@@ -1,6 +1,6 @@
 # Cryptographic Mechanisms Comparison
 
-A comprehensive analysis of signature schemes, cryptographic primitives, and encryption strategies across blockchain platforms (Bitcoin, Ethereum, Solana) and messaging applications (Signal, Telegram).
+A comprehensive analysis of signature schemes, cryptographic primitives, and encryption strategies across Zero-Auth, blockchain platforms (Bitcoin, Ethereum, Solana), and messaging applications (Signal, Telegram).
 
 ## Table of Contents
 
@@ -17,7 +17,14 @@ A comprehensive analysis of signature schemes, cryptographic primitives, and enc
 
 ## Executive Summary
 
-This document compares cryptographic mechanisms across two fundamentally different domains:
+This document compares cryptographic mechanisms across three fundamentally different domains:
+
+**Zero-Auth** (identity and authentication system) prioritizes:
+- Cryptographic identity ownership via client-generated Neural Keys
+- Hierarchical deterministic key derivation with domain separation
+- Zero-knowledge of master secrets (Neural Key never leaves client)
+- Secure key recovery via 3-of-5 Shamir Secret Sharing
+- Modern authenticated encryption (XChaCha20-Poly1305)
 
 **Blockchain Platforms** (Bitcoin, Ethereum, Solana) prioritize:
 - Transaction integrity and non-repudiation
@@ -33,13 +40,14 @@ This document compares cryptographic mechanisms across two fundamentally differe
 
 ### Key Differentiators
 
-| Aspect | Blockchain | Messaging |
-|--------|------------|-----------|
-| Primary Goal | Public verification | Private communication |
-| Data Model | Permanent, immutable ledger | Ephemeral messages |
-| Key Lifetime | Long-lived (years) | Short-lived (per-message/session) |
-| Encryption | Rarely used (public data) | Always used (E2EE) |
-| Forward Secrecy | Not applicable | Critical requirement |
+| Aspect | Zero-Auth | Blockchain | Messaging |
+|--------|-----------|------------|-----------|
+| Primary Goal | Identity ownership & auth | Public verification | Private communication |
+| Data Model | Identity-centric, server-stored | Permanent, immutable ledger | Ephemeral messages |
+| Key Lifetime | Long-lived (Neural Key) + rotatable machine keys | Long-lived (years) | Short-lived (per-message/session) |
+| Encryption | XChaCha20-Poly1305 AEAD | Rarely used (public data) | Always used (E2EE) |
+| Forward Secrecy | Per-machine key rotation | Not applicable | Critical requirement |
+| Key Recovery | 3-of-5 Shamir Secret Sharing | BIP-39 mnemonics | Device-based |
 
 ---
 
@@ -49,11 +57,59 @@ This document compares cryptographic mechanisms across two fundamentally differe
 
 | Platform | Primary Scheme | Curve/Parameters | Signature Size | Public Key Size | Private Key Size |
 |----------|---------------|------------------|----------------|-----------------|------------------|
+| **Zero-Auth** | Ed25519 + X25519 | Curve25519 | 64B | 32B | 32B |
 | Bitcoin | ECDSA + Schnorr | secp256k1 | 70-72B (ECDSA), 64B (Schnorr) | 33B (compressed) | 32B |
 | Ethereum | ECDSA + BLS | secp256k1, BLS12-381 | 65B (ECDSA), 48B (BLS) | 64B (uncompressed) | 32B |
 | Solana | Ed25519 | Curve25519 | 64B | 32B | 32B |
 | Signal | Ed25519 + X25519 | Curve25519 | 64B | 32B | 32B |
 | Telegram | RSA-2048 + DH | 2048-bit modulus | 256B | 256B | 256B |
+
+### Zero-Auth: Ed25519 and X25519 on Curve25519
+
+Zero-Auth uses the **Curve25519** family for all cryptographic operations:
+
+#### Ed25519 (Signing)
+
+- **Standard**: RFC 8032 (EdDSA)
+- **Signature Size**: 64 bytes (fixed)
+- **Public Key Size**: 32 bytes
+- **Characteristics**:
+  - **Deterministic**: No random nonce required (derived from private key + message)
+  - **Fast**: Optimized for high-throughput verification
+  - **Safe by default**: Resistant to implementation errors
+
+**Usage in Zero-Auth**:
+- Identity Signing Keys: Sign machine enrollments, key rotations, recovery approvals
+- Machine Signing Keys: Sign authentication challenges
+- JWT Signing: EdDSA-based JWT tokens
+
+#### X25519 (Key Exchange)
+
+- **Standard**: RFC 7748
+- **Public Key Size**: 32 bytes
+- **Characteristics**:
+  - Used for ECDH key agreement
+  - Machine encryption keys enable secure key exchange
+
+#### Key Derivation Hierarchy
+
+```
+NeuralKey (32 bytes, client CSPRNG)
+│
+├── Identity Signing Key (Ed25519)
+│   HKDF("cypher:auth:identity:v1" || identity_id)
+│
+├── Machine Keys (per device)
+│   ├── Signing Key (Ed25519)
+│   │   HKDF("cypher:shared:machine:sign:v1" || machine_id)
+│   └── Encryption Key (X25519)
+│       HKDF("cypher:shared:machine:encrypt:v1" || machine_id)
+│
+└── MFA KEK (for TOTP secret encryption)
+    HKDF("cypher:auth:mfa-kek:v1" || identity_id)
+```
+
+**Design Choice**: Zero-Auth separates signing and encryption keys using domain separation strings, preventing cross-protocol attacks while maintaining deterministic derivation from a single root secret.
 
 ### Bitcoin: ECDSA and Schnorr on secp256k1
 
@@ -173,6 +229,9 @@ This represents significantly larger key material compared to elliptic curve alt
 
 | Platform | Primary Hash | Usage | Output Size | Standard |
 |----------|-------------|-------|-------------|----------|
+| **Zero-Auth** | BLAKE3 | Fast hashing, key ID derivation | 256 bits | - |
+| **Zero-Auth** | SHA-256 | HKDF-SHA256 key derivation | 256 bits | FIPS 180-4 |
+| **Zero-Auth** | Keccak-256 | EVM wallet address verification | 256 bits | Pre-FIPS SHA-3 |
 | Bitcoin | SHA-256 | Block headers, TXID, addresses | 256 bits | FIPS 180-4 |
 | Bitcoin | RIPEMD-160 | Address generation (after SHA-256) | 160 bits | ISO/IEC 10118-3 |
 | Bitcoin | SHA-256d | Double SHA-256 for PoW | 256 bits | - |
@@ -182,9 +241,29 @@ This represents significantly larger key material compared to elliptic curve alt
 | Signal | SHA-512 | Ed25519 internal | 512 bits | FIPS 180-4 |
 | Telegram | SHA-256 | MTProto 2.0 key derivation | 256 bits | FIPS 180-4 |
 
-**Note**: Ethereum's Keccak-256 is **not** identical to NIST SHA-3 (SHA3-256). Keccak-256 uses different padding, making them incompatible.
+**Note**: Ethereum's Keccak-256 is **not** identical to NIST SHA-3 (SHA3-256). Keccak-256 uses different padding, making them incompatible. Zero-Auth uses Keccak-256 specifically for EVM wallet authentication compatibility.
 
 ### Key Derivation Functions
+
+#### Zero-Auth: HKDF-SHA256 with Domain Separation
+
+Zero-Auth uses HKDF (RFC 5869) extensively with unique domain strings:
+
+```
+Key Generation:
+  neural_key = CSPRNG(32 bytes)  // Client-generated
+  
+Identity Key Derivation:
+  seed = HKDF-Expand(neural_key, "cypher:auth:identity:v1" || identity_id, 32)
+  identity_keypair = Ed25519::from_seed(seed)
+
+Machine Key Derivation:
+  machine_seed = HKDF-Expand(neural_key, "cypher:shared:machine:v1" || identity_id || machine_id || epoch, 32)
+  signing_seed = HKDF-Expand(machine_seed, "cypher:shared:machine:sign:v1" || machine_id, 32)
+  encrypt_seed = HKDF-Expand(machine_seed, "cypher:shared:machine:encrypt:v1" || machine_id, 32)
+```
+
+**Key Differentiator**: Unlike BIP-32, Zero-Auth uses explicit domain separation strings following the pattern `cypher:{service}:{purpose}:v{version}`, enabling versioned algorithm migration and preventing cross-protocol key reuse.
 
 #### Bitcoin: BIP-32 Hierarchical Deterministic Wallets
 
@@ -229,22 +308,73 @@ aes_iv  = SHA256(auth_key[y:y+32] || msg_key)[4:20] || SHA256(msg_key || auth_ke
 
 | Platform | Algorithm | Mode | Key Size | Nonce/IV | Tag Size |
 |----------|-----------|------|----------|----------|----------|
+| **Zero-Auth** | ChaCha20 | XChaCha20-Poly1305 | 256 bits | 192 bits | 128 bits |
 | Signal | AES-256 | GCM | 256 bits | 96 bits | 128 bits |
 | Telegram (cloud) | AES-256 | IGE | 256 bits | 256 bits | N/A (no auth) |
 | Telegram (secret) | AES-256 | IGE | 256 bits | 256 bits | N/A (SHA-256 MAC) |
 
-**Critical Difference**: Signal uses authenticated encryption (AES-GCM), while Telegram uses AES-IGE which requires a separate MAC for authentication.
+**Critical Differences**:
+- **Zero-Auth** uses XChaCha20-Poly1305 with 192-bit nonces, providing collision resistance even with random nonce generation (birthday bound at 2^96 messages per key)
+- **Signal** uses AES-GCM with 96-bit nonces, requiring careful nonce management
+- **Telegram** uses AES-IGE which requires a separate MAC for authentication
 
 ### Password Hashing
 
 | Platform | Algorithm | Memory | Iterations | Purpose |
 |----------|-----------|--------|------------|---------|
+| **Zero-Auth** | Argon2id | 64 MB | 3 | Password hashing, passphrase-derived KEK |
 | Signal | Argon2id | 64 MB | 3 | PIN-derived keys |
 | Telegram | - | - | - | No client-side password hashing |
 
 ---
 
 ## Architecture and Design Philosophy
+
+### Zero-Auth: Identity-Centric Hierarchical Key Management
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Zero-Auth Architecture                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│   Client-Side (Neural Key never leaves)                     │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │            Neural Key (32 bytes)                     │   │
+│   │  ┌─────────────┐      ┌─────────────────────────┐   │   │
+│   │  │   CSPRNG    │      │  3-of-5 Shamir Backup   │   │   │
+│   │  │  Generated  │      │  (recovery shards)      │   │   │
+│   │  └─────────────┘      └─────────────────────────┘   │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                           │                                  │
+│                           ▼                                  │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │         HKDF-SHA256 Domain-Separated Derivation      │   │
+│   │  ┌──────────────────┐  ┌──────────────────────┐     │   │
+│   │  │ Identity Signing │  │   Machine Keys       │     │   │
+│   │  │ Key (Ed25519)    │  │   (Ed25519 + X25519) │     │   │
+│   │  └──────────────────┘  └──────────────────────┘     │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                           │                                  │
+│                           ▼                                  │
+│   Server-Side (Public keys only)                            │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │  Challenge-Response Auth    │  JWT Sessions (EdDSA)  │   │
+│   │  ┌───────────────────────┐  │  ┌─────────────────┐   │   │
+│   │  │ Server: nonce         │  │  │ Access tokens   │   │   │
+│   │  │ Client: Ed25519 sig   │  │  │ Refresh tokens  │   │   │
+│   │  │ Server: verify        │  │  │ Key rotation    │   │   │
+│   │  └───────────────────────┘  │  └─────────────────┘   │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Properties**:
+- Neural Key is NEVER transmitted or stored on servers
+- All key derivations use unique domain separation strings
+- Machine keys can be rotated without changing identity
+- 3-of-5 Shamir provides recovery without single point of failure
+- XChaCha20-Poly1305 AEAD for all symmetric encryption
 
 ### Bitcoin: UTXO Model with Script
 
@@ -404,15 +534,17 @@ Signal's current architecture combines three key mechanisms:
 
 ### Comparison Matrix
 
-| Property | Bitcoin | Ethereum | Solana | Signal | Telegram (Cloud) | Telegram (Secret) |
-|----------|---------|----------|--------|--------|------------------|-------------------|
-| Confidentiality | N/A | N/A | N/A | Yes | Server can read | Yes |
-| Integrity | Yes | Yes | Yes | Yes | Yes | Yes |
-| Authentication | Yes | Yes | Yes | Yes | Yes | Yes |
-| Non-repudiation | Yes | Yes | Yes | Optional | No | No |
-| Forward Secrecy | N/A | N/A | N/A | Yes | No | Limited |
-| Post-Compromise Security | N/A | N/A | N/A | Yes | No | No |
-| Deniability | No | No | No | Yes | No | Partial |
+| Property | Zero-Auth | Bitcoin | Ethereum | Solana | Signal | Telegram (Cloud) | Telegram (Secret) |
+|----------|-----------|---------|----------|--------|--------|------------------|-------------------|
+| Confidentiality | Yes (AEAD) | N/A | N/A | N/A | Yes | Server can read | Yes |
+| Integrity | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Authentication | Yes (Ed25519) | Yes | Yes | Yes | Yes | Yes | Yes |
+| Non-repudiation | Yes | Yes | Yes | Yes | Optional | No | No |
+| Forward Secrecy | Machine key rotation | N/A | N/A | N/A | Yes | No | Limited |
+| Post-Compromise Security | Via recovery ceremony | N/A | N/A | N/A | Yes | No | No |
+| Deniability | No | No | No | No | Yes | No | Partial |
+| Zero-Knowledge of Master Key | Yes (Neural Key) | No | No | No | No | No | No |
+| Key Recovery | 3-of-5 Shamir | BIP-39 mnemonic | BIP-39 mnemonic | BIP-39 mnemonic | Device-based | No | No |
 
 ### Forward Secrecy Analysis
 
@@ -432,6 +564,16 @@ Signal's current architecture combines three key mechanisms:
 - Keys are meant for long-term ownership proof
 
 ### Known Vulnerabilities and Mitigations
+
+#### Zero-Auth Ed25519/X25519
+
+| Vulnerability | Description | Mitigation |
+|--------------|-------------|------------|
+| Neural Key extraction | Root key compromise reveals all derived keys | Zeroization on drop, 3-of-5 Shamir (never stored whole) |
+| Memory timing attacks | Side-channel leaks in signature verification | Constant-time operations via `subtle` crate |
+| Nonce reuse | Repeated nonces could leak key material | 192-bit random nonces (birthday bound at 2^96) |
+| Domain separation failure | Cross-protocol key reuse | Unique domain strings per key type with versioning |
+| Server compromise | Attacker gains access to stored data | Only public keys stored server-side, Neural Key client-only |
 
 #### Bitcoin/Ethereum ECDSA
 
@@ -471,21 +613,24 @@ Signal's current architecture combines three key mechanisms:
 
 Benchmarks on modern hardware (ARM Cortex-A76, single core):
 
-| Algorithm | Sign (ops/sec) | Verify (ops/sec) | Relative Speed |
-|-----------|---------------|------------------|----------------|
-| Ed25519 | ~30,775 | ~11,870 | 1.0x (baseline) |
-| ECDSA P-256 | ~32,866 | ~10,449 | ~1.1x sign, ~0.9x verify |
-| ECDSA secp256k1 | ~28,000 | ~9,500 | ~0.9x sign, ~0.8x verify |
-| Schnorr (secp256k1) | ~30,000 | ~11,000 | ~1.0x |
-| BLS12-381 | ~1,200 | ~450 | ~0.04x (but aggregates) |
-| RSA-2048 | ~900 | ~45,000 | ~0.03x sign, ~3.8x verify |
+| Algorithm | Sign (ops/sec) | Verify (ops/sec) | Relative Speed | Used By |
+|-----------|---------------|------------------|----------------|---------|
+| Ed25519 | ~30,775 | ~11,870 | 1.0x (baseline) | **Zero-Auth**, Solana, Signal |
+| ECDSA P-256 | ~32,866 | ~10,449 | ~1.1x sign, ~0.9x verify | TLS |
+| ECDSA secp256k1 | ~28,000 | ~9,500 | ~0.9x sign, ~0.8x verify | Bitcoin, Ethereum, Zero-Auth (EVM wallets) |
+| Schnorr (secp256k1) | ~30,000 | ~11,000 | ~1.0x | Bitcoin (Taproot) |
+| BLS12-381 | ~1,200 | ~450 | ~0.04x (but aggregates) | Ethereum (consensus) |
+| RSA-2048 | ~900 | ~45,000 | ~0.03x sign, ~3.8x verify | Telegram |
 
 **Key Observations**:
+- **Zero-Auth** uses Ed25519 for optimal signing/verification performance
 - Ed25519 and ECDSA are comparable for individual operations
 - BLS is slower per-signature but aggregation makes it efficient at scale
 - RSA verification is fast but signing is extremely slow
 
 ### BLS Aggregation Efficiency
+
+**Note**: Zero-Auth does not use BLS signatures as it doesn't require signature aggregation. Each machine key signs its own challenges individually.
 
 For Ethereum consensus with N validators:
 
@@ -495,10 +640,11 @@ For Ethereum consensus with N validators:
 | 100,000 | 6.5 MB signatures | 48 bytes | 99.9993% |
 | 500,000 | 32.5 MB signatures | 48 bytes | 99.99985% |
 
-### Transaction Throughput Impact
+### Transaction/Authentication Throughput Impact
 
 | Platform | Signature Scheme | Typical TPS | Signature Overhead |
 |----------|-----------------|-------------|-------------------|
+| **Zero-Auth** | Ed25519 | N/A (auth system) | 64B signature per auth challenge |
 | Bitcoin | ECDSA/Schnorr | 7 | ~50% of transaction size |
 | Ethereum | ECDSA | 15-30 | ~40% of transaction size |
 | Solana | Ed25519 | 65,000 | ~5% due to native verification |
@@ -507,6 +653,7 @@ For Ethereum consensus with N validators:
 
 | Platform | Encryption | Key Exchange | Per-Message Overhead |
 |----------|------------|--------------|---------------------|
+| **Zero-Auth** | XChaCha20-Poly1305 | HKDF-derived keys | 40 bytes (24B nonce + 16B tag) |
 | Signal | AES-256-GCM | PQXDH (~3 KB initial) | ~50 bytes (MAC + headers) |
 | Telegram | AES-256-IGE | DH (~512 bytes) | ~32 bytes (msg_key + padding) |
 
@@ -529,11 +676,38 @@ Quantum computers running **Shor's algorithm** can efficiently solve:
 
 | Platform | Current Status | Migration Plan | Timeline |
 |----------|---------------|----------------|----------|
+| **Zero-Auth** | Vulnerable (Ed25519/X25519) | Domain versioning supports migration to ML-DSA/ML-KEM | Prepared via version strings |
 | **Bitcoin** | Vulnerable (ECDSA/Schnorr) | Research: SPHINCS+, XMSS hash-based signatures | No concrete timeline |
 | **Ethereum** | Vulnerable (ECDSA/BLS) | Research: ML-DSA for consensus, account abstraction for users | Long-term research |
 | **Solana** | Vulnerable (Ed25519) | Research: NIST PQC standards (ML-DSA, SLH-DSA) | No concrete timeline |
 | **Signal** | **Hybrid PQ deployed** | PQXDH + Triple Ratchet with ML-KEM-1024 | Production since 2024 |
 | **Telegram** | Vulnerable (RSA/DH) | No announced roadmap | Unknown |
+
+### Zero-Auth's Post-Quantum Migration Path
+
+Zero-Auth is designed with post-quantum migration in mind:
+
+**Domain String Versioning**:
+```
+Current:  "cypher:auth:identity:v1"  → Ed25519
+Future:   "cypher:auth:identity:v2"  → ML-DSA-65 (Dilithium)
+
+Current:  "cypher:shared:machine:encrypt:v1"  → X25519
+Future:   "cypher:shared:machine:encrypt:v2"  → ML-KEM-768 (Kyber)
+```
+
+**Migration Strategy**:
+- Version strings in domain separation enable parallel key derivation
+- Hybrid mode: derive both classical and PQ keys, use combined secrets
+- Gradual rollout via server-negotiated algorithm selection
+
+**Planned Replacements**:
+
+| Current | Planned PQ Alternative |
+|---------|------------------------|
+| Ed25519 | ML-DSA-65 (Dilithium-3) |
+| X25519 | ML-KEM-768 (Kyber-768) |
+| BLAKE3 | SHA-3 or BLAKE3 (quantum-safe for symmetric use) |
 
 ### Signal's Post-Quantum Implementation
 
@@ -565,9 +739,16 @@ Standardized algorithms for future blockchain/messaging migration:
 
 **Challenge for Blockchains**: Post-quantum signatures are 50-100x larger than current ECDSA/Ed25519 signatures, requiring significant protocol changes.
 
+**Zero-Auth Advantage**: As an identity system (not a public ledger), Zero-Auth can migrate to PQ algorithms without the on-chain storage constraints that blockchains face. The domain-versioned key derivation allows graceful hybrid transitions.
+
 ---
 
 ## References
+
+### Zero-Auth Specifications
+
+- **zero-auth-crypto Specification v0.1**: Cryptographic primitives and key derivation hierarchy
+- **Cryptographic Primitives Specification v0.1**: Algorithms, binary formats, and domain separation
 
 ### Standards and Specifications
 
