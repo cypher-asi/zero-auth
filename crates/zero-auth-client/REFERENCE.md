@@ -19,7 +19,7 @@ Complete command reference and authentication flow documentation.
 
 All commands support:
 ```bash
--s, --server URL    # Use different server (default: http://127.0.0.1:8080)
+-s, --server URL    # Use different server (default: http://127.0.0.1:9999)
 ```
 
 ### Identity & Authentication
@@ -317,7 +317,7 @@ async fn login_with_machine_key(
     // Step 1: Request challenge
     let challenge_response = client
         .get(format!(
-            "http://127.0.0.1:8080/v1/auth/challenge?machine_id={}",
+            "http://127.0.0.1:9999/v1/auth/challenge?machine_id={}",
             machine_id
         ))
         .send()
@@ -345,7 +345,7 @@ async fn login_with_machine_key(
     
     // Step 5: Submit signature
     let login_response = client
-        .post("http://127.0.0.1:8080/v1/auth/login/machine")
+        .post("http://127.0.0.1:9999/v1/auth/login/machine")
         .json(&json!({
             "challenge_id": challenge_response.challenge_id,
             "machine_id": machine_id,
@@ -380,7 +380,7 @@ async fn login_with_email(
     let client = reqwest::Client::new();
     
     let response = client
-        .post("http://127.0.0.1:8080/v1/auth/login/email")
+        .post("http://127.0.0.1:9999/v1/auth/login/email")
         .json(&json!({
             "email": email,
             "password": password,
@@ -416,7 +416,7 @@ async fn refresh_access_token(
     let client = reqwest::Client::new();
     
     let response = client
-        .post("http://127.0.0.1:8080/v1/auth/refresh")
+        .post("http://127.0.0.1:9999/v1/auth/refresh")
         .json(&json!({
             "refresh_token": refresh_token,
             "session_id": session_id,
@@ -495,7 +495,7 @@ async fn enroll_new_machine(
     // Step 6: Send enrollment request
     let client = reqwest::Client::new();
     let response = client
-        .post("http://127.0.0.1:8080/v1/machines/enroll")
+        .post("http://127.0.0.1:9999/v1/machines/enroll")
         .header("Authorization", format!("Bearer {}", access_token))
         .json(&json!({
             "machine_id": machine_id,
@@ -631,7 +631,7 @@ async fn list_machines(
 ) -> Result<Vec<MachineInfo>> {
     let client = reqwest::Client::new();
     
-    let mut url = "http://127.0.0.1:8080/v1/machines".to_string();
+    let mut url = "http://127.0.0.1:9999/v1/machines".to_string();
     if let Some(ns_id) = namespace_id {
         url.push_str(&format!("?namespace_id={}", ns_id));
     }
@@ -662,7 +662,7 @@ async fn revoke_machine(
     
     client
         .delete(format!(
-            "http://127.0.0.1:8080/v1/machines/{}",
+            "http://127.0.0.1:9999/v1/machines/{}",
             machine_id
         ))
         .header("Authorization", format!("Bearer {}", access_token))
@@ -820,7 +820,7 @@ async fn revoke_machine(
 
 **"Connection refused"**
 - **Cause:** Server not running
-- **Solution:** Start server on port 8080
+- **Solution:** Start server on port 9999
 - **Command:** `cargo run -p zero-auth-server`
 
 **"Invalid signature"**

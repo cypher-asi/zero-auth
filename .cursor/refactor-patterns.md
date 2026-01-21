@@ -360,7 +360,7 @@ impl Validatable for UserInput {
 // In multiple places:
 let config = Config {
     host: "localhost".to_string(),
-    port: 8080,
+    port: 9999,
     timeout: Duration::from_secs(30),
     retries: 3,
     tls_enabled: true,
@@ -397,7 +397,7 @@ impl ConfigBuilder {
 // Usage:
 let config = ConfigBuilder::new()
     .host("localhost")
-    .port(8080)
+    .port(9999)
     .build();
 ```
 

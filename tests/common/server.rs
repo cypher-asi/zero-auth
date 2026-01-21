@@ -42,7 +42,7 @@ impl TestServer {
             tokio::time::sleep(Duration::from_secs(1)).await;
 
             // Try to connect to the health endpoint
-            if let Ok(response) = client.get("http://127.0.0.1:8080/health").send().await {
+            if let Ok(response) = client.get("http://127.0.0.1:9999/health").send().await {
                 if response.status().is_success() {
                     return Ok(());
                 }
@@ -85,7 +85,7 @@ pub async fn send_request(
     body: Option<&serde_json::Value>,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
-    let url = format!("http://127.0.0.1:8080{}", path);
+    let url = format!("http://127.0.0.1:9999{}", path);
 
     let mut request = client.request(method, &url);
 

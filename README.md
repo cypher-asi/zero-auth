@@ -14,6 +14,10 @@ zero-auth is a modular authentication system built on the principle that cryptog
 4. **Threshold Recovery**: Account recovery via 3-of-5 Neural Shards using Shamir Secret Sharing
 5. **Protocol Agnostic**: Multiple authentication methods (cryptographic, email, OAuth, blockchain wallets)
 
+### Open Source & Self-Hosting
+
+zero-auth is fully open source. Cypher operates the main authentication server at **https://auth.zero.tech** for public use, but anyone can run their own zero-auth server. The system is designed to be self-hosted with no vendor lock-in—your cryptographic keys remain under your control regardless of which server you use.
+
 ## How the System Works
 
 ### The Neural Key
@@ -215,14 +219,14 @@ $env:SERVICE_MASTER_KEY = -join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Rand
 cargo run -p zero-auth-server
 ```
 
-The server starts on `http://127.0.0.1:8080` by default.
+The server starts on `http://127.0.0.1:9999` by default.
 
 ### Configuration
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `SERVICE_MASTER_KEY` | Yes | - | 64-character hex string (32 bytes) for cryptographic operations |
-| `BIND_ADDRESS` | No | `127.0.0.1:8080` | Server bind address |
+| `BIND_ADDRESS` | No | `127.0.0.1:9999` | Server bind address |
 | `DATABASE_PATH` | No | `./data/zero-auth.db` | Path to RocksDB database |
 | `JWT_ISSUER` | No | `https://zero-auth.cypher.io` | JWT issuer claim |
 | `JWT_AUDIENCE` | No | `zero-vault` | JWT audience claim |
@@ -251,6 +255,32 @@ cargo run -p zero-auth-client -- list-machines
 cargo run -p zero-auth-client -- refresh-token
 ```
 
+#### Machine Management
+
+```bash
+# Remove a compromised or lost device
+cargo run -p zero-auth-client -- revoke-machine <machine-id> --reason "Device lost"
+
+# Rotate a machine key (enroll replacement, then revoke old)
+cargo run -p zero-auth-client -- enroll-machine --device-name "My Laptop (rotated)"
+cargo run -p zero-auth-client -- revoke-machine <old-machine-id> --reason "Key rotation"
+```
+
+#### Neural Key Recovery
+
+If you lose access to your Neural Key, reconstruct it from any 3 of your 5 Neural Shards:
+
+```bash
+# Recover identity using 3 Neural Shards (displayed during identity creation)
+cargo run -p zero-auth-client -- recover \
+  --shard <shard1-hex> \
+  --shard <shard2-hex> \
+  --shard <shard3-hex> \
+  --device-name "Recovery Device"
+```
+
+This reconstructs the Neural Key, derives fresh Machine Keys, and enrolls the recovery device. Store your Neural Shards securely in separate locations (password manager, safe deposit box, trusted contacts).
+
 See `crates/zero-auth-client/README.md` for complete client documentation.
 
 ### Testing
@@ -264,6 +294,27 @@ cargo test --workspace --test '*' -- --ignored
 
 # Run with output
 cargo test --test identity_creation -- --ignored --nocapture
+```
+
+### Test Coverage
+
+| Crate | Unit Tests | Description |
+|-------|------------|-------------|
+| `zero-auth-crypto` | 59 | Cryptographic primitives, key derivation, Shamir sharing |
+| `zero-auth-methods` | 35 | Authentication methods, OAuth/OIDC, MFA, wallet signing |
+| `zero-auth-integrations` | 24 | Webhooks, SSE events, external service integration |
+| `zero-auth-sessions` | 21 | JWT tokens, session lifecycle, introspection |
+| `zero-auth-policy` | 16 | Policy engine, rate limiting, authorization rules |
+| `zero-auth-storage` | 9 | RocksDB operations, column families |
+| `zero-auth-identity-core` | 5 | Identity and machine key management |
+| `zero-auth-server` | 4 | API handlers, request context |
+| **Total** | **173** | |
+
+**Integration Tests:** 1 end-to-end test (requires running server)
+
+```bash
+# Generate coverage report (requires cargo-llvm-cov)
+cargo llvm-cov --workspace --html
 ```
 
 ## API Reference
@@ -353,7 +404,65 @@ cargo test --test identity_creation -- --ignored --nocapture
 - **Token Security**: EdDSA-signed JWTs with short expiry and refresh rotation
 - **Comprehensive Revocation**: Per-session, per-identity, and epoch-level revocation
 
+## Security Auditing
+
+**This software is in alpha and has not undergone professional security audits.** We do not guarantee the security of this system. While we have designed zero-auth with security as a primary concern and follow cryptographic best practices, unaudited software may contain vulnerabilities.
+
+Users and developers should:
+
+- Evaluate the system carefully before using it in production environments
+- Consider the alpha status when making decisions about sensitive deployments
+- Wait for further hardening and audit completion if your threat model requires verified security
+
+Our intention is to pursue multiple independent security audits as zero-auth matures. This section will be updated with audit reports, findings, and remediations as they become available.
+
 ## Integrating with Your Application
+
+### Getting Started
+
+You can integrate zero-auth into your application by either using the hosted service at **https://auth.zero.tech** or running your own server.
+
+**Option 1: Use the hosted service**
+
+Point your application to the Cypher-managed server:
+
+```rust
+const AUTH_SERVER: &str = "https://auth.zero.tech";
+```
+
+**Option 2: Self-host**
+
+Run your own zero-auth server (see [Running the Server](#running-the-server)) and point to your instance.
+
+### Required Dependencies
+
+Add these to your `Cargo.toml` for Rust applications:
+
+```toml
+[dependencies]
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+jsonwebtoken = "9.0"     # For local JWT validation
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
+```
+
+For client-side cryptographic operations (identity creation, machine enrollment):
+
+```toml
+[dependencies]
+zero-auth-crypto = { git = "https://github.com/cypher-agi/zero-auth" }
+```
+
+### SDK Roadmap
+
+We intend to provide:
+
+- **Formal OpenAPI Specification** - Machine-readable API definition for code generation
+- **TypeScript SDK** - First-class support for Node.js and browser applications
+- **Additional language SDKs** - Based on community demand
+
+Until SDKs are available, integrate via the REST API as shown below.
 
 ### Token Introspection
 
@@ -361,7 +470,7 @@ The simplest integration method - validate tokens by calling the introspection e
 
 ```rust
 let response = client
-    .post("http://127.0.0.1:8080/v1/auth/introspect")
+    .post("http://127.0.0.1:9999/v1/auth/introspect")
     .json(&json!({ "token": token, "operation_type": "protected" }))
     .send()
     .await?;

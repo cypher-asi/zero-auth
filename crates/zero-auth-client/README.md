@@ -121,7 +121,7 @@ async fn validate_token(token: &str) -> Result<IntrospectResponse, Box<dyn std::
     let client = reqwest::Client::new();
     
     let response = client
-        .post("http://127.0.0.1:8080/v1/auth/introspect")
+        .post("http://127.0.0.1:9999/v1/auth/introspect")
         .json(&serde_json::json!({
             "token": token,
             "operation_type": "protected"
@@ -239,7 +239,7 @@ async fn auth_middleware<B>(
 | Error | Solution |
 |-------|----------|
 | "Failed to load credentials" | Run `create-identity` first |
-| "Connection refused" | Make sure zero-auth server is running on port 8080 |
+| "Connection refused" | Make sure zero-auth server is running on port 9999 |
 | "Invalid signature" | Credentials may be corrupted, recreate identity |
 | "Token expired" | Run `refresh-token` to get a new access token |
 | "Failed to load session" | Run `login` first |

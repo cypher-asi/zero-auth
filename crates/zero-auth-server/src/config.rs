@@ -110,7 +110,7 @@ impl Config {
 
     fn load_bind_address() -> Result<SocketAddr> {
         std::env::var("BIND_ADDRESS")
-            .unwrap_or_else(|_| "127.0.0.1:8080".to_string())
+            .unwrap_or_else(|_| "127.0.0.1:9999".to_string())
             .parse()
             .map_err(Into::into)
     }

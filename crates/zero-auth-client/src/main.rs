@@ -32,7 +32,7 @@ struct Cli {
     command: Commands,
 
     /// Zero-auth server URL
-    #[arg(short, long, default_value = "http://127.0.0.1:8080")]
+    #[arg(short, long, default_value = "http://127.0.0.1:9999")]
     server: String,
 }
 
