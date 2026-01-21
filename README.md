@@ -2,6 +2,72 @@
 
 A cryptographic identity and authentication service with client-controlled roots.
 
+## Table of Contents
+
+- [Overview](#overview)
+  - [Core Principles](#core-principles)
+  - [Open Source & Self-Hosting](#open-source--self-hosting)
+- [How the System Works](#how-the-system-works)
+  - [The Neural Key](#the-neural-key)
+  - [Key Hierarchy](#key-hierarchy)
+  - [Machine Keys](#machine-keys)
+  - [Identity Lifecycle](#identity-lifecycle)
+  - [Namespaces](#namespaces)
+  - [Policy Engine](#policy-engine)
+  - [Challenge-Response Authentication](#challenge-response-authentication)
+  - [Session and Token Management](#session-and-token-management)
+  - [Recovery via Shamir Secret Sharing](#recovery-via-shamir-secret-sharing)
+- [Authentication Methods](#authentication-methods)
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Building](#building)
+  - [Running the Server](#running-the-server)
+  - [Configuration](#configuration)
+  - [Using the CLI Client](#using-the-cli-client)
+  - [Machine Management](#machine-management)
+  - [Neural Key Recovery](#neural-key-recovery)
+  - [Testing](#testing)
+  - [Test Coverage](#test-coverage)
+- [API Reference](#api-reference)
+- [Cryptographic Standards](#cryptographic-standards)
+- [Security Properties](#security-properties)
+- [Security Auditing](#security-auditing)
+- [Integrating with Your Application](#integrating-with-your-application)
+- [Project Status](#project-status)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Specification v0.1](docs/spec/v0.1/README.md) | Comprehensive system specification with architecture diagrams |
+| [API Documentation](docs/api/README.md) | REST API overview, authentication, and quick start |
+| [API v1 Reference](docs/api/v1-reference.md) | Complete endpoint documentation |
+| [API Errors](docs/api/errors.md) | Error codes and troubleshooting |
+| [CLI Client Reference](crates/zero-auth-client/REFERENCE.md) | Complete CLI command reference |
+| [Encryption Comparison](docs/encryption/comparison.md) | Cryptographic algorithm comparison |
+| [Quantum Considerations](docs/encryption/quantum.md) | Post-quantum cryptography notes |
+
+### Specification Deep Dives
+
+For detailed technical specifications of each component:
+
+| Spec | Crate | Description |
+|------|-------|-------------|
+| [Crypto Primitives](docs/spec/v0.1/01-crypto.md) | `zero-auth-crypto` | Key derivation, encryption, signatures, Shamir |
+| [Storage](docs/spec/v0.1/02-storage.md) | `zero-auth-storage` | Storage abstraction and column families |
+| [Policy Engine](docs/spec/v0.1/03-policy.md) | `zero-auth-policy` | Rate limiting, reputation, authorization |
+| [Identity Core](docs/spec/v0.1/04-identity-core.md) | `zero-auth-identity-core` | Identities, machines, namespaces |
+| [Integrations](docs/spec/v0.1/05-integrations.md) | `zero-auth-integrations` | mTLS auth, SSE streaming, webhooks |
+| [Sessions](docs/spec/v0.1/06-sessions.md) | `zero-auth-sessions` | JWT issuance, refresh tokens |
+| [Auth Methods](docs/spec/v0.1/07-methods.md) | `zero-auth-methods` | Machine, email, OAuth, wallet, MFA |
+| [Server](docs/spec/v0.1/08-server.md) | `zero-auth-server` | HTTP API endpoints and middleware |
+| [Client](docs/spec/v0.1/09-client.md) | `zero-auth-client` | CLI commands and workflows |
+| [System Overview](docs/spec/v0.1/10-system-overview.md) | — | Architecture and data flows |
+| [Crypto Primitives Deep Dive](docs/spec/v0.1/11-crypto-primitives.md) | — | Algorithms and binary formats |
+
 ## Overview
 
 zero-auth is a modular authentication system built on the principle that cryptographic root material should never leave client devices. The server operates in a zero-trust model where it cannot decrypt, sign, or impersonate users without their active participation.
