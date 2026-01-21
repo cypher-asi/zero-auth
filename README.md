@@ -104,6 +104,199 @@ Machine Key capabilities include:
 5. **Recovery**: If Neural Key is lost, reconstruct from 3 of 5 recovery shards
 6. **Revocation**: Individual devices or entire identity can be revoked
 
+### Namespaces
+
+Namespaces provide multi-tenant isolation and organizational boundaries within zero-auth. Every identity operates within at least one namespace, and all sessions and tokens are scoped to a specific namespace context.
+
+#### Namespace Structure
+
+```
+Namespace
+├── namespace_id: UUID
+├── name: String
+├── owner_identity_id: UUID
+├── created_at: Timestamp
+└── active: Boolean
+```
+
+When an identity is created, a default namespace is automatically created with the identity as its owner:
+
+```
+Identity Creation
+    │
+    ├── Creates Identity
+    ├── Creates Namespace (owned by identity)
+    └── Creates IdentityNamespaceMembership (role: Owner)
+```
+
+#### Namespace Roles
+
+Identities can belong to multiple namespaces with different permission levels:
+
+| Role | Value | Description |
+|------|-------|-------------|
+| Owner | 0x01 | Full control over namespace, can manage members and settings |
+| Admin | 0x02 | Can manage members and perform administrative operations |
+| Member | 0x03 | Basic access within the namespace |
+
+#### Namespace Membership
+
+The relationship between identities and namespaces is tracked via membership records:
+
+```
+IdentityNamespaceMembership
+├── identity_id: UUID
+├── namespace_id: UUID
+├── role: NamespaceRole
+└── joined_at: Timestamp
+```
+
+#### How Namespaces Affect Sessions
+
+Every session is bound to a specific namespace. When a user authenticates, the resulting session and tokens include the namespace context:
+
+```
+Session
+├── session_id
+├── identity_id
+├── machine_id
+├── namespace_id  ← Scoped to namespace
+└── ...
+
+JWT Access Token Claims
+├── sub: identity_id
+├── machine_id
+├── namespace_id  ← Included in token
+├── session_id
+└── ...
+```
+
+This enables:
+
+- **Tenant isolation**: Users in different namespaces cannot access each other's resources
+- **Context switching**: A single identity can operate in multiple namespaces with different roles
+- **Audit trails**: All operations are traceable to a specific namespace context
+
+#### Example: Multi-Organization Access
+
+Consider a user who belongs to two organizations:
+
+```
+Alice's Identity
+    │
+    ├── Namespace: "Acme Corp" (role: Admin)
+    │   └── Can manage team members, access admin features
+    │
+    └── Namespace: "Side Project" (role: Owner)
+        └── Full control, billing, settings
+```
+
+When Alice logs in, she authenticates to a specific namespace. Her JWT tokens will contain that namespace's ID, and backend services can enforce namespace-scoped permissions accordingly.
+
+### Policy Engine
+
+The Policy Engine provides authorization and rate limiting for all operations. Every authentication attempt and sensitive operation is evaluated against configurable policies before being allowed to proceed.
+
+#### Policy Context
+
+Each policy evaluation receives a context containing:
+
+```
+PolicyContext
+├── identity_id: UUID
+├── machine_id: Option<UUID>
+├── namespace_id: UUID
+├── auth_method: AuthMethod
+├── mfa_verified: bool
+├── operation: Operation
+├── resource: Option<Resource>
+├── ip_address: String
+├── user_agent: String
+├── timestamp: u64
+├── reputation_score: i32
+└── recent_failed_attempts: u32
+```
+
+#### Policy Verdicts
+
+The engine returns one of five verdicts:
+
+| Verdict | Description |
+|---------|-------------|
+| Allow | Operation permitted |
+| Deny | Operation blocked |
+| RequireAdditionalAuth | MFA or additional factor required |
+| RequireApproval | Multi-device approval needed |
+| RateLimited | Too many attempts, try later |
+
+#### Operation Risk Levels
+
+Operations are classified by risk level, which determines security requirements:
+
+**High-Risk Operations** (require MFA when enabled):
+- Disable Identity
+- Freeze Identity
+- Rotate Neural Key
+- Disable MFA
+- Change Password
+- Revoke All Sessions
+
+**Operations Requiring Multi-Device Approval**:
+- Rotate Neural Key → 2 device approvals
+- Unfreeze Identity → 2 device approvals
+
+#### Rate Limiting
+
+The policy engine enforces rate limits at multiple levels:
+
+| Level | Window | Limit | Purpose |
+|-------|--------|-------|---------|
+| IP Address | 1 minute | 100 requests | Prevent brute force from single source |
+| Identity | 1 hour | 1000 requests | Prevent account abuse |
+| Failed Attempts | 15 minutes | 5 failures | Lock out after repeated failures |
+
+Rate limit information is returned in response headers:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1705320060
+```
+
+#### Reputation System
+
+Each identity maintains a reputation score (0-100) that influences policy decisions:
+
+- **Starting score**: 50 (neutral)
+- **Successful operations**: Increase score
+- **Failed operations**: Decrease score
+- **Score below threshold**: Automatic denial
+
+The reputation system helps identify potentially compromised accounts or malicious actors without requiring manual intervention.
+
+#### Policy Evaluation Flow
+
+```
+Request
+    │
+    ├── 1. IP Rate Limit Check (middleware)
+    │
+    ├── 2. Authentication
+    │
+    └── 3. Policy Evaluation
+            │
+            ├── Identity status (frozen?)
+            ├── Machine status (revoked?)
+            ├── Namespace status (active?)
+            ├── Operation risk level
+            ├── MFA requirements
+            ├── Reputation score
+            ├── Failed attempt count
+            └── Approval requirements
+                    │
+                    └── Verdict (Allow/Deny/RequireAuth/...)
+```
+
 ### Challenge-Response Authentication
 
 Machine Key authentication uses a challenge-response protocol:
