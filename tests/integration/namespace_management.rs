@@ -8,7 +8,7 @@
 
 use serde_json::json;
 use uuid::Uuid;
-use zero_auth_crypto::{
+use zero_id_crypto::{
     canonicalize_identity_creation_message, derive_identity_signing_keypair, derive_machine_keypair,
     sign_message, MachineKeyCapabilities, NeuralKey,
 };

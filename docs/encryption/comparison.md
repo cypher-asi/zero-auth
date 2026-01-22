@@ -97,7 +97,7 @@ Zero-Auth uses the **Curve25519** family for all cryptographic operations:
 NeuralKey (32 bytes, client CSPRNG)
 │
 ├── Identity Signing Key (Ed25519)
-│   HKDF("cypher:auth:identity:v1" || identity_id)
+│   HKDF("cypher:id:identity:v1" || identity_id)
 │
 ├── Machine Keys (per device)
 │   ├── Signing Key (Ed25519)
@@ -106,7 +106,7 @@ NeuralKey (32 bytes, client CSPRNG)
 │       HKDF("cypher:shared:machine:encrypt:v1" || machine_id)
 │
 └── MFA KEK (for TOTP secret encryption)
-    HKDF("cypher:auth:mfa-kek:v1" || identity_id)
+    HKDF("cypher:id:mfa-kek:v1" || identity_id)
 ```
 
 **Design Choice**: Zero-Auth separates signing and encryption keys using domain separation strings, preventing cross-protocol attacks while maintaining deterministic derivation from a single root secret.
@@ -254,7 +254,7 @@ Key Generation:
   neural_key = CSPRNG(32 bytes)  // Client-generated
   
 Identity Key Derivation:
-  seed = HKDF-Expand(neural_key, "cypher:auth:identity:v1" || identity_id, 32)
+  seed = HKDF-Expand(neural_key, "cypher:id:identity:v1" || identity_id, 32)
   identity_keypair = Ed25519::from_seed(seed)
 
 Machine Key Derivation:
@@ -676,7 +676,7 @@ Quantum computers running **Shor's algorithm** can efficiently solve:
 
 | Platform | Current Status | Migration Plan | Timeline |
 |----------|---------------|----------------|----------|
-| **Zero-Auth** | **PQ-Hybrid available** | ML-DSA-65 + ML-KEM-768 implemented (optional feature) | **Implemented** |
+| **Zero-Auth** | **PQ-Hybrid implemented** | ML-DSA-65 + ML-KEM-768 always available (no feature flag) | **Production ready** |
 | **Bitcoin** | Vulnerable (ECDSA/Schnorr) | Research: SPHINCS+, XMSS hash-based signatures | No concrete timeline |
 | **Ethereum** | Vulnerable (ECDSA/BLS) | Research: ML-DSA for consensus, account abstraction for users | Long-term research |
 | **Solana** | Vulnerable (Ed25519) | Research: NIST PQC standards (ML-DSA, SLH-DSA) | No concrete timeline |
@@ -687,7 +687,7 @@ Quantum computers running **Shor's algorithm** can efficiently solve:
 
 Zero-Auth has implemented PQ-Hybrid key support with the following approach:
 
-**Key Schemes**:
+**Key Schemes** (always available, no feature flag required):
 ```rust
 pub enum KeyScheme {
     Classical,  // Ed25519 + X25519 only (default)
@@ -705,16 +705,17 @@ PQ KEM:               "cypher:shared:machine:pq-kem:v1"   → ML-KEM-768
 
 **Implementation Status**:
 
-| Algorithm | Status | Feature Flag |
-|-----------|--------|--------------|
-| ML-DSA-65 (Dilithium-3) | ✅ Implemented | `post-quantum` |
-| ML-KEM-768 (Kyber-768) | ✅ Implemented | `post-quantum` |
-| BLAKE3 | No change needed | N/A |
+| Algorithm | Status | Notes |
+|-----------|--------|-------|
+| ML-DSA-65 (Dilithium-3) | ✅ Implemented | NIST FIPS 204, always available |
+| ML-KEM-768 (Kyber-768) | ✅ Implemented | NIST FIPS 203, always available |
+| BLAKE3 | No change needed | Quantum-resistant hash |
 
 **PQ-Hybrid Key Derivation**:
 - Classical keys (Ed25519 + X25519) always present for OpenMLS compatibility
 - PQ keys derived alongside classical keys from same machine seed
 - Deterministic derivation from Neural Key preserved
+- Uses `fips203` and `fips204` crates for NIST-compliant implementations
 
 ### Signal's Post-Quantum Implementation
 
@@ -754,7 +755,7 @@ Standardized algorithms for future blockchain/messaging migration:
 
 ### Zero-Auth Specifications
 
-- [**zero-auth-crypto Specification v0.1**](../spec/v0.1/01-crypto.md): Cryptographic primitives and key derivation hierarchy
+- [**zero-id-crypto Specification v0.1**](../spec/v0.1/01-crypto.md): Cryptographic primitives and key derivation hierarchy
 - [**Cryptographic Primitives Specification v0.1**](../spec/v0.1/11-crypto-primitives.md): Algorithms, binary formats, and domain separation
 
 ### Standards and Specifications

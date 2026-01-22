@@ -1,8 +1,8 @@
-# zero-auth-identity-core Specification v0.1
+# zero-id-identity-core Specification v0.1
 
 ## 1. Overview
 
-The `zero-auth-identity-core` crate is the foundational subsystem for cryptographic identity management. It handles identity creation, machine key enrollment, namespace management, and sensitive ceremonies like Neural Key rotation and recovery.
+The `zero-id-identity-core` crate is the foundational subsystem for cryptographic identity management. It handles identity creation, machine key enrollment, namespace management, and sensitive ceremonies like Neural Key rotation and recovery.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -25,17 +25,17 @@ The `zero-auth-identity-core` crate is the foundational subsystem for cryptograp
 
 ```mermaid
 graph TD
-    CRYPTO[zero-auth-crypto]
-    STORAGE[zero-auth-storage]
-    POLICY[zero-auth-policy]
-    IDENTITY[zero-auth-identity-core]
+    CRYPTO[zero-id-crypto]
+    STORAGE[zero-id-storage]
+    POLICY[zero-id-policy]
+    IDENTITY[zero-id-identity-core]
     
     IDENTITY --> CRYPTO
     IDENTITY --> STORAGE
     IDENTITY --> POLICY
     
-    METHODS[zero-auth-methods] --> IDENTITY
-    SERVER[zero-auth-server] --> IDENTITY
+    METHODS[zero-id-methods] --> IDENTITY
+    SERVER[zero-id-server] --> IDENTITY
     
     style IDENTITY fill:#e1f5fe
 ```
@@ -314,7 +314,7 @@ pub enum FreezeReason {
 
 Revocation events for the integrations subsystem (SSE streaming, webhooks). These events are published when security-relevant state changes occur and are delivered to external services.
 
-> **Note**: The sessions crate has a separate internal `RevocationEvent` type for session-specific events. This is the canonical type for external event delivery via `zero-auth-integrations`.
+> **Note**: The sessions crate has a separate internal `RevocationEvent` type for session-specific events. This is the canonical type for external event delivery via `zero-id-integrations`.
 
 ```rust
 #[repr(u8)]
@@ -715,9 +715,9 @@ Revocation events are published for:
 
 | Crate | Purpose |
 |-------|---------|
-| `zero-auth-crypto` | Signature verification, key types |
-| `zero-auth-storage` | Persistent storage |
-| `zero-auth-policy` | Policy evaluation |
+| `zero-id-crypto` | Signature verification, key types |
+| `zero-id-storage` | Persistent storage |
+| `zero-id-policy` | Policy evaluation |
 
 ### 7.2 External Dependencies
 

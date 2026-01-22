@@ -1,0 +1,46 @@
+[package]
+name = "zero-id-crypto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Cryptographic primitives
+chacha20poly1305 = { workspace = true }
+hkdf = { workspace = true }
+sha2 = { workspace = true }
+ed25519-dalek = { workspace = true }
+x25519-dalek = { workspace = true }
+blake3 = { workspace = true }
+argon2 = { workspace = true }
+zeroize = { workspace = true }
+rand = { workspace = true }
+sharks = { workspace = true }
+
+# Post-quantum cryptography (always available)
+fips204 = "0.4"
+fips203 = "0.4"
+
+# Serialization
+serde = { workspace = true }
+
+# Encoding
+hex = { workspace = true }
+
+# UUID
+uuid = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Utilities
+bitflags = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lib]
+name = "zero_id_crypto"
+path = "src/lib.rs"

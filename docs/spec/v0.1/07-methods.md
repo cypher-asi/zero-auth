@@ -1,8 +1,8 @@
-# zero-auth-methods Specification v0.1
+# zero-id-methods Specification v0.1
 
 ## 1. Overview
 
-The `zero-auth-methods` crate provides multiple authentication mechanisms for Zero-Auth. It supports five distinct authentication methods: machine key challenge-response, email+password, OAuth/OIDC providers, EVM wallet signatures, and multi-factor authentication (TOTP).
+The `zero-id-methods` crate provides multiple authentication mechanisms for Zero-Auth. It supports five distinct authentication methods: machine key challenge-response, email+password, OAuth/OIDC providers, EVM wallet signatures, and multi-factor authentication (TOTP).
 
 ### 1.1 Purpose and Responsibilities
 
@@ -27,18 +27,18 @@ The `zero-auth-methods` crate provides multiple authentication mechanisms for Ze
 
 ```mermaid
 graph TD
-    CRYPTO[zero-auth-crypto]
-    STORAGE[zero-auth-storage]
-    IDENTITY[zero-auth-identity-core]
-    POLICY[zero-auth-policy]
-    METHODS[zero-auth-methods]
+    CRYPTO[zero-id-crypto]
+    STORAGE[zero-id-storage]
+    IDENTITY[zero-id-identity-core]
+    POLICY[zero-id-policy]
+    METHODS[zero-id-methods]
     
     METHODS --> CRYPTO
     METHODS --> STORAGE
     METHODS --> IDENTITY
     METHODS --> POLICY
     
-    SERVER[zero-auth-server] --> METHODS
+    SERVER[zero-id-server] --> METHODS
     
     style METHODS fill:#e1f5fe
 ```
@@ -891,7 +891,7 @@ Encrypted MFA Secret:
 ┌─────────────────────────────────────────────────────────────┐
 │ KEK Derivation                                              │
 │   ikm = service_master_key || identity_id                   │
-│   kek = HKDF-SHA256(ikm, "cypher:auth:mfa-kek:v1")         │
+│   kek = HKDF-SHA256(ikm, "cypher:id:mfa-kek:v1")         │
 ├─────────────────────────────────────────────────────────────┤
 │ Encryption                                                  │
 │   nonce = random(24)  // XChaCha20 nonce                   │
@@ -941,11 +941,11 @@ Virtual Machine Properties:
 - Warning returned to encourage real device enrollment
 
 Key Derivation:
-  machine_id = HKDF(identity_id, "cypher:auth:virtual-machine-id:v1")[..16]
+  machine_id = HKDF(identity_id, "cypher:id:virtual-machine-id:v1")[..16]
   signing_seed = HKDF(service_master_key || identity_id, 
-                      "cypher:auth:virtual-machine-signing:v1")
+                      "cypher:id:virtual-machine-signing:v1")
   encryption_seed = HKDF(service_master_key || identity_id,
-                         "cypher:auth:virtual-machine-encryption:v1")
+                         "cypher:id:virtual-machine-encryption:v1")
 ```
 
 ### 6.5 Input Validation
@@ -986,10 +986,10 @@ if !password_valid || credential.is_none() {
 
 | Crate | Purpose |
 |-------|---------|
-| `zero-auth-crypto` | Key derivation, encryption, signatures, timestamps |
-| `zero-auth-storage` | Persistent storage for challenges, credentials |
-| `zero-auth-policy` | Policy evaluation, rate limiting |
-| `zero-auth-identity-core` | Identity and machine lookup |
+| `zero-id-crypto` | Key derivation, encryption, signatures, timestamps |
+| `zero-id-storage` | Persistent storage for challenges, credentials |
+| `zero-id-policy` | Policy evaluation, rate limiting |
+| `zero-id-identity-core` | Identity and machine lookup |
 
 ### 7.2 External Dependencies
 
@@ -1019,7 +1019,7 @@ if !password_valid || credential.is_none() {
 ```rust
 // Challenge configuration
 const CHALLENGE_EXPIRY_SECONDS: u64 = 60;
-const DEFAULT_AUDIENCE: &str = "zero-auth.cypher.io";
+const DEFAULT_AUDIENCE: &str = "zero-id.cypher.io";
 
 // TOTP configuration
 const TOTP_DIGITS: usize = 6;

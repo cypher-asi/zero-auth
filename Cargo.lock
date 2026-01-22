@@ -3436,7 +3436,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zero-auth-client"
+name = "zero-id-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3453,12 +3453,12 @@ dependencies = [
  "serde_json",
  "tokio",
  "uuid",
- "zero-auth-crypto",
+ "zero-id-crypto",
  "zeroize",
 ]
 
 [[package]]
-name = "zero-auth-crypto"
+name = "zero-id-crypto"
 version = "0.1.0"
 dependencies = [
  "argon2",
@@ -3482,7 +3482,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zero-auth-identity-core"
+name = "zero-id-identity-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -3492,13 +3492,13 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "zero-auth-crypto",
- "zero-auth-policy",
- "zero-auth-storage",
+ "zero-id-crypto",
+ "zero-id-policy",
+ "zero-id-storage",
 ]
 
 [[package]]
-name = "zero-auth-integration-tests"
+name = "zero-id-integration-tests"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -3508,14 +3508,14 @@ dependencies = [
  "serde_json",
  "tokio",
  "uuid",
- "zero-auth-crypto",
- "zero-auth-identity-core",
- "zero-auth-policy",
- "zero-auth-storage",
+ "zero-id-crypto",
+ "zero-id-identity-core",
+ "zero-id-policy",
+ "zero-id-storage",
 ]
 
 [[package]]
-name = "zero-auth-integrations"
+name = "zero-id-integrations"
 version = "0.1.0"
 dependencies = [
  "bincode",
@@ -3531,12 +3531,12 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "uuid",
- "zero-auth-crypto",
- "zero-auth-storage",
+ "zero-id-crypto",
+ "zero-id-storage",
 ]
 
 [[package]]
-name = "zero-auth-methods"
+name = "zero-id-methods"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -3555,15 +3555,15 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
- "zero-auth-crypto",
- "zero-auth-identity-core",
- "zero-auth-policy",
- "zero-auth-storage",
+ "zero-id-crypto",
+ "zero-id-identity-core",
+ "zero-id-policy",
+ "zero-id-storage",
  "zeroize",
 ]
 
 [[package]]
-name = "zero-auth-policy"
+name = "zero-id-policy"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -3575,11 +3575,11 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "zero-auth-storage",
+ "zero-id-storage",
 ]
 
 [[package]]
-name = "zero-auth-server"
+name = "zero-id-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3600,17 +3600,17 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
- "zero-auth-crypto",
- "zero-auth-identity-core",
- "zero-auth-integrations",
- "zero-auth-methods",
- "zero-auth-policy",
- "zero-auth-sessions",
- "zero-auth-storage",
+ "zero-id-crypto",
+ "zero-id-identity-core",
+ "zero-id-integrations",
+ "zero-id-methods",
+ "zero-id-policy",
+ "zero-id-sessions",
+ "zero-id-storage",
 ]
 
 [[package]]
-name = "zero-auth-sessions"
+name = "zero-id-sessions"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -3627,15 +3627,15 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "zero-auth-crypto",
- "zero-auth-identity-core",
- "zero-auth-policy",
- "zero-auth-storage",
+ "zero-id-crypto",
+ "zero-id-identity-core",
+ "zero-id-policy",
+ "zero-id-storage",
  "zeroize",
 ]
 
 [[package]]
-name = "zero-auth-storage"
+name = "zero-id-storage"
 version = "0.1.0"
 dependencies = [
  "async-trait",

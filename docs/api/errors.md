@@ -1,6 +1,6 @@
-# zero-auth API Error Reference
+# zero-id API Error Reference
 
-This document describes all error codes returned by the zero-auth API, their HTTP status codes, and troubleshooting guidance.
+This document describes all error codes returned by the zero-id API, their HTTP status codes, and troubleshooting guidance.
 
 ## Error Response Format
 

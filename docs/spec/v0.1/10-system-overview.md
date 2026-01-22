@@ -83,21 +83,21 @@ graph TB
 ```mermaid
 graph TD
     subgraph "Core Layer"
-        CRYPTO[zero-auth-crypto]
-        STORAGE[zero-auth-storage]
+        CRYPTO[zero-id-crypto]
+        STORAGE[zero-id-storage]
     end
 
     subgraph "Domain Layer"
-        POLICY[zero-auth-policy]
-        IDENTITY[zero-auth-identity-core]
-        INTEGRATIONS[zero-auth-integrations]
-        SESSIONS[zero-auth-sessions]
+        POLICY[zero-id-policy]
+        IDENTITY[zero-id-identity-core]
+        INTEGRATIONS[zero-id-integrations]
+        SESSIONS[zero-id-sessions]
     end
 
     subgraph "Application Layer"
-        METHODS[zero-auth-methods]
-        SERVER[zero-auth-server]
-        CLIENT[zero-auth-client]
+        METHODS[zero-id-methods]
+        SERVER[zero-id-server]
+        CLIENT[zero-id-client]
     end
 
     %% Core has no internal deps
@@ -130,15 +130,15 @@ graph TD
 
 | Crate | Responsibility |
 |-------|----------------|
-| `zero-auth-crypto` | Key derivation, encryption, signatures, Shamir secret sharing |
-| `zero-auth-storage` | Storage abstraction, RocksDB implementation, column families |
-| `zero-auth-policy` | Rate limiting, reputation scoring, authorization decisions |
-| `zero-auth-identity-core` | Identity, machine, and namespace lifecycle management |
-| `zero-auth-integrations` | mTLS service auth, SSE streaming, webhook delivery |
-| `zero-auth-sessions` | JWT issuance, token refresh, introspection, key rotation |
-| `zero-auth-methods` | Machine, email, OAuth, wallet, and MFA authentication |
-| `zero-auth-server` | HTTP API, middleware, request handling |
-| `zero-auth-client` | CLI interface, local credential storage |
+| `zero-id-crypto` | Key derivation, encryption, signatures, Shamir secret sharing |
+| `zero-id-storage` | Storage abstraction, RocksDB implementation, column families |
+| `zero-id-policy` | Rate limiting, reputation scoring, authorization decisions |
+| `zero-id-identity-core` | Identity, machine, and namespace lifecycle management |
+| `zero-id-integrations` | mTLS service auth, SSE streaming, webhook delivery |
+| `zero-id-sessions` | JWT issuance, token refresh, introspection, key rotation |
+| `zero-id-methods` | Machine, email, OAuth, wallet, and MFA authentication |
+| `zero-id-server` | HTTP API, middleware, request handling |
+| `zero-id-client` | CLI interface, local credential storage |
 
 ---
 
@@ -151,7 +151,7 @@ NeuralKey (32 bytes, client-generated, never leaves device)
 │
 ├─── Identity Signing Key (ISK)
 │    ├── Algorithm: Ed25519
-│    ├── Derivation: HKDF("cypher:auth:identity:v1" || identity_id)
+│    ├── Derivation: HKDF("cypher:id:identity:v1" || identity_id)
 │    └── Purpose: Signs machine enrollments, key rotations
 │
 ├─── Machine Keys (per machine_id, epoch)
@@ -166,7 +166,7 @@ NeuralKey (32 bytes, client-generated, never leaves device)
 │        └── Purpose: ECDH key agreement, data encryption
 │
 └─── MFA KEK
-     ├── Derivation: HKDF("cypher:auth:mfa-kek:v1" || identity_id)
+     ├── Derivation: HKDF("cypher:id:mfa-kek:v1" || identity_id)
      └── Purpose: Encrypts MFA TOTP secrets at rest
 ```
 
@@ -176,11 +176,11 @@ All domain strings follow the format: `cypher:{service}:{purpose}:v{version}`
 
 | Domain String | Purpose |
 |---------------|---------|
-| `cypher:auth:identity:v1` | Identity signing key derivation |
+| `cypher:id:identity:v1` | Identity signing key derivation |
 | `cypher:shared:machine:v1` | Machine seed derivation |
 | `cypher:shared:machine:sign:v1` | Machine signing key |
 | `cypher:shared:machine:encrypt:v1` | Machine encryption key |
-| `cypher:auth:mfa-kek:v1` | MFA secret encryption |
+| `cypher:id:mfa-kek:v1` | MFA secret encryption |
 | `cypher:shared:session:encryption:v1` | Session key encryption |
 
 ---
@@ -490,9 +490,9 @@ sequenceDiagram
 | Setting | Environment Variable | Default |
 |---------|---------------------|---------|
 | Server bind address | `BIND_ADDRESS` | `127.0.0.1:9999` |
-| Database path | `DATABASE_PATH` | `./data/zero-auth.db` |
+| Database path | `DATABASE_PATH` | `./data/zero-id.db` |
 | Service master key | `SERVICE_MASTER_KEY` | Required in prod |
-| JWT issuer | `JWT_ISSUER` | `https://zero-auth.cypher.io` |
+| JWT issuer | `JWT_ISSUER` | `https://zero-id.cypher.io` |
 | Access token expiry | `ACCESS_TOKEN_EXPIRY` | 900 (15 min) |
 | Refresh token expiry | `REFRESH_TOKEN_EXPIRY` | 2592000 (30 days) |
 
@@ -554,7 +554,7 @@ graph LR
 // Pattern 1: Introspection
 async fn validate_via_introspection(token: &str) -> Result<Claims> {
     let response = client
-        .post("http://zero-auth:9999/v1/auth/introspect")
+        .post("http://zero-id:9999/v1/auth/introspect")
         .json(&json!({"token": token, "operation_type": "read"}))
         .send()
         .await?;

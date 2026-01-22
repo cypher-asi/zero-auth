@@ -1,14 +1,14 @@
 [workspace]
 members = [
-    "crates/zero-auth-crypto",
-    "crates/zero-auth-storage",
-    "crates/zero-auth-policy",
-    "crates/zero-auth-identity-core",
-    "crates/zero-auth-methods",
-    "crates/zero-auth-sessions",
-    "crates/zero-auth-integrations",
-    "crates/zero-auth-server",
-    "crates/zero-auth-client",
+    "crates/zero-id-crypto",
+    "crates/zero-id-storage",
+    "crates/zero-id-policy",
+    "crates/zero-id-identity-core",
+    "crates/zero-id-methods",
+    "crates/zero-id-sessions",
+    "crates/zero-id-integrations",
+    "crates/zero-id-server",
+    "crates/zero-id-client",
     "tests",
 ]
 resolver = "2"

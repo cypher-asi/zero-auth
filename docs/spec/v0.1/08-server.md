@@ -1,8 +1,8 @@
-# zero-auth-server Specification v0.1
+# zero-id-server Specification v0.1
 
 ## 1. Overview
 
-The `zero-auth-server` crate provides the HTTP API server for Zero-Auth. It exposes RESTful endpoints for identity management, authentication, session management, and service integrations using the Axum web framework.
+The `zero-id-server` crate provides the HTTP API server for Zero-Auth. It exposes RESTful endpoints for identity management, authentication, session management, and service integrations using the Axum web framework.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -28,14 +28,14 @@ The `zero-auth-server` crate provides the HTTP API server for Zero-Auth. It expo
 
 ```mermaid
 graph TD
-    CRYPTO[zero-auth-crypto]
-    STORAGE[zero-auth-storage]
-    POLICY[zero-auth-policy]
-    IDENTITY[zero-auth-identity-core]
-    METHODS[zero-auth-methods]
-    SESSIONS[zero-auth-sessions]
-    INTEGRATIONS[zero-auth-integrations]
-    SERVER[zero-auth-server]
+    CRYPTO[zero-id-crypto]
+    STORAGE[zero-id-storage]
+    POLICY[zero-id-policy]
+    IDENTITY[zero-id-identity-core]
+    METHODS[zero-id-methods]
+    SESSIONS[zero-id-sessions]
+    INTEGRATIONS[zero-id-integrations]
+    SERVER[zero-id-server]
     
     SERVER --> CRYPTO
     SERVER --> STORAGE
@@ -57,9 +57,9 @@ graph TD
 ```rust
 pub struct Config {
     pub bind_address: SocketAddr,           // Default: 127.0.0.1:9999
-    pub database_path: PathBuf,             // Default: ./data/zero-auth.db
+    pub database_path: PathBuf,             // Default: ./data/zero-id.db
     pub service_master_key: [u8; 32],       // Required in prod, random in dev
-    pub jwt_issuer: String,                 // Default: https://zero-auth.cypher.io
+    pub jwt_issuer: String,                 // Default: https://zero-id.cypher.io
     pub jwt_audience: String,               // Default: zero-vault
     pub access_token_expiry: u64,           // Default: 900 (15 min)
     pub refresh_token_expiry: u64,          // Default: 2592000 (30 days)
@@ -646,9 +646,9 @@ ApiError::Internal(err) => {
 |----------|----------|---------|-------------|
 | `RUN_MODE` | No | `prod` | `dev` or `prod` |
 | `BIND_ADDRESS` | No | `127.0.0.1:9999` | Server bind address |
-| `DATABASE_PATH` | No | `./data/zero-auth.db` | RocksDB path |
+| `DATABASE_PATH` | No | `./data/zero-id.db` | RocksDB path |
 | `SERVICE_MASTER_KEY` | Prod only | Random in dev | 32-byte hex key |
-| `JWT_ISSUER` | No | `https://zero-auth.cypher.io` | JWT issuer claim |
+| `JWT_ISSUER` | No | `https://zero-id.cypher.io` | JWT issuer claim |
 | `JWT_AUDIENCE` | No | `zero-vault` | JWT audience claim |
 | `ACCESS_TOKEN_EXPIRY_SECONDS` | No | `900` | Access token TTL |
 | `REFRESH_TOKEN_EXPIRY_SECONDS` | No | `2592000` | Refresh token TTL |
@@ -672,13 +672,13 @@ ApiError::Internal(err) => {
 
 | Crate | Purpose |
 |-------|---------|
-| `zero-auth-crypto` | Signature verification, timestamps |
-| `zero-auth-storage` | RocksDB storage backend |
-| `zero-auth-policy` | Rate limiting, policy evaluation |
-| `zero-auth-identity-core` | Identity and machine operations |
-| `zero-auth-methods` | Authentication methods |
-| `zero-auth-sessions` | Session and token management |
-| `zero-auth-integrations` | Service registration, SSE |
+| `zero-id-crypto` | Signature verification, timestamps |
+| `zero-id-storage` | RocksDB storage backend |
+| `zero-id-policy` | Rate limiting, policy evaluation |
+| `zero-id-identity-core` | Identity and machine operations |
+| `zero-id-methods` | Authentication methods |
+| `zero-id-sessions` | Session and token management |
+| `zero-id-integrations` | Service registration, SSE |
 
 ### 8.2 External Dependencies
 

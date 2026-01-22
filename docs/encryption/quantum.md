@@ -1,12 +1,12 @@
 # Quantum Computing Risks and Migration Strategy
 
-This document assesses the quantum computing threat landscape for zero-auth's cryptographic primitives and outlines a migration strategy to post-quantum cryptography (PQC).
+This document assesses the quantum computing threat landscape for zero-id's cryptographic primitives and outlines a migration strategy to post-quantum cryptography (PQC).
 
 ## Table of Contents
 
 1. [Quantum Computing Threat Overview](#1-quantum-computing-threat-overview)
 2. [Current Cryptographic Inventory](#2-current-cryptographic-inventory)
-3. [Risk Assessment for zero-auth](#3-risk-assessment-for-zero-auth)
+3. [Risk Assessment for zero-id](#3-risk-assessment-for-zero-id)
 4. [NIST Post-Quantum Standards](#4-nist-post-quantum-standards)
 5. [Migration Strategy](#5-migration-strategy)
 6. [Implementation Considerations](#6-implementation-considerations)
@@ -24,7 +24,7 @@ Shor's algorithm, when run on a sufficiently powerful quantum computer, can solv
 - **Discrete Logarithm Problem (DLP)**: Breaks DSA, Diffie-Hellman
 - **Elliptic Curve Discrete Logarithm Problem (ECDLP)**: Breaks ECDSA, Ed25519, X25519, ECDH
 
-**Impact on zero-auth**: Ed25519 signatures and X25519 key exchange are vulnerable. A quantum computer with ~2,330 logical qubits could break 256-bit elliptic curve cryptography.
+**Impact on zero-id**: Ed25519 signatures and X25519 key exchange are vulnerable. A quantum computer with ~2,330 logical qubits could break 256-bit elliptic curve cryptography.
 
 ### 1.2 Grover's Algorithm
 
@@ -33,7 +33,7 @@ Grover's algorithm provides a quadratic speedup for unstructured search problems
 - **Symmetric Encryption**: Effective key strength is halved (256-bit → 128-bit post-quantum security)
 - **Hash Functions**: Collision resistance is reduced (256-bit → 128-bit post-quantum)
 
-**Impact on zero-auth**: Symmetric primitives remain secure with current key sizes. A 256-bit key (XChaCha20) provides 128-bit post-quantum security, which is considered adequate.
+**Impact on zero-id**: Symmetric primitives remain secure with current key sizes. A 256-bit key (XChaCha20) provides 128-bit post-quantum security, which is considered adequate.
 
 ### 1.3 Timeline Estimates
 
@@ -53,9 +53,9 @@ Quantum computing timeline predictions vary significantly:
 
 ## 2. Current Cryptographic Inventory
 
-Based on analysis of `crates/zero-auth-crypto/src/`, the system uses the following algorithms:
+Based on analysis of `crates/zero-id-crypto/src/`, the system uses the following algorithms:
 
-| Algorithm | Usage in zero-auth | Key/Output Size | Quantum Status |
+| Algorithm | Usage in zero-id | Key/Output Size | Quantum Status |
 |-----------|-------------------|-----------------|----------------|
 | **XChaCha20-Poly1305** | Symmetric encryption (AEAD) | 256-bit key, 192-bit nonce | ✅ Safe (128-bit PQ security) |
 | **Ed25519** | Digital signatures | 32B public key, 64B signature | ⚠️ **Vulnerable** |
@@ -81,7 +81,7 @@ Based on analysis of `crates/zero-auth-crypto/src/`, the system uses the followi
 
 ---
 
-## 3. Risk Assessment for zero-auth
+## 3. Risk Assessment for zero-id
 
 ### 3.1 High Risk Components
 
@@ -156,7 +156,7 @@ NIST finalized the first set of post-quantum cryptographic standards in 2024:
 | ML-KEM-768 | NIST Level 3 | 1,184 B | 1,088 B | 32 B |
 | ML-KEM-1024 | NIST Level 5 | 1,568 B | 1,568 B | 32 B |
 
-**Recommendation for zero-auth**: ML-KEM-768 (128-bit classical / NIST Level 3)
+**Recommendation for zero-id**: ML-KEM-768 (128-bit classical / NIST Level 3)
 
 ### 4.2 ML-DSA (FIPS 204) - Digital Signatures
 
@@ -168,7 +168,7 @@ NIST finalized the first set of post-quantum cryptographic standards in 2024:
 | ML-DSA-65 | NIST Level 3 | 1,952 B | 3,309 B |
 | ML-DSA-87 | NIST Level 5 | 2,592 B | 4,627 B |
 
-**Recommendation for zero-auth**: ML-DSA-65 (128-bit classical / NIST Level 3)
+**Recommendation for zero-id**: ML-DSA-65 (128-bit classical / NIST Level 3)
 
 ### 4.3 SLH-DSA (FIPS 205) - Hash-Based Signatures
 
@@ -294,22 +294,29 @@ Once hybrid mode is stable and ecosystem support matures:
 
 ### 6.1 Rust Ecosystem
 
-**Recommended Libraries**:
+**Libraries Used in zero-id-crypto**:
+
+| Library | Purpose | Status |
+|---------|---------|--------|
+| `fips203` | ML-KEM-768 (NIST FIPS 203) | Stable, integrated |
+| `fips204` | ML-DSA-65 (NIST FIPS 204) | Stable, integrated |
+
+**Other Available Libraries**:
 
 | Library | Purpose | Status |
 |---------|---------|--------|
 | `pqcrypto` | Pure Rust PQC implementations | Stable |
 | `oqs-rs` | Bindings to liboqs (Open Quantum Safe) | Stable |
-| `ml-kem` | RustCrypto ML-KEM implementation | In development |
-| `ml-dsa` | RustCrypto ML-DSA implementation | In development |
+| `ml-kem` | RustCrypto ML-KEM implementation | Stable |
+| `ml-dsa` | RustCrypto ML-DSA implementation | Stable |
 
-**Example Cargo.toml additions**:
+**zero-id-crypto Cargo.toml**:
 
 ```toml
 [dependencies]
-# Post-quantum cryptography
-pqcrypto-kyber = "0.8"      # ML-KEM (Kyber)
-pqcrypto-dilithium = "0.5"  # ML-DSA (Dilithium)
+# Post-quantum cryptography (NIST FIPS standards)
+fips203 = "0.4"  # ML-KEM-768 key encapsulation
+fips204 = "0.4"  # ML-DSA-65 digital signatures
 ```
 
 ### 6.2 Storage Schema Updates
@@ -353,7 +360,9 @@ Areas requiring protocol changes:
 1. **Challenge-Response Authentication**: Update challenge canonicalization to include algorithm version
 2. **JWT Signing**: Support multiple signature algorithms in token headers
 3. **Machine Enrollment**: Extend enrollment message format for larger keys
-4. **Key Derivation**: Maintain domain separation for PQC key derivation paths
+4. **Key Derivation**: ✅ Domain separation for PQ keys implemented:
+   - `cypher:shared:machine:pq-sign:v1` for ML-DSA-65
+   - `cypher:shared:machine:pq-kem:v1` for ML-KEM-768
 
 ### 6.5 Backward Compatibility
 
@@ -401,13 +410,15 @@ Areas requiring protocol changes:
 1. ✅ Inventory complete - all cryptographic primitives documented
 2. ✅ Risk assessment complete - Ed25519 and X25519 identified as vulnerable
 3. ✅ **PQ-Hybrid key derivation implemented** (ML-DSA-65 + ML-KEM-768)
-4. ✅ KeyScheme enum added (Classical, PqHybrid)
+4. ✅ `KeyScheme` enum added (Classical, PqHybrid)
 5. ✅ Domain separation strings for PQ keys
 6. ✅ **Always-available implementation** (no feature flag required)
+7. ✅ PQ key types exported from crate root (`MlDsaKeyPair`, `MlKemKeyPair`)
+8. ✅ FIPS 203/204 compliant implementations integrated
 
 ### Remaining Actions
 
-1. Update storage layer for larger key sizes
+1. Update storage layer for larger key sizes (60x increase for PQ public keys)
 2. Add algorithm negotiation to authentication protocol
 3. Create migration tooling for existing identities
 4. Benchmark PQC performance on target hardware
@@ -423,26 +434,38 @@ Areas requiring protocol changes:
 | `MachineKeyPair` with PQ support | ✅ Implemented |
 | `derive_machine_keypair_with_scheme()` | ✅ Implemented |
 | PQ domain separation strings | ✅ Implemented |
+| `fips203`/`fips204` integration | ✅ Implemented |
+| Always-available (no feature flag) | ✅ Implemented |
 | Hybrid signature verification | 📋 Pending (app-level) |
 | Storage schema updates | 📋 Pending |
 | Protocol algorithm negotiation | 📋 Pending |
 
 ### Usage
 
-Add `zero-auth-crypto` to your dependencies:
+Add `zero-id-crypto` to your dependencies:
 
 ```toml
 [dependencies]
-zero-auth-crypto = { version = "0.1" }
+zero-id-crypto = { version = "0.1" }
 ```
 
-Derive PQ-Hybrid machine keys (always available):
+Derive PQ-Hybrid machine keys:
 
 ```rust
-use zero_auth_crypto::{
-    derive_machine_keypair_with_scheme, KeyScheme, MachineKeyCapabilities,
+use zero_id_crypto::{
+    derive_machine_keypair_with_scheme,
+    KeyScheme,
+    MachineKeyCapabilities,
+    NeuralKey,
 };
 
+// Generate or reconstruct Neural Key
+let neural_key = NeuralKey::generate()?;
+let identity_id = uuid::Uuid::new_v4();
+let machine_id = uuid::Uuid::new_v4();
+let epoch = 1u64;
+
+// Derive machine keys with PQ-Hybrid scheme
 let keypair = derive_machine_keypair_with_scheme(
     &neural_key,
     &identity_id,
@@ -452,11 +475,20 @@ let keypair = derive_machine_keypair_with_scheme(
     KeyScheme::PqHybrid,
 )?;
 
-// Access PQ keys
+// Classical keys (always present, OpenMLS compatible)
+let ed25519_pk = keypair.signing_public_key();       // 32 bytes
+let x25519_pk = keypair.encryption_public_key();     // 32 bytes
+
+// Post-quantum keys (present in PqHybrid mode)
 if let Some(pq_sign_pk) = keypair.pq_signing_public_key() {
-    // 1,952-byte ML-DSA-65 public key
+    // 1,952-byte ML-DSA-65 public key (NIST FIPS 204)
 }
 if let Some(pq_kem_pk) = keypair.pq_encryption_public_key() {
-    // 1,184-byte ML-KEM-768 public key
+    // 1,184-byte ML-KEM-768 public key (NIST FIPS 203)
+}
+
+// Sign with ML-DSA-65
+if let Some(pq_keypair) = keypair.pq_signing_key_pair() {
+    let signature = pq_keypair.sign(b"message")?;  // 3,309 bytes
 }
 ```

@@ -1,8 +1,8 @@
-# zero-auth-storage Specification v0.1
+# zero-id-storage Specification v0.1
 
 ## 1. Overview
 
-The `zero-auth-storage` crate provides the storage abstraction layer for Zero-Auth, with a RocksDB implementation. It defines traits for key-value operations and batch/transaction support, enabling both production use and mock implementations for testing.
+The `zero-id-storage` crate provides the storage abstraction layer for Zero-Auth, with a RocksDB implementation. It defines traits for key-value operations and batch/transaction support, enabling both production use and mock implementations for testing.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -23,13 +23,13 @@ The `zero-auth-storage` crate provides the storage abstraction layer for Zero-Au
 
 ```mermaid
 graph TD
-    STORAGE[zero-auth-storage]
+    STORAGE[zero-id-storage]
     
-    POLICY[zero-auth-policy] --> STORAGE
-    IDENTITY[zero-auth-identity-core] --> STORAGE
-    INTEGRATIONS[zero-auth-integrations] --> STORAGE
-    SESSIONS[zero-auth-sessions] --> STORAGE
-    SERVER[zero-auth-server] --> STORAGE
+    POLICY[zero-id-policy] --> STORAGE
+    IDENTITY[zero-id-identity-core] --> STORAGE
+    INTEGRATIONS[zero-id-integrations] --> STORAGE
+    SESSIONS[zero-id-sessions] --> STORAGE
+    SERVER[zero-id-server] --> STORAGE
     
     style STORAGE fill:#e1f5fe
 ```
@@ -481,7 +481,7 @@ Column families with TTL requirements must be enforced at the application layer:
 
 ### 7.1 Internal Crate Dependencies
 
-None. This is a foundational crate alongside `zero-auth-crypto`.
+None. This is a foundational crate alongside `zero-id-crypto`.
 
 ### 7.2 External Dependencies
 
@@ -559,7 +559,7 @@ pub fn all_column_families() -> Vec<&'static str>;
 ### 9.1 Basic Operations
 
 ```rust
-use zero_auth_storage::{RocksDbStorage, Storage, CF_IDENTITIES};
+use zero_id_storage::{RocksDbStorage, Storage, CF_IDENTITIES};
 
 // Open database
 let storage = RocksDbStorage::open("/path/to/db")?;
@@ -584,7 +584,7 @@ storage.delete(CF_IDENTITIES, &identity_id).await?;
 ### 9.2 Batch Operations
 
 ```rust
-use zero_auth_storage::{RocksDbStorage, Storage, BatchExt, CF_IDENTITIES, CF_MACHINE_KEYS};
+use zero_id_storage::{RocksDbStorage, Storage, BatchExt, CF_IDENTITIES, CF_MACHINE_KEYS};
 
 let storage = RocksDbStorage::open("/path/to/db")?;
 
@@ -603,7 +603,7 @@ batch.commit().await?;
 ### 9.3 Prefix Queries
 
 ```rust
-use zero_auth_storage::{RocksDbStorage, Storage, CF_MACHINE_KEYS_BY_IDENTITY};
+use zero_id_storage::{RocksDbStorage, Storage, CF_MACHINE_KEYS_BY_IDENTITY};
 
 let storage = RocksDbStorage::open("/path/to/db")?;
 

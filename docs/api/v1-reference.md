@@ -1,6 +1,6 @@
-# zero-auth API v1 Reference
+# zero-id API v1 Reference
 
-Complete endpoint reference for the zero-auth REST API.
+Complete endpoint reference for the zero-id REST API.
 
 ## Table of Contents
 
@@ -135,7 +135,7 @@ Create a new identity with an initial machine key.
 | Capability | Description |
 |------------|-------------|
 | `FULL_DEVICE` | All capabilities (convenience alias) |
-| `AUTHENTICATE` | Can authenticate to zero-auth |
+| `AUTHENTICATE` | Can authenticate to zero-id |
 | `SIGN` | Can sign challenges and messages |
 | `ENCRYPT` | Can encrypt/decrypt data |
 | `SVK_UNWRAP` | Can unwrap vault keys (zero-vault integration) |
@@ -1164,7 +1164,7 @@ Authenticate using an EVM wallet signature (EIP-191).
 {
   "wallet_address": "0x1234567890abcdef1234567890abcdef12345678",
   "signature": "a1b2c3d4...",
-  "message": "Sign in to zero-auth\nTimestamp: 1705838400\nWallet: 0x1234..."
+  "message": "Sign in to zero-id\nTimestamp: 1705838400\nWallet: 0x1234..."
 }
 ```
 
@@ -1177,7 +1177,7 @@ Authenticate using an EVM wallet signature (EIP-191).
 **Message Format:**
 
 ```
-Sign in to zero-auth
+Sign in to zero-id
 Timestamp: <unix_timestamp>
 Wallet: <wallet_address>
 ```
@@ -1534,7 +1534,7 @@ Set up TOTP-based MFA for an identity.
   "mfa_enabled": true,
   "enabled_at": "2025-01-21T12:00:00Z",
   "totp_secret": "JBSWY3DPEHPK3PXP",
-  "qr_code_url": "otpauth://totp/zero-auth:user?secret=JBSWY3DPEHPK3PXP&issuer=zero-auth",
+  "qr_code_url": "otpauth://totp/zero-id:user?secret=JBSWY3DPEHPK3PXP&issuer=zero-id",
   "backup_codes": [
     "XXXX-XXXX-XXXX",
     "YYYY-YYYY-YYYY",
@@ -1711,7 +1711,7 @@ Complete linking an OAuth account.
 
 ## Post-Quantum Cryptography
 
-zero-auth supports optional post-quantum (PQ) cryptographic keys alongside classical keys to provide defense against future quantum computers.
+zero-id supports optional post-quantum (PQ) cryptographic keys alongside classical keys to provide defense against future quantum computers.
 
 ### Overview
 
@@ -1742,7 +1742,7 @@ In PQ-Hybrid mode, classical keys are **always present** for backward compatibil
 
 ### Availability
 
-PQ-Hybrid support is always available on zero-auth servers. Both `classical` and `pq_hybrid` key schemes are supported without any additional configuration.
+PQ-Hybrid support is always available on zero-id servers. Both `classical` and `pq_hybrid` key schemes are supported without any additional configuration.
 
 ### Example: Creating Identity with PQ-Hybrid Keys
 
@@ -1769,10 +1769,10 @@ PQ-Hybrid support is always available on zero-auth servers. Both `classical` and
 
 ### Client-Side Key Derivation
 
-Use `zero-auth-crypto` to derive PQ-Hybrid keys:
+Use `zero-id-crypto` to derive PQ-Hybrid keys:
 
 ```rust
-use zero_auth_crypto::{
+use zero_id_crypto::{
     derive_machine_keypair_with_scheme, KeyScheme, MachineKeyCapabilities,
 };
 

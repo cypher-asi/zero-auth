@@ -1,8 +1,8 @@
-# zero-auth-crypto Specification v0.1
+# zero-id-crypto Specification v0.1
 
 ## 1. Overview
 
-The `zero-auth-crypto` crate provides all cryptographic primitives for the Zero-Auth system. It is the most fundamental crate in the dependency hierarchy, with no internal dependencies on other Zero-Auth crates.
+The `zero-id-crypto` crate provides all cryptographic primitives for the Zero-Auth system. It is the most fundamental crate in the dependency hierarchy, with no internal dependencies on other Zero-Auth crates.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -25,12 +25,12 @@ The `zero-auth-crypto` crate provides all cryptographic primitives for the Zero-
 
 ```mermaid
 graph TD
-    CRYPTO[zero-auth-crypto]
+    CRYPTO[zero-id-crypto]
     
-    IDENTITY[zero-auth-identity-core] --> CRYPTO
-    SESSIONS[zero-auth-sessions] --> CRYPTO
-    METHODS[zero-auth-methods] --> CRYPTO
-    CLIENT[zero-auth-client] --> CRYPTO
+    IDENTITY[zero-id-identity-core] --> CRYPTO
+    SESSIONS[zero-id-sessions] --> CRYPTO
+    METHODS[zero-id-methods] --> CRYPTO
+    CLIENT[zero-id-client] --> CRYPTO
     
     style CRYPTO fill:#e1f5fe
 ```
@@ -169,12 +169,12 @@ Both schemes are always available for runtime selection. In **PqHybrid** mode, c
 
 Bitflags defining what cryptographic operations a machine key can perform. These are stored with the machine key and define its functional capabilities.
 
-> **Note**: These are distinct from the policy operation requirements in `zero-auth-policy`, which define what permissions are needed to perform specific API operations. Machine key capabilities are about what the key *can do*; policy capabilities are about what's *required* for an operation.
+> **Note**: These are distinct from the policy operation requirements in `zero-id-policy`, which define what permissions are needed to perform specific API operations. Machine key capabilities are about what the key *can do*; policy capabilities are about what's *required* for an operation.
 
 ```rust
 bitflags! {
     pub struct MachineKeyCapabilities: u32 {
-        const AUTHENTICATE     = 0b00000001;  // Can authenticate to zero-auth
+        const AUTHENTICATE     = 0b00000001;  // Can authenticate to zero-id
         const SIGN             = 0b00000010;  // Can sign challenges
         const ENCRYPT          = 0b00000100;  // Can encrypt/decrypt
         const SVK_UNWRAP       = 0b00001000;  // Can unwrap vault keys
@@ -201,7 +201,7 @@ pub fn hkdf_derive(ikm: &[u8], info: &[u8], output_len: usize) -> Result<Vec<u8>
 pub fn hkdf_derive_32(ikm: &[u8], info: &[u8]) -> Result<[u8; 32]>;
 
 /// Derive Identity Signing Keypair from Neural Key
-/// Domain: "cypher:auth:identity:v1" || identity_id
+/// Domain: "cypher:id:identity:v1" || identity_id
 pub fn derive_identity_signing_keypair(
     neural_key: &NeuralKey,
     identity_id: &Uuid,
@@ -240,14 +240,14 @@ pub fn derive_machine_keypair(
 ) -> Result<MachineKeyPair>;
 
 /// Derive MFA Key Encryption Key
-/// Domain: "cypher:auth:mfa-kek:v1" || identity_id
+/// Domain: "cypher:id:mfa-kek:v1" || identity_id
 pub fn derive_mfa_kek(
     neural_key: &NeuralKey,
     identity_id: &Uuid,
 ) -> Result<Zeroizing<[u8; 32]>>;
 
 /// Derive JWT signing key seed
-/// Domain: "cypher:auth:jwt:v1" || key_epoch
+/// Domain: "cypher:id:jwt:v1" || key_epoch
 pub fn derive_jwt_signing_seed(
     service_master_key: &[u8; 32],
     key_epoch: u64,
@@ -277,7 +277,7 @@ pub fn decrypt(
 ) -> Result<Vec<u8>>;
 
 /// Encrypt MFA TOTP secret
-/// AAD: "cypher:auth:mfa-totp:v1" || identity_id
+/// AAD: "cypher:id:mfa-totp:v1" || identity_id
 pub fn encrypt_mfa_secret(
     mfa_kek: &[u8; 32],
     totp_secret: &[u8],
@@ -540,14 +540,14 @@ stateDiagram-v2
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Crypto as zero-auth-crypto
+    participant Crypto as zero-id-crypto
     
     Note over Client: Identity Creation
     Client->>Crypto: NeuralKey::generate()
     Crypto-->>Client: NeuralKey (32 bytes)
     
     Client->>Crypto: derive_identity_signing_keypair(neural_key, identity_id)
-    Note over Crypto: HKDF("cypher:auth:identity:v1" || identity_id)
+    Note over Crypto: HKDF("cypher:id:identity:v1" || identity_id)
     Crypto-->>Client: (public_key, Ed25519KeyPair)
     
     Note over Client: Machine Enrollment
@@ -566,7 +566,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Server
-    participant Crypto as zero-auth-crypto
+    participant Crypto as zero-id-crypto
     participant Client
     
     Server->>Crypto: generate_challenge_nonce()
@@ -595,7 +595,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant User
-    participant Crypto as zero-auth-crypto
+    participant Crypto as zero-id-crypto
     participant Custodians
     
     Note over User: Backup (during identity creation)
@@ -715,13 +715,13 @@ All domain strings follow the format: `cypher:{service}:{purpose}:v{version}`
 
 | Domain String | Purpose |
 |---------------|---------|
-| `cypher:auth:identity:v1` | Identity Signing Key derivation |
+| `cypher:id:identity:v1` | Identity Signing Key derivation |
 | `cypher:shared:machine:v1` | Machine seed derivation |
 | `cypher:shared:machine:sign:v1` | Machine signing key derivation |
 | `cypher:shared:machine:encrypt:v1` | Machine encryption key derivation |
-| `cypher:auth:jwt:v1` | JWT signing key derivation |
-| `cypher:auth:mfa-kek:v1` | MFA Key Encryption Key derivation |
-| `cypher:auth:mfa-totp:v1` | MFA TOTP secret AAD |
+| `cypher:id:jwt:v1` | JWT signing key derivation |
+| `cypher:id:mfa-kek:v1` | MFA Key Encryption Key derivation |
+| `cypher:id:mfa-totp:v1` | MFA TOTP secret AAD |
 
 ### 6.3 Validation Rules
 

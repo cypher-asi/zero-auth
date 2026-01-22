@@ -1,8 +1,8 @@
-# zero-auth-policy Specification v0.1
+# zero-id-policy Specification v0.1
 
 ## 1. Overview
 
-The `zero-auth-policy` crate provides the Policy Engine for authorization decisions, rate limiting, and approval requirements. It evaluates operation contexts against a set of rules to produce allow/deny verdicts with optional requirements for MFA or approvals.
+The `zero-id-policy` crate provides the Policy Engine for authorization decisions, rate limiting, and approval requirements. It evaluates operation contexts against a set of rules to produce allow/deny verdicts with optional requirements for MFA or approvals.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -24,13 +24,13 @@ The `zero-auth-policy` crate provides the Policy Engine for authorization decisi
 
 ```mermaid
 graph TD
-    STORAGE[zero-auth-storage]
-    POLICY[zero-auth-policy]
+    STORAGE[zero-id-storage]
+    POLICY[zero-id-policy]
     
     POLICY --> STORAGE
     
-    METHODS[zero-auth-methods] --> POLICY
-    SERVER[zero-auth-server] --> POLICY
+    METHODS[zero-id-methods] --> POLICY
+    SERVER[zero-id-server] --> POLICY
     
     style POLICY fill:#e1f5fe
 ```
@@ -314,7 +314,7 @@ pub struct ReputationRecord {
 
 These capability flags define what permissions are required to perform specific operations. They are checked against the machine's granted capabilities during policy evaluation.
 
-> **Note**: These are distinct from `MachineKeyCapabilities` in `zero-auth-crypto`, which define what cryptographic operations a key can perform. Policy capabilities define authorization requirements.
+> **Note**: These are distinct from `MachineKeyCapabilities` in `zero-id-crypto`, which define what cryptographic operations a key can perform. Policy capabilities define authorization requirements.
 
 ```rust
 pub mod capabilities {
@@ -662,7 +662,7 @@ Checks are ordered by security criticality:
 
 | Crate | Purpose |
 |-------|---------|
-| `zero-auth-storage` | Persistent reputation storage |
+| `zero-id-storage` | Persistent reputation storage |
 
 ### 7.2 External Dependencies
 

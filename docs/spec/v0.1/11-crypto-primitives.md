@@ -98,7 +98,7 @@ All domain strings follow the format: `cypher:{service}:{purpose}:v{version}`
 
 | Domain String | Purpose | Concatenated With |
 |---------------|---------|-------------------|
-| `cypher:auth:identity:v1` | Identity Signing Key derivation | `identity_id` |
+| `cypher:id:identity:v1` | Identity Signing Key derivation | `identity_id` |
 | `cypher:shared:machine:v1` | Machine seed derivation | `identity_id \|\| machine_id \|\| epoch` |
 | `cypher:shared:machine:sign:v1` | Machine signing key (Ed25519) | `machine_id` |
 | `cypher:shared:machine:encrypt:v1` | Machine encryption key (X25519) | `machine_id` |
@@ -109,9 +109,9 @@ All domain strings follow the format: `cypher:{service}:{purpose}:v{version}`
 
 | Domain String | Purpose | Concatenated With |
 |---------------|---------|-------------------|
-| `cypher:auth:jwt:v1` | JWT signing key seed | `key_epoch` |
-| `cypher:auth:mfa-kek:v1` | MFA KEK derivation | `identity_id` |
-| `cypher:auth:mfa-totp:v1` | MFA TOTP AAD | `identity_id` |
+| `cypher:id:jwt:v1` | JWT signing key seed | `key_epoch` |
+| `cypher:id:mfa-kek:v1` | MFA KEK derivation | `identity_id` |
+| `cypher:id:mfa-totp:v1` | MFA TOTP AAD | `identity_id` |
 
 ### 4.3 Recovery
 
@@ -141,7 +141,7 @@ NeuralKey (32 bytes, client-generated via CSPRNG)
 │    │
 │    │   Derivation:
 │    │     ikm = neural_key.as_bytes()
-│    │     info = "cypher:auth:identity:v1" || identity_id.as_bytes()
+│    │     info = "cypher:id:identity:v1" || identity_id.as_bytes()
 │    │     seed = HKDF-SHA256-Expand(ikm, info, 32)
 │    │     keypair = Ed25519::from_seed(seed)
 │    │
@@ -178,7 +178,7 @@ NeuralKey (32 bytes, client-generated via CSPRNG)
      │
      │   Derivation:
      │     ikm = neural_key.as_bytes()
-     │     info = "cypher:auth:mfa-kek:v1" || identity_id
+     │     info = "cypher:id:mfa-kek:v1" || identity_id
      │     kek = HKDF-SHA256-Expand(ikm, info, 32)
      │
      └─── Purpose: Encrypts MFA TOTP secrets at rest
@@ -457,7 +457,7 @@ bitflags! {
 
 ```json
 {
-  "iss": "https://zero-auth.cypher.io",
+  "iss": "https://zero-id.cypher.io",
   "sub": "<identity_id>",
   "aud": "zero-vault",
   "exp": 1706288400,
@@ -665,7 +665,7 @@ NeuralKey (32 bytes)
                     └── ML-KEM-768 (encryption)→ FIPS 203, NIST Level 3
 ```
 
-Post-quantum support is always available in `zero-auth-crypto` - no feature flags required.
+Post-quantum support is always available in `zero-id-crypto` - no feature flags required.
 
 ### 15.3 Version Negotiation
 

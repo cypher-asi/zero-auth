@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use base64::Engine;
 use colored::*;
 use uuid::Uuid;
-use zero_auth_crypto::{derive_machine_keypair, sign_message, MachineKeyCapabilities, NeuralKey};
+use zero_id_crypto::{derive_machine_keypair, sign_message, MachineKeyCapabilities, NeuralKey};
 
 use crate::storage::{
     load_and_reconstruct_neural_key, load_credentials, prompt_neural_shard, prompt_passphrase,
@@ -107,10 +107,10 @@ fn sign_challenge(
         .decode(&challenge_data.challenge)
         .context("Failed to decode challenge")?;
 
-    let challenge: zero_auth_crypto::Challenge =
+    let challenge: zero_id_crypto::Challenge =
         serde_json::from_slice(&challenge_bytes).context("Failed to deserialize challenge")?;
 
-    let canonical_challenge = zero_auth_crypto::canonicalize_challenge(&challenge);
+    let canonical_challenge = zero_id_crypto::canonicalize_challenge(&challenge);
 
     let machine_keypair = derive_machine_keypair(
         neural_key,

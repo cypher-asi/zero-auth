@@ -100,6 +100,6 @@ setup_test_environment()?;
 
 - Tests are marked with `#[ignore]` to prevent them from running during regular `cargo test`
 - Each test spawns its own server instance
-- Tests use a test database at `./data/zero-auth-test.db`
+- Tests use a test database at `./data/zero-id-test.db`
 - Server output is piped to prevent noise in test output
 - Tests automatically clean up server processes on completion or panic
