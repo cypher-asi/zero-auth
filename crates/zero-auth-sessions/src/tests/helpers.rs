@@ -70,7 +70,7 @@ pub async fn create_test_identity_with_machine(
     let now = crate::current_timestamp();
     let identity_id = Uuid::new_v4();
     let machine_id = Uuid::new_v4();
-    let namespace_id = Uuid::new_v4();
+    let namespace_id = identity_id; // Personal namespace has same ID as identity
 
     // Create Ed25519 keypair for identity
     let identity_keypair = Ed25519KeyPair::from_seed(&[42u8; 32]).unwrap();
@@ -95,6 +95,9 @@ pub async fn create_test_identity_with_machine(
         device_platform: "test-platform".to_string(),
         revoked: false,
         revoked_at: None,
+        key_scheme: Default::default(),
+        pq_signing_public_key: None,
+        pq_encryption_public_key: None,
     };
 
     // Create canonical message

@@ -1,7 +1,7 @@
 //! Shared API helper functions.
 
 use crate::error::ApiError;
-use zero_auth_crypto::{blake3_hash, MachineKeyCapabilities};
+use zero_auth_crypto::{blake3_hash, KeyScheme, MachineKeyCapabilities, ML_DSA_65_PUBLIC_KEY_SIZE, ML_KEM_768_PUBLIC_KEY_SIZE};
 use zero_auth_methods::OAuthProvider;
 
 /// Parse a hex string into a 32-byte array
@@ -74,4 +74,42 @@ pub fn parse_oauth_provider(provider_str: &str) -> Result<OAuthProvider, ApiErro
 pub fn hash_for_log(value: &str) -> String {
     let hash = blake3_hash(value.as_bytes());
     hex::encode(&hash[..8])
+}
+
+/// Parse key scheme string into KeyScheme enum
+pub fn parse_key_scheme(scheme: Option<&str>) -> Result<KeyScheme, ApiError> {
+    match scheme {
+        None | Some("classical") => Ok(KeyScheme::Classical),
+        Some("pq_hybrid") => Ok(KeyScheme::PqHybrid),
+        Some(other) => Err(ApiError::InvalidRequest(format!(
+            "Invalid key_scheme: {}. Expected 'classical' or 'pq_hybrid'",
+            other
+        ))),
+    }
+}
+
+/// Parse ML-DSA-65 public key from hex string (1952 bytes)
+pub fn parse_pq_signing_key(hex_str: &str) -> Result<Vec<u8>, ApiError> {
+    let bytes = hex::decode(hex_str)
+        .map_err(|_| ApiError::InvalidRequest("Invalid hex encoding for PQ signing key".to_string()))?;
+    if bytes.len() != ML_DSA_65_PUBLIC_KEY_SIZE {
+        return Err(ApiError::InvalidRequest(format!(
+            "Invalid PQ signing key size: expected {} bytes, got {}",
+            ML_DSA_65_PUBLIC_KEY_SIZE, bytes.len()
+        )));
+    }
+    Ok(bytes)
+}
+
+/// Parse ML-KEM-768 public key from hex string (1184 bytes)
+pub fn parse_pq_encryption_key(hex_str: &str) -> Result<Vec<u8>, ApiError> {
+    let bytes = hex::decode(hex_str)
+        .map_err(|_| ApiError::InvalidRequest("Invalid hex encoding for PQ encryption key".to_string()))?;
+    if bytes.len() != ML_KEM_768_PUBLIC_KEY_SIZE {
+        return Err(ApiError::InvalidRequest(format!(
+            "Invalid PQ encryption key size: expected {} bytes, got {}",
+            ML_KEM_768_PUBLIC_KEY_SIZE, bytes.len()
+        )));
+    }
+    Ok(bytes)
 }

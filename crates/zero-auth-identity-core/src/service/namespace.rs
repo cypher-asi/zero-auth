@@ -654,6 +654,9 @@ mod tests {
             device_platform: "test".to_string(),
             revoked: false,
             revoked_at: None,
+            key_scheme: Default::default(),
+            pq_signing_public_key: None,
+            pq_encryption_public_key: None,
         };
 
         let message = canonicalize_identity_creation_message(

@@ -14,7 +14,8 @@ use crate::{
     state::AppState,
 };
 
-use super::helpers::{format_timestamp_rfc3339, parse_capabilities, parse_hex_32, parse_hex_64};
+use super::helpers::{format_timestamp_rfc3339, parse_capabilities, parse_hex_32, parse_hex_64, parse_key_scheme, parse_pq_signing_key, parse_pq_encryption_key};
+use zero_auth_crypto::KeyScheme;
 
 // ============================================================================
 // Request/Response Types
@@ -30,12 +31,19 @@ pub struct EnrollMachineRequest {
     pub device_name: String,
     pub device_platform: String,
     pub authorization_signature: String, // hex
+    /// Key scheme: "classical" (default) or "pq_hybrid"
+    pub key_scheme: Option<String>,
+    /// ML-DSA-65 public key (hex, 3904 chars)
+    pub pq_signing_public_key: Option<String>,
+    /// ML-KEM-768 public key (hex, 2368 chars)
+    pub pq_encryption_public_key: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct EnrollMachineResponse {
     pub machine_id: Uuid,
     pub namespace_id: Uuid,
+    pub key_scheme: String,
     pub enrolled_at: String,
 }
 
@@ -52,6 +60,8 @@ pub struct MachineInfo {
     pub created_at: String,
     pub last_used_at: Option<String>,
     pub revoked: bool,
+    pub key_scheme: String,
+    pub has_pq_keys: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -86,6 +96,27 @@ pub async fn enroll_machine(
     // Parse capabilities
     let capabilities = parse_capabilities(&req.capabilities)?;
 
+    // Parse key scheme (default to classical)
+    let key_scheme = parse_key_scheme(req.key_scheme.as_deref())?;
+
+    // Parse PQ keys if scheme is pq_hybrid
+    let (pq_signing_public_key, pq_encryption_public_key) = match key_scheme {
+        KeyScheme::Classical => (None, None),
+        KeyScheme::PqHybrid => {
+            let pq_sign = req.pq_signing_public_key.as_ref()
+                .ok_or_else(|| crate::error::ApiError::InvalidRequest(
+                    "pq_signing_public_key required for pq_hybrid scheme".to_string()
+                ))
+                .and_then(|s| parse_pq_signing_key(s))?;
+            let pq_enc = req.pq_encryption_public_key.as_ref()
+                .ok_or_else(|| crate::error::ApiError::InvalidRequest(
+                    "pq_encryption_public_key required for pq_hybrid scheme".to_string()
+                ))
+                .and_then(|s| parse_pq_encryption_key(s))?;
+            (Some(pq_sign), Some(pq_enc))
+        }
+    };
+
     // Default namespace to personal namespace if not provided
     let namespace_id = req.namespace_id.unwrap_or(identity_id);
 
@@ -105,6 +136,9 @@ pub async fn enroll_machine(
         device_platform: req.device_platform.clone(),
         revoked: false,
         revoked_at: None,
+        key_scheme,
+        pq_signing_public_key,
+        pq_encryption_public_key,
     };
 
     // Enroll machine
@@ -121,9 +155,15 @@ pub async fn enroll_machine(
         .await
         .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
 
+    let key_scheme_str = match key_scheme {
+        KeyScheme::Classical => "classical",
+        KeyScheme::PqHybrid => "pq_hybrid",
+    };
+
     Ok(Json(EnrollMachineResponse {
         machine_id,
         namespace_id,
+        key_scheme: key_scheme_str.to_string(),
         enrolled_at: chrono::Utc::now().to_rfc3339(),
     }))
 }
@@ -151,6 +191,12 @@ pub async fn list_machines(
 
             let last_used_at = m.last_used_at.map(format_timestamp_rfc3339).transpose()?;
 
+            let key_scheme_str = match m.key_scheme {
+                KeyScheme::Classical => "classical",
+                KeyScheme::PqHybrid => "pq_hybrid",
+            };
+            let has_pq_keys = m.pq_signing_public_key.is_some() && m.pq_encryption_public_key.is_some();
+
             Ok(MachineInfo {
                 machine_id: m.machine_id,
                 device_name: m.device_name,
@@ -158,6 +204,8 @@ pub async fn list_machines(
                 created_at,
                 last_used_at,
                 revoked: m.revoked,
+                key_scheme: key_scheme_str.to_string(),
+                has_pq_keys,
             })
         })
         .collect();

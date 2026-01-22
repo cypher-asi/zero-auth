@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use zero_auth_crypto::MachineKeyCapabilities;
+use zero_auth_crypto::{KeyScheme, MachineKeyCapabilities};
 
 /// Identity status
 #[repr(u8)]
@@ -43,6 +43,15 @@ pub struct MachineKey {
     pub device_platform: String,
     pub revoked: bool,
     pub revoked_at: Option<u64>,
+    /// Key scheme used for this machine key (Classical or PqHybrid)
+    #[serde(default)]
+    pub key_scheme: KeyScheme,
+    /// ML-DSA-65 post-quantum signing public key (1952 bytes when present)
+    #[serde(default)]
+    pub pq_signing_public_key: Option<Vec<u8>>,
+    /// ML-KEM-768 post-quantum encryption public key (1184 bytes when present)
+    #[serde(default)]
+    pub pq_encryption_public_key: Option<Vec<u8>>,
 }
 
 /// Namespace record

@@ -657,6 +657,8 @@ cargo llvm-cov --workspace --html
 
 ## Cryptographic Standards
 
+### Classical Cryptography (Default)
+
 | Operation | Algorithm | Standard |
 |-----------|-----------|----------|
 | Signatures | Ed25519 | RFC 8032 |
@@ -666,6 +668,46 @@ cargo llvm-cov --workspace --html
 | Password Hashing | Argon2id (64MB, 3 iterations) | RFC 9106 |
 | Non-password Hashing | BLAKE3 | - |
 | MFA | TOTP (SHA-1, 6 digits, 30s) | RFC 6238 |
+
+### Post-Quantum Cryptography
+
+zero-auth supports PQ-Hybrid key derivation with ML-DSA-65 and ML-KEM-768 always available. Machine keys can include post-quantum keys alongside classical keys for defense against future quantum computers.
+
+| Operation | Algorithm | Standard | Key/Signature Size |
+|-----------|-----------|----------|-------------------|
+| PQ Signatures | ML-DSA-65 | FIPS 204 | 1,952 B / 3,309 B |
+| PQ Key Encapsulation | ML-KEM-768 | FIPS 203 | 1,184 B / 1,088 B |
+
+#### Key Schemes
+
+Machine keys support two schemes:
+
+- **Classical** (default): Ed25519 + X25519 only. OpenMLS compatible, smaller keys.
+- **PqHybrid**: Classical keys plus ML-DSA-65 + ML-KEM-768. Provides post-quantum protection while maintaining backward compatibility.
+
+```rust
+use zero_auth_crypto::{derive_machine_keypair_with_scheme, KeyScheme, MachineKeyCapabilities};
+
+// Derive machine keys with post-quantum protection
+let keypair = derive_machine_keypair_with_scheme(
+    &neural_key,
+    &identity_id,
+    &machine_id,
+    epoch,
+    MachineKeyCapabilities::FULL_DEVICE,
+    KeyScheme::PqHybrid,
+)?;
+
+// Access PQ keys
+if let Some(pq_sign_pk) = keypair.pq_signing_public_key() {
+    // 1,952-byte ML-DSA-65 public key
+}
+if let Some(pq_enc_pk) = keypair.pq_encryption_public_key() {
+    // 1,184-byte ML-KEM-768 public key
+}
+```
+
+See [Quantum Considerations](docs/encryption/quantum.md) for migration strategy and threat analysis.
 
 ## Security Properties
 

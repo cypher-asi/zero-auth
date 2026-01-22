@@ -17,7 +17,8 @@ use crate::{
     state::AppState,
 };
 
-use super::helpers::{format_timestamp_rfc3339, parse_capabilities, parse_hex_32, parse_hex_64};
+use super::helpers::{format_timestamp_rfc3339, parse_capabilities, parse_hex_32, parse_hex_64, parse_key_scheme, parse_pq_signing_key, parse_pq_encryption_key};
+use zero_auth_crypto::KeyScheme;
 
 // ============================================================================
 // Request/Response Types
@@ -41,6 +42,12 @@ pub struct MachineKeyRequest {
     pub capabilities: Vec<String>,
     pub device_name: String,
     pub device_platform: String,
+    /// Key scheme: "classical" (default) or "pq_hybrid"
+    pub key_scheme: Option<String>,
+    /// ML-DSA-65 public key (hex, 3904 chars)
+    pub pq_signing_public_key: Option<String>,
+    /// ML-KEM-768 public key (hex, 2368 chars)
+    pub pq_encryption_public_key: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -48,6 +55,7 @@ pub struct CreateIdentityResponse {
     pub identity_id: Uuid,
     pub machine_id: Uuid,
     pub namespace_id: Uuid,
+    pub key_scheme: String,
     pub created_at: String,
 }
 
@@ -114,6 +122,27 @@ pub async fn create_identity(
     // Parse capabilities
     let capabilities = parse_capabilities(&req.machine_key.capabilities)?;
 
+    // Parse key scheme (default to classical)
+    let key_scheme = parse_key_scheme(req.machine_key.key_scheme.as_deref())?;
+
+    // Parse PQ keys if scheme is pq_hybrid
+    let (pq_signing_public_key, pq_encryption_public_key) = match key_scheme {
+        KeyScheme::Classical => (None, None),
+        KeyScheme::PqHybrid => {
+            let pq_sign = req.machine_key.pq_signing_public_key.as_ref()
+                .ok_or_else(|| ApiError::InvalidRequest(
+                    "pq_signing_public_key required for pq_hybrid scheme".to_string()
+                ))
+                .and_then(|s| parse_pq_signing_key(s))?;
+            let pq_enc = req.machine_key.pq_encryption_public_key.as_ref()
+                .ok_or_else(|| ApiError::InvalidRequest(
+                    "pq_encryption_public_key required for pq_hybrid scheme".to_string()
+                ))
+                .and_then(|s| parse_pq_encryption_key(s))?;
+            (Some(pq_sign), Some(pq_enc))
+        }
+    };
+
     // Create machine key
     let machine_key = MachineKey {
         machine_id: req.machine_key.machine_id,
@@ -130,6 +159,9 @@ pub async fn create_identity(
         device_platform: req.machine_key.device_platform.clone(),
         revoked: false,
         revoked_at: None,
+        key_scheme,
+        pq_signing_public_key,
+        pq_encryption_public_key,
     };
 
     // Create identity request
@@ -152,10 +184,16 @@ pub async fn create_identity(
     // Personal namespace has same ID as identity
     let namespace_id = req.identity_id;
 
+    let key_scheme_str = match key_scheme {
+        KeyScheme::Classical => "classical",
+        KeyScheme::PqHybrid => "pq_hybrid",
+    };
+
     Ok(Json(CreateIdentityResponse {
         identity_id: identity.identity_id,
         machine_id: req.machine_key.machine_id,
         namespace_id,
+        key_scheme: key_scheme_str.to_string(),
         created_at: format_timestamp_rfc3339(identity.created_at)?,
     }))
 }
@@ -324,6 +362,9 @@ pub async fn recovery_ceremony(
         device_platform: "unknown".to_string(),
         revoked: false,
         revoked_at: None,
+        key_scheme: Default::default(),
+        pq_signing_public_key: None,
+        pq_encryption_public_key: None,
     };
 
     // Execute recovery ceremony

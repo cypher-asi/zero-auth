@@ -12,6 +12,7 @@ Complete endpoint reference for the zero-auth REST API.
 - [Sessions](#sessions)
 - [Multi-Factor Authentication](#multi-factor-authentication)
 - [Credentials](#credentials)
+- [Post-Quantum Cryptography](#post-quantum-cryptography)
 - [Integrations](#integrations)
 
 ---
@@ -99,6 +100,9 @@ Create a new identity with an initial machine key.
     "machine_id": "660e8400-e29b-41d4-a716-446655440001",
     "signing_public_key": "i9j0k1l2...",
     "encryption_public_key": "m3n4o5p6...",
+    "key_scheme": "classical",
+    "pq_signing_public_key": null,
+    "pq_encryption_public_key": null,
     "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
     "device_name": "My Laptop",
     "device_platform": "macos"
@@ -117,6 +121,9 @@ Create a new identity with an initial machine key.
 | `machine_key.machine_id` | UUID | Yes | Client-generated machine ID |
 | `machine_key.signing_public_key` | string | Yes | Ed25519 public key (hex, 64 chars) |
 | `machine_key.encryption_public_key` | string | Yes | X25519 public key (hex, 64 chars) |
+| `machine_key.key_scheme` | string | No | Key scheme: `classical` (default) or `pq_hybrid` |
+| `machine_key.pq_signing_public_key` | string | No | ML-DSA-65 public key (hex, 3904 chars). Required if `key_scheme` is `pq_hybrid` |
+| `machine_key.pq_encryption_public_key` | string | No | ML-KEM-768 public key (hex, 2368 chars). Required if `key_scheme` is `pq_hybrid` |
 | `machine_key.capabilities` | array | Yes | Capability strings (see below) |
 | `machine_key.device_name` | string | Yes | Human-readable device name |
 | `machine_key.device_platform` | string | Yes | Platform identifier (e.g., "macos", "windows", "linux", "ios", "android") |
@@ -136,6 +143,24 @@ Create a new identity with an initial machine key.
 | `VAULT_OPERATIONS` | Can access vault operations |
 | `SERVICE_MACHINE` | Service-level machine (automated systems) |
 
+**Key Scheme (Optional Post-Quantum Support):**
+
+The `key_scheme` field controls whether post-quantum keys are included alongside classical keys. This is optional and defaults to `classical`.
+
+| Scheme | Description |
+|--------|-------------|
+| `classical` | Ed25519 + X25519 only (default, OpenMLS compatible) |
+| `pq_hybrid` | Classical keys + ML-DSA-65 + ML-KEM-768 (post-quantum protection) |
+
+When using `pq_hybrid`, the machine key includes additional post-quantum public keys:
+
+| Field | Size | Description |
+|-------|------|-------------|
+| `pq_signing_public_key` | 3,904 hex chars (1,952 bytes) | ML-DSA-65 public key (FIPS 204) |
+| `pq_encryption_public_key` | 2,368 hex chars (1,184 bytes) | ML-KEM-768 public key (FIPS 203) |
+
+**Note:** PQ-Hybrid support is always available. Both classical and post-quantum key schemes can be used without any feature flags.
+
 **Response (200 OK):**
 
 ```json
@@ -143,6 +168,7 @@ Create a new identity with an initial machine key.
   "identity_id": "550e8400-e29b-41d4-a716-446655440000",
   "machine_id": "660e8400-e29b-41d4-a716-446655440001",
   "namespace_id": "550e8400-e29b-41d4-a716-446655440000",
+  "key_scheme": "classical",
   "created_at": "2025-01-21T12:00:00Z"
 }
 ```
@@ -152,13 +178,14 @@ Create a new identity with an initial machine key.
 | `identity_id` | UUID | Created identity ID |
 | `machine_id` | UUID | Enrolled machine ID |
 | `namespace_id` | UUID | Personal namespace ID (same as identity_id) |
+| `key_scheme` | string | Key scheme used: `classical` or `pq_hybrid` |
 | `created_at` | string | RFC 3339 timestamp |
 
 **Errors:**
 
 | Code | Description |
 |------|-------------|
-| `INVALID_REQUEST` | Invalid hex encoding, missing fields, or invalid capabilities |
+| `INVALID_REQUEST` | Invalid hex encoding, missing fields, invalid capabilities, or PQ key size mismatch |
 | `INVALID_SIGNATURE` | Authorization signature verification failed |
 | `CONFLICT` | Identity or machine ID already exists |
 
@@ -423,6 +450,9 @@ Enroll a new machine key for an existing identity.
   "namespace_id": "550e8400-e29b-41d4-a716-446655440000",
   "signing_public_key": "a1b2c3d4...",
   "encryption_public_key": "e5f6g7h8...",
+  "key_scheme": "classical",
+  "pq_signing_public_key": null,
+  "pq_encryption_public_key": null,
   "capabilities": ["AUTHENTICATE", "SIGN"],
   "device_name": "My Phone",
   "device_platform": "ios",
@@ -436,6 +466,9 @@ Enroll a new machine key for an existing identity.
 | `namespace_id` | UUID | No | Target namespace (defaults to personal namespace) |
 | `signing_public_key` | string | Yes | Ed25519 public key (hex, 64 chars) |
 | `encryption_public_key` | string | Yes | X25519 public key (hex, 64 chars) |
+| `key_scheme` | string | No | Key scheme: `classical` (default) or `pq_hybrid` |
+| `pq_signing_public_key` | string | No | ML-DSA-65 public key (hex, 3904 chars). Required if `key_scheme` is `pq_hybrid` |
+| `pq_encryption_public_key` | string | No | ML-KEM-768 public key (hex, 2368 chars). Required if `key_scheme` is `pq_hybrid` |
 | `capabilities` | array | Yes | Capability strings |
 | `device_name` | string | Yes | Human-readable device name |
 | `device_platform` | string | Yes | Platform identifier |
@@ -447,6 +480,7 @@ Enroll a new machine key for an existing identity.
 {
   "machine_id": "770e8400-e29b-41d4-a716-446655440002",
   "namespace_id": "550e8400-e29b-41d4-a716-446655440000",
+  "key_scheme": "classical",
   "enrolled_at": "2025-01-21T12:00:00Z"
 }
 ```
@@ -455,6 +489,7 @@ Enroll a new machine key for an existing identity.
 |-------|------|-------------|
 | `machine_id` | UUID | Enrolled machine ID |
 | `namespace_id` | UUID | Namespace the machine is enrolled in |
+| `key_scheme` | string | Key scheme used: `classical` or `pq_hybrid` |
 | `enrolled_at` | string | RFC 3339 timestamp |
 
 **Errors:**
@@ -462,7 +497,7 @@ Enroll a new machine key for an existing identity.
 | Code | Description |
 |------|-------------|
 | `UNAUTHORIZED` | Missing or invalid token |
-| `INVALID_REQUEST` | Invalid hex encoding or capabilities |
+| `INVALID_REQUEST` | Invalid hex encoding, capabilities, or PQ key size mismatch |
 | `INVALID_SIGNATURE` | Authorization signature verification failed |
 | `CONFLICT` | Machine ID already exists |
 
@@ -489,6 +524,8 @@ List enrolled machines for the authenticated identity.
       "machine_id": "660e8400-e29b-41d4-a716-446655440001",
       "device_name": "My Laptop",
       "device_platform": "macos",
+      "key_scheme": "classical",
+      "has_pq_keys": false,
       "created_at": "2025-01-21T12:00:00Z",
       "last_used_at": "2025-01-21T14:30:00Z",
       "revoked": false
@@ -497,6 +534,8 @@ List enrolled machines for the authenticated identity.
       "machine_id": "770e8400-e29b-41d4-a716-446655440002",
       "device_name": "My Phone",
       "device_platform": "ios",
+      "key_scheme": "pq_hybrid",
+      "has_pq_keys": true,
       "created_at": "2025-01-22T10:00:00Z",
       "last_used_at": null,
       "revoked": false
@@ -511,6 +550,8 @@ List enrolled machines for the authenticated identity.
 | `machines[].machine_id` | UUID | Machine ID |
 | `machines[].device_name` | string | Human-readable name |
 | `machines[].device_platform` | string | Platform identifier |
+| `machines[].key_scheme` | string | Key scheme: `classical` or `pq_hybrid` |
+| `machines[].has_pq_keys` | boolean | Whether machine has post-quantum keys |
 | `machines[].created_at` | string | RFC 3339 timestamp |
 | `machines[].last_used_at` | string | RFC 3339 timestamp or `null` |
 | `machines[].revoked` | boolean | Whether the machine is revoked |
@@ -1665,6 +1706,106 @@ Complete linking an OAuth account.
 | `UNAUTHORIZED` | Missing or invalid token |
 | `INVALID_REQUEST` | Invalid state or code |
 | `CONFLICT` | OAuth account already linked to another identity |
+
+---
+
+## Post-Quantum Cryptography
+
+zero-auth supports optional post-quantum (PQ) cryptographic keys alongside classical keys to provide defense against future quantum computers.
+
+### Overview
+
+Machine keys can be created with two key schemes:
+
+| Scheme | Classical Keys | Post-Quantum Keys | Use Case |
+|--------|---------------|-------------------|----------|
+| `classical` | Ed25519 + X25519 | None | Default, OpenMLS compatible, smaller keys |
+| `pq_hybrid` | Ed25519 + X25519 | ML-DSA-65 + ML-KEM-768 | Post-quantum protection with backward compatibility |
+
+In PQ-Hybrid mode, classical keys are **always present** for backward compatibility. The PQ keys provide additional protection for application-level protocols.
+
+### Key Sizes
+
+| Key Type | Algorithm | Hex Size | Byte Size | Standard |
+|----------|-----------|----------|-----------|----------|
+| Signing (classical) | Ed25519 | 64 chars | 32 bytes | RFC 8032 |
+| Encryption (classical) | X25519 | 64 chars | 32 bytes | RFC 7748 |
+| PQ Signing | ML-DSA-65 | 3,904 chars | 1,952 bytes | FIPS 204 |
+| PQ Encryption | ML-KEM-768 | 2,368 chars | 1,184 bytes | FIPS 203 |
+
+### Signature Sizes
+
+| Algorithm | Hex Size | Byte Size |
+|-----------|----------|-----------|
+| Ed25519 | 128 chars | 64 bytes |
+| ML-DSA-65 | 6,618 chars | 3,309 bytes |
+
+### Availability
+
+PQ-Hybrid support is always available on zero-auth servers. Both `classical` and `pq_hybrid` key schemes are supported without any additional configuration.
+
+### Example: Creating Identity with PQ-Hybrid Keys
+
+```json
+{
+  "identity_id": "550e8400-e29b-41d4-a716-446655440000",
+  "identity_signing_public_key": "a1b2c3d4...",
+  "authorization_signature": "e5f6g7h8...",
+  "machine_key": {
+    "machine_id": "660e8400-e29b-41d4-a716-446655440001",
+    "signing_public_key": "i9j0k1l2...",
+    "encryption_public_key": "m3n4o5p6...",
+    "key_scheme": "pq_hybrid",
+    "pq_signing_public_key": "q7r8s9t0...(3904 hex chars)...",
+    "pq_encryption_public_key": "u1v2w3x4...(2368 hex chars)...",
+    "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
+    "device_name": "My Laptop",
+    "device_platform": "macos"
+  },
+  "namespace_name": "Personal",
+  "created_at": 1705838400
+}
+```
+
+### Client-Side Key Derivation
+
+Use `zero-auth-crypto` to derive PQ-Hybrid keys:
+
+```rust
+use zero_auth_crypto::{
+    derive_machine_keypair_with_scheme, KeyScheme, MachineKeyCapabilities,
+};
+
+let keypair = derive_machine_keypair_with_scheme(
+    &neural_key,
+    &identity_id,
+    &machine_id,
+    epoch,
+    MachineKeyCapabilities::FULL_DEVICE,
+    KeyScheme::PqHybrid,
+)?;
+
+// Access classical keys (always present)
+let signing_pk = keypair.signing_public_key();       // 32 bytes
+let encryption_pk = keypair.encryption_public_key(); // 32 bytes
+
+// Access PQ keys (only in PqHybrid mode)
+if let Some(pq_sign_pk) = keypair.pq_signing_public_key() {
+    // 1,952 bytes ML-DSA-65 public key
+}
+if let Some(pq_kem_pk) = keypair.pq_encryption_public_key() {
+    // 1,184 bytes ML-KEM-768 public key
+}
+```
+
+### Security Considerations
+
+- **NIST Level 3**: ML-DSA-65 and ML-KEM-768 provide 128-bit post-quantum security
+- **Hybrid security**: If either classical or PQ algorithm is secure, the system remains secure
+- **Storage impact**: PQ keys are significantly larger (~60x for signatures, ~37x for encryption keys)
+- **Bandwidth**: Consider the increased payload size for mobile or constrained clients
+
+For detailed migration strategy and threat analysis, see [Quantum Considerations](../encryption/quantum.md).
 
 ---
 

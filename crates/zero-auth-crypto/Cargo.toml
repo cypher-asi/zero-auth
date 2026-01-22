@@ -19,6 +19,10 @@ zeroize = { workspace = true }
 rand = { workspace = true }
 sharks = { workspace = true }
 
+# Post-quantum cryptography (always available)
+fips204 = "0.4"
+fips203 = "0.4"
+
 # Serialization
 serde = { workspace = true }
 

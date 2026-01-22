@@ -112,6 +112,18 @@ pub enum CryptoError {
     /// Invalid shard format
     #[error("Invalid Neural Shard format: {0}")]
     InvalidShardFormat(String),
+
+    /// Post-quantum key generation failed
+    #[error("Post-quantum key generation failed: {0}")]
+    PqKeyGenerationFailed(String),
+
+    /// Post-quantum signature error
+    #[error("Post-quantum signature error: {0}")]
+    PqSignatureError(String),
+
+    /// Post-quantum KEM error
+    #[error("Post-quantum KEM error: {0}")]
+    PqKemError(String),
 }
 
 /// Result type for cryptographic operations

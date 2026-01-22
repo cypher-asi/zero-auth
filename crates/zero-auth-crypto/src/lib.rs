@@ -38,3 +38,14 @@ pub use utils::*;
 
 // Re-export Challenge types for client use
 pub use signatures::{canonicalize_challenge, Challenge, EntityType};
+
+// Re-export KeyScheme for easy access
+pub use keys::KeyScheme;
+
+// Re-export PQ key types (always available)
+pub use keys::{MlDsaKeyPair, MlKemKeyPair};
+
+// Re-export PQ derivation functions (always available)
+pub use derivation::{
+    derive_machine_keypair_with_scheme, derive_machine_pq_kem_seed, derive_machine_pq_signing_seed,
+};

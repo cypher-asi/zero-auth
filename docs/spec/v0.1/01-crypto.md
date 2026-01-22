@@ -150,6 +150,21 @@ impl MachineKeyPair {
 }
 ```
 
+#### KeyScheme
+
+Defines the key derivation scheme for machine keys.
+
+```rust
+pub enum KeyScheme {
+    /// Classical only: Ed25519 + X25519 (OpenMLS compatible)
+    Classical,
+    /// PQ-Hybrid: Classical + ML-DSA-65 + ML-KEM-768
+    PqHybrid,
+}
+```
+
+Both schemes are always available for runtime selection. In **PqHybrid** mode, classical keys are always present for backward compatibility with OpenMLS and existing systems. The PQ keys provide additional protection for application-level protocols.
+
 #### MachineKeyCapabilities
 
 Bitflags defining what cryptographic operations a machine key can perform. These are stored with the machine key and define its functional capabilities.

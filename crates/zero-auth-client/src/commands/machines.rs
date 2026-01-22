@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 use colored::*;
 use uuid::Uuid;
 use zero_auth_crypto::{
-    canonicalize_enrollment_message, derive_identity_signing_keypair, derive_machine_keypair,
-    sign_message, MachineKeyCapabilities, NeuralKey,
+    canonicalize_enrollment_message, derive_identity_signing_keypair, derive_machine_keypair_with_scheme,
+    sign_message, KeyScheme, MachineKeyCapabilities, NeuralKey,
 };
 
 use crate::storage::{
@@ -34,8 +34,10 @@ pub async fn enroll_machine(server: &str, device_name: &str, device_platform: &s
     let (neural_key, _) = load_and_reconstruct_neural_key(&passphrase, &user_shard)?;
     println!("{}", "✓ Neural Key reconstructed in memory".green());
 
+    // Use classical scheme by default - can be made configurable later
+    let scheme = KeyScheme::Classical;
     let new_keypair =
-        derive_new_machine_keypair(&neural_key, &credentials.identity_id, &new_machine_id)?;
+        derive_new_machine_keypair(&neural_key, &credentials.identity_id, &new_machine_id, scheme)?;
     let auth_signature = create_enrollment_signature(
         &neural_key,
         &credentials.identity_id,
@@ -94,10 +96,11 @@ fn derive_new_machine_keypair(
     neural_key: &NeuralKey,
     identity_id: &Uuid,
     machine_id: &Uuid,
+    scheme: KeyScheme,
 ) -> Result<zero_auth_crypto::MachineKeyPair> {
     println!("\n{}", "Step 3: Deriving new machine keys...".yellow());
 
-    let keypair = derive_machine_keypair(
+    let keypair = derive_machine_keypair_with_scheme(
         neural_key,
         identity_id,
         machine_id,
@@ -105,6 +108,7 @@ fn derive_new_machine_keypair(
         MachineKeyCapabilities::AUTHENTICATE
             | MachineKeyCapabilities::SIGN
             | MachineKeyCapabilities::ENCRYPT,
+        scheme,
     )?;
 
     println!(
@@ -115,6 +119,11 @@ fn derive_new_machine_keypair(
         "  Encryption Public Key: {}",
         hex::encode(keypair.encryption_public_key())
     );
+    println!("  Key Scheme: {:?}", scheme);
+    if keypair.has_post_quantum_keys() {
+        println!("  PQ Signing Public Key: {} bytes", keypair.pq_signing_public_key().map(|k| k.len()).unwrap_or(0));
+        println!("  PQ Encryption Public Key: {} bytes", keypair.pq_encryption_public_key().map(|k| k.len()).unwrap_or(0));
+    }
     Ok(keypair)
 }
 
@@ -163,20 +172,36 @@ async fn send_enrollment_request(
 ) -> Result<EnrollMachineResponse> {
     println!("\n{}", "Step 5: Sending enrollment request...".yellow());
 
+    let key_scheme = match keypair.scheme() {
+        KeyScheme::Classical => "classical",
+        KeyScheme::PqHybrid => "pq_hybrid",
+    };
+
+    let mut request_body = serde_json::json!({
+        "machine_id": machine_id,
+        "namespace_id": namespace_id,
+        "signing_public_key": hex::encode(keypair.signing_public_key()),
+        "encryption_public_key": hex::encode(keypair.encryption_public_key()),
+        "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
+        "device_name": device_name,
+        "device_platform": device_platform,
+        "authorization_signature": hex::encode(auth_signature),
+        "key_scheme": key_scheme
+    });
+
+    // Add PQ keys if present
+    if let Some(pq_sign_pk) = keypair.pq_signing_public_key() {
+        request_body["pq_signing_public_key"] = serde_json::json!(hex::encode(pq_sign_pk));
+    }
+    if let Some(pq_enc_pk) = keypair.pq_encryption_public_key() {
+        request_body["pq_encryption_public_key"] = serde_json::json!(hex::encode(pq_enc_pk));
+    }
+
     let client = reqwest::Client::new();
     let response = client
         .post(format!("{}/v1/machines/enroll", server))
         .header("Authorization", format!("Bearer {}", access_token))
-        .json(&serde_json::json!({
-            "machine_id": machine_id,
-            "namespace_id": namespace_id,
-            "signing_public_key": hex::encode(keypair.signing_public_key()),
-            "encryption_public_key": hex::encode(keypair.encryption_public_key()),
-            "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
-            "device_name": device_name,
-            "device_platform": device_platform,
-            "authorization_signature": hex::encode(auth_signature)
-        }))
+        .json(&request_body)
         .send()
         .await
         .context("Failed to send enrollment request")?;

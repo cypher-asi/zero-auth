@@ -53,6 +53,37 @@ pub const SHAMIR_THRESHOLD: usize = 3;
 /// Shamir secret sharing total shares
 pub const SHAMIR_TOTAL_SHARES: usize = 5;
 
+// =============================================================================
+// Post-Quantum Cryptography Constants (NIST Level 3)
+// =============================================================================
+
+/// ML-DSA-65 public key size in bytes (NIST FIPS 204)
+pub const ML_DSA_65_PUBLIC_KEY_SIZE: usize = 1952;
+
+/// ML-DSA-65 secret key size in bytes
+pub const ML_DSA_65_SECRET_KEY_SIZE: usize = 4032;
+
+/// ML-DSA-65 signature size in bytes
+pub const ML_DSA_65_SIGNATURE_SIZE: usize = 3309;
+
+/// ML-DSA-65 seed size for deterministic key generation
+pub const ML_DSA_65_SEED_SIZE: usize = 32;
+
+/// ML-KEM-768 public key size in bytes (NIST FIPS 203)
+pub const ML_KEM_768_PUBLIC_KEY_SIZE: usize = 1184;
+
+/// ML-KEM-768 secret key size in bytes
+pub const ML_KEM_768_SECRET_KEY_SIZE: usize = 2400;
+
+/// ML-KEM-768 ciphertext size in bytes
+pub const ML_KEM_768_CIPHERTEXT_SIZE: usize = 1088;
+
+/// ML-KEM-768 shared secret size in bytes
+pub const ML_KEM_768_SHARED_SECRET_SIZE: usize = 32;
+
+/// ML-KEM-768 seed size for deterministic key generation (d || z)
+pub const ML_KEM_768_SEED_SIZE: usize = 64;
+
 /// Number of MFA backup codes
 pub const MFA_BACKUP_CODES_COUNT: usize = 10;
 
@@ -72,6 +103,14 @@ pub const DOMAIN_MACHINE_SIGN: &str = "cypher:shared:machine:sign:v1";
 /// Domain separation for Machine encryption key derivation
 /// Format: "cypher:shared:machine:encrypt:v1" || machine_id
 pub const DOMAIN_MACHINE_ENCRYPT: &str = "cypher:shared:machine:encrypt:v1";
+
+/// Domain separation for Machine post-quantum signing key derivation
+/// Format: "cypher:shared:machine:pq-sign:v1" || machine_id
+pub const DOMAIN_MACHINE_PQ_SIGN: &str = "cypher:shared:machine:pq-sign:v1";
+
+/// Domain separation for Machine post-quantum KEM key derivation
+/// Format: "cypher:shared:machine:pq-kem:v1" || machine_id
+pub const DOMAIN_MACHINE_PQ_KEM: &str = "cypher:shared:machine:pq-kem:v1";
 
 /// Domain separation for JWT signing key seed derivation
 /// Format: "cypher:auth:jwt:v1" || key_epoch
@@ -142,6 +181,28 @@ mod tests {
         assert_eq!(SIGNATURE_SIZE, 64);
         assert_eq!(NONCE_SIZE, 24);
         assert_eq!(TAG_SIZE, 16);
+    }
+
+    #[test]
+    fn test_pq_constants_match_nist_specs() {
+        // ML-DSA-65 (NIST Level 3) sizes per FIPS 204
+        assert_eq!(ML_DSA_65_PUBLIC_KEY_SIZE, 1952);
+        assert_eq!(ML_DSA_65_SECRET_KEY_SIZE, 4032);
+        assert_eq!(ML_DSA_65_SIGNATURE_SIZE, 3309);
+
+        // ML-KEM-768 (NIST Level 3) sizes per FIPS 203
+        assert_eq!(ML_KEM_768_PUBLIC_KEY_SIZE, 1184);
+        assert_eq!(ML_KEM_768_SECRET_KEY_SIZE, 2400);
+        assert_eq!(ML_KEM_768_CIPHERTEXT_SIZE, 1088);
+        assert_eq!(ML_KEM_768_SHARED_SECRET_SIZE, 32);
+    }
+
+    #[test]
+    fn test_pq_domain_strings_follow_spec() {
+        assert!(DOMAIN_MACHINE_PQ_SIGN.starts_with("cypher:"));
+        assert!(DOMAIN_MACHINE_PQ_SIGN.contains(":v1"));
+        assert!(DOMAIN_MACHINE_PQ_KEM.starts_with("cypher:"));
+        assert!(DOMAIN_MACHINE_PQ_KEM.contains(":v1"));
     }
 
     #[test]

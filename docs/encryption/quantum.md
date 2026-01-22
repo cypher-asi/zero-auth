@@ -396,26 +396,67 @@ Areas requiring protocol changes:
 
 ## Appendix A: Quick Reference
 
-### Immediate Actions (No Code Changes)
+### Completed Actions ✅
 
 1. ✅ Inventory complete - all cryptographic primitives documented
 2. ✅ Risk assessment complete - Ed25519 and X25519 identified as vulnerable
-3. 📋 Monitor Rust PQC library ecosystem maturity
+3. ✅ **PQ-Hybrid key derivation implemented** (ML-DSA-65 + ML-KEM-768)
+4. ✅ KeyScheme enum added (Classical, PqHybrid)
+5. ✅ Domain separation strings for PQ keys
+6. ✅ **Always-available implementation** (no feature flag required)
 
-### Near-Term Actions
+### Remaining Actions
 
-1. Design versioned key structures (Phase 2 preparation)
-2. Prototype hybrid signature verification
-3. Estimate storage impact for production database
+1. Update storage layer for larger key sizes
+2. Add algorithm negotiation to authentication protocol
+3. Create migration tooling for existing identities
 4. Benchmark PQC performance on target hardware
 
-### Migration Checklist
+### Implementation Status
 
-- [ ] Add `SignatureAlgorithm` and `KemAlgorithm` enums to `types.rs`
-- [ ] Extend `Ed25519KeyPair` to `HybridSigningKeyPair`
-- [ ] Extend `X25519KeyPair` to `HybridEncryptionKeyPair`
-- [ ] Update key derivation paths with PQC domain separation
-- [ ] Modify canonicalization functions to include algorithm version
-- [ ] Update storage layer for larger key sizes
-- [ ] Add algorithm negotiation to authentication protocol
-- [ ] Create migration tooling for existing identities
+| Item | Status |
+|------|--------|
+| `KeyScheme` enum | ✅ Implemented |
+| `MlDsaKeyPair` (ML-DSA-65) | ✅ Implemented |
+| `MlKemKeyPair` (ML-KEM-768) | ✅ Implemented |
+| PQ key derivation functions | ✅ Implemented |
+| `MachineKeyPair` with PQ support | ✅ Implemented |
+| `derive_machine_keypair_with_scheme()` | ✅ Implemented |
+| PQ domain separation strings | ✅ Implemented |
+| Hybrid signature verification | 📋 Pending (app-level) |
+| Storage schema updates | 📋 Pending |
+| Protocol algorithm negotiation | 📋 Pending |
+
+### Usage
+
+Add `zero-auth-crypto` to your dependencies:
+
+```toml
+[dependencies]
+zero-auth-crypto = { version = "0.1" }
+```
+
+Derive PQ-Hybrid machine keys (always available):
+
+```rust
+use zero_auth_crypto::{
+    derive_machine_keypair_with_scheme, KeyScheme, MachineKeyCapabilities,
+};
+
+let keypair = derive_machine_keypair_with_scheme(
+    &neural_key,
+    &identity_id,
+    &machine_id,
+    epoch,
+    MachineKeyCapabilities::FULL_DEVICE,
+    KeyScheme::PqHybrid,
+)?;
+
+// Access PQ keys
+if let Some(pq_sign_pk) = keypair.pq_signing_public_key() {
+    // 1,952-byte ML-DSA-65 public key
+}
+if let Some(pq_kem_pk) = keypair.pq_encryption_public_key() {
+    // 1,184-byte ML-KEM-768 public key
+}
+```

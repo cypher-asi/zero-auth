@@ -36,6 +36,8 @@ This document specifies the cryptographic primitives, algorithms, and binary for
 
 ### 3.1 Key and Signature Sizes
 
+#### Classical Cryptography
+
 | Constant | Value | Description |
 |----------|-------|-------------|
 | `NEURAL_KEY_SIZE` | 32 bytes | Root secret size (256 bits) |
@@ -45,6 +47,20 @@ This document specifies the cryptographic primitives, algorithms, and binary for
 | `NONCE_SIZE` | 24 bytes | XChaCha20-Poly1305 nonce (192 bits) |
 | `TAG_SIZE` | 16 bytes | AEAD authentication tag (128 bits) |
 | `HKDF_OUTPUT_SIZE` | 32 bytes | HKDF-SHA256 output |
+
+#### Post-Quantum Cryptography (NIST Level 3)
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `ML_DSA_65_PUBLIC_KEY_SIZE` | 1,952 bytes | ML-DSA-65 public key |
+| `ML_DSA_65_SECRET_KEY_SIZE` | 4,032 bytes | ML-DSA-65 secret key |
+| `ML_DSA_65_SIGNATURE_SIZE` | 3,309 bytes | ML-DSA-65 signature |
+| `ML_DSA_65_SEED_SIZE` | 32 bytes | ML-DSA-65 seed for keygen |
+| `ML_KEM_768_PUBLIC_KEY_SIZE` | 1,184 bytes | ML-KEM-768 encapsulation key |
+| `ML_KEM_768_SECRET_KEY_SIZE` | 2,400 bytes | ML-KEM-768 decapsulation key |
+| `ML_KEM_768_CIPHERTEXT_SIZE` | 1,088 bytes | ML-KEM-768 ciphertext |
+| `ML_KEM_768_SHARED_SECRET_SIZE` | 32 bytes | ML-KEM-768 shared secret |
+| `ML_KEM_768_SEED_SIZE` | 64 bytes | ML-KEM-768 seed (d || z) |
 
 ### 3.2 Timing Constants
 
@@ -84,8 +100,10 @@ All domain strings follow the format: `cypher:{service}:{purpose}:v{version}`
 |---------------|---------|-------------------|
 | `cypher:auth:identity:v1` | Identity Signing Key derivation | `identity_id` |
 | `cypher:shared:machine:v1` | Machine seed derivation | `identity_id \|\| machine_id \|\| epoch` |
-| `cypher:shared:machine:sign:v1` | Machine signing key | `machine_id` |
-| `cypher:shared:machine:encrypt:v1` | Machine encryption key | `machine_id` |
+| `cypher:shared:machine:sign:v1` | Machine signing key (Ed25519) | `machine_id` |
+| `cypher:shared:machine:encrypt:v1` | Machine encryption key (X25519) | `machine_id` |
+| `cypher:shared:machine:pq-sign:v1` | Machine PQ signing key (ML-DSA-65) | `machine_id` |
+| `cypher:shared:machine:pq-kem:v1` | Machine PQ KEM key (ML-KEM-768) | `machine_id` |
 
 ### 4.2 Session and MFA
 
@@ -623,12 +641,32 @@ fn verify_tag(computed: &[u8], received: &[u8]) -> bool {
 
 ### 15.1 Current → Post-Quantum
 
-| Current | Planned PQ Alternative |
-|---------|------------------------|
-| Ed25519 | Dilithium-3 (ML-DSA-65) |
-| X25519 | Kyber-768 (ML-KEM-768) |
-| BLAKE3 | SHA-3 or BLAKE3 (quantum-safe) |
+| Current | PQ Alternative | Status |
+|---------|----------------|--------|
+| Ed25519 | ML-DSA-65 (Dilithium-3) | **Implemented** (optional) |
+| X25519 | ML-KEM-768 (Kyber-768) | **Implemented** (optional) |
+| BLAKE3 | SHA-3 or BLAKE3 (quantum-safe) | No change needed |
 
-### 15.2 Version Negotiation
+### 15.2 PQ-Hybrid Key Derivation
+
+When using `KeyScheme::PqHybrid`, machine keys include both classical and post-quantum keys:
+
+```
+NeuralKey (32 bytes)
+    │
+    └─► derive_machine_keypair_with_scheme(..., KeyScheme::PqHybrid)
+            │
+            ├─► Classical keys (always present):
+            │       ├── Ed25519 (signing)      → OpenMLS compatible
+            │       └── X25519 (encryption)    → OpenMLS compatible
+            │
+            └─► Post-quantum keys (PqHybrid only):
+                    ├── ML-DSA-65 (signing)    → FIPS 204, NIST Level 3
+                    └── ML-KEM-768 (encryption)→ FIPS 203, NIST Level 3
+```
+
+Post-quantum support is always available in `zero-auth-crypto` - no feature flags required.
+
+### 15.3 Version Negotiation
 
 Domain strings include version (`v1`, `v2`, etc.) to support algorithm migration while maintaining backward compatibility.

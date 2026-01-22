@@ -672,42 +672,49 @@ Quantum computers running **Shor's algorithm** can efficiently solve:
 - Symmetric key search (AES-256 → ~AES-128 security)
 - Hash collisions (SHA-256 → ~SHA-128 security)
 
-### Platform Status (as of January 2025)
+### Platform Status (as of January 2026)
 
 | Platform | Current Status | Migration Plan | Timeline |
 |----------|---------------|----------------|----------|
-| **Zero-Auth** | Vulnerable (Ed25519/X25519) | Domain versioning supports migration to ML-DSA/ML-KEM | Prepared via version strings |
+| **Zero-Auth** | **PQ-Hybrid available** | ML-DSA-65 + ML-KEM-768 implemented (optional feature) | **Implemented** |
 | **Bitcoin** | Vulnerable (ECDSA/Schnorr) | Research: SPHINCS+, XMSS hash-based signatures | No concrete timeline |
 | **Ethereum** | Vulnerable (ECDSA/BLS) | Research: ML-DSA for consensus, account abstraction for users | Long-term research |
 | **Solana** | Vulnerable (Ed25519) | Research: NIST PQC standards (ML-DSA, SLH-DSA) | No concrete timeline |
 | **Signal** | **Hybrid PQ deployed** | PQXDH + Triple Ratchet with ML-KEM-1024 | Production since 2024 |
 | **Telegram** | Vulnerable (RSA/DH) | No announced roadmap | Unknown |
 
-### Zero-Auth's Post-Quantum Migration Path
+### Zero-Auth's Post-Quantum Implementation
 
-Zero-Auth is designed with post-quantum migration in mind:
+Zero-Auth has implemented PQ-Hybrid key support with the following approach:
 
-**Domain String Versioning**:
+**Key Schemes**:
+```rust
+pub enum KeyScheme {
+    Classical,  // Ed25519 + X25519 only (default)
+    PqHybrid,   // Classical + ML-DSA-65 + ML-KEM-768
+}
 ```
-Current:  "cypher:auth:identity:v1"  → Ed25519
-Future:   "cypher:auth:identity:v2"  → ML-DSA-65 (Dilithium)
 
-Current:  "cypher:shared:machine:encrypt:v1"  → X25519
-Future:   "cypher:shared:machine:encrypt:v2"  → ML-KEM-768 (Kyber)
+**Domain Separation**:
+```
+Classical signing:     "cypher:shared:machine:sign:v1"     → Ed25519
+Classical encryption:  "cypher:shared:machine:encrypt:v1"  → X25519
+PQ signing:           "cypher:shared:machine:pq-sign:v1"  → ML-DSA-65
+PQ KEM:               "cypher:shared:machine:pq-kem:v1"   → ML-KEM-768
 ```
 
-**Migration Strategy**:
-- Version strings in domain separation enable parallel key derivation
-- Hybrid mode: derive both classical and PQ keys, use combined secrets
-- Gradual rollout via server-negotiated algorithm selection
+**Implementation Status**:
 
-**Planned Replacements**:
+| Algorithm | Status | Feature Flag |
+|-----------|--------|--------------|
+| ML-DSA-65 (Dilithium-3) | ✅ Implemented | `post-quantum` |
+| ML-KEM-768 (Kyber-768) | ✅ Implemented | `post-quantum` |
+| BLAKE3 | No change needed | N/A |
 
-| Current | Planned PQ Alternative |
-|---------|------------------------|
-| Ed25519 | ML-DSA-65 (Dilithium-3) |
-| X25519 | ML-KEM-768 (Kyber-768) |
-| BLAKE3 | SHA-3 or BLAKE3 (quantum-safe for symmetric use) |
+**PQ-Hybrid Key Derivation**:
+- Classical keys (Ed25519 + X25519) always present for OpenMLS compatibility
+- PQ keys derived alongside classical keys from same machine seed
+- Deterministic derivation from Neural Key preserved
 
 ### Signal's Post-Quantum Implementation
 
@@ -747,49 +754,49 @@ Standardized algorithms for future blockchain/messaging migration:
 
 ### Zero-Auth Specifications
 
-- **zero-auth-crypto Specification v0.1**: Cryptographic primitives and key derivation hierarchy
-- **Cryptographic Primitives Specification v0.1**: Algorithms, binary formats, and domain separation
+- [**zero-auth-crypto Specification v0.1**](../spec/v0.1/01-crypto.md): Cryptographic primitives and key derivation hierarchy
+- [**Cryptographic Primitives Specification v0.1**](../spec/v0.1/11-crypto-primitives.md): Algorithms, binary formats, and domain separation
 
 ### Standards and Specifications
 
-- **RFC 8032**: Edwards-Curve Digital Signature Algorithm (EdDSA)
-- **RFC 7748**: Elliptic Curves for Security (X25519, X448)
-- **RFC 8439**: ChaCha20 and Poly1305 for IETF Protocols
-- **RFC 5869**: HMAC-based Extract-and-Expand Key Derivation Function (HKDF)
-- **RFC 9106**: Argon2 Memory-Hard Function
-- **RFC 6238**: TOTP: Time-Based One-Time Password Algorithm
-- **FIPS 180-4**: Secure Hash Standard (SHA-2)
-- **FIPS 186-5**: Digital Signature Standard (DSS)
-- **FIPS 203**: Module-Lattice-Based Key-Encapsulation Mechanism (ML-KEM)
-- **FIPS 204**: Module-Lattice-Based Digital Signature (ML-DSA)
+- [**RFC 8032**](https://datatracker.ietf.org/doc/html/rfc8032): Edwards-Curve Digital Signature Algorithm (EdDSA)
+- [**RFC 7748**](https://datatracker.ietf.org/doc/html/rfc7748): Elliptic Curves for Security (X25519, X448)
+- [**RFC 8439**](https://datatracker.ietf.org/doc/html/rfc8439): ChaCha20 and Poly1305 for IETF Protocols
+- [**RFC 5869**](https://datatracker.ietf.org/doc/html/rfc5869): HMAC-based Extract-and-Expand Key Derivation Function (HKDF)
+- [**RFC 9106**](https://datatracker.ietf.org/doc/html/rfc9106): Argon2 Memory-Hard Function
+- [**RFC 6238**](https://datatracker.ietf.org/doc/html/rfc6238): TOTP: Time-Based One-Time Password Algorithm
+- [**FIPS 180-4**](https://csrc.nist.gov/publications/detail/fips/180/4/final): Secure Hash Standard (SHA-2)
+- [**FIPS 186-5**](https://csrc.nist.gov/publications/detail/fips/186/5/final): Digital Signature Standard (DSS)
+- [**FIPS 203**](https://csrc.nist.gov/publications/detail/fips/203/final): Module-Lattice-Based Key-Encapsulation Mechanism (ML-KEM)
+- [**FIPS 204**](https://csrc.nist.gov/publications/detail/fips/204/final): Module-Lattice-Based Digital Signature (ML-DSA)
 
 ### Bitcoin Improvement Proposals
 
-- **BIP-32**: Hierarchical Deterministic Wallets
-- **BIP-39**: Mnemonic code for generating deterministic keys
-- **BIP-44**: Multi-Account Hierarchy for Deterministic Wallets
-- **BIP-340**: Schnorr Signatures for secp256k1
+- [**BIP-32**](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki): Hierarchical Deterministic Wallets
+- [**BIP-39**](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki): Mnemonic code for generating deterministic keys
+- [**BIP-44**](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki): Multi-Account Hierarchy for Deterministic Wallets
+- [**BIP-340**](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki): Schnorr Signatures for secp256k1
 
 ### Ethereum Specifications
 
-- **Ethereum Yellow Paper**: Formal specification of the Ethereum protocol
-- **EIP-2**: Homestead Hard-fork Changes (signature malleability fix)
-- **EIP-155**: Simple replay attack protection (chain ID in signatures)
-- **Ethereum Consensus Specs**: BLS12-381 signature aggregation
+- [**Ethereum Yellow Paper**](https://ethereum.github.io/yellowpaper/paper.pdf): Formal specification of the Ethereum protocol
+- [**EIP-2**](https://eips.ethereum.org/EIPS/eip-2): Homestead Hard-fork Changes (signature malleability fix)
+- [**EIP-155**](https://eips.ethereum.org/EIPS/eip-155): Simple replay attack protection (chain ID in signatures)
+- [**Ethereum Consensus Specs**](https://github.com/ethereum/consensus-specs): BLS12-381 signature aggregation
 
 ### Protocol Documentation
 
-- **Signal Protocol Specifications**: X3DH, Double Ratchet, PQXDH
-- **MTProto 2.0**: Telegram's transport protocol documentation
+- [**Signal Protocol Specifications**](https://signal.org/docs/): X3DH, Double Ratchet, PQXDH
+- [**MTProto 2.0**](https://core.telegram.org/mtproto): Telegram's transport protocol documentation
 
 ### Academic Research
 
-- Albrecht et al. (2022): "Four Attacks and a Proof for Telegram" - Journal of Cryptology
-- Cohn-Gordon et al. (2020): "A Formal Security Analysis of the Signal Messaging Protocol"
-- Stebila & Mosca (2016): "Post-quantum Key Exchange for the Internet" - Selected Areas in Cryptography
+- Albrecht et al. (2022): ["Four Attacks and a Proof for Telegram"](https://link.springer.com/article/10.1007/s00145-022-09437-7) - Journal of Cryptology
+- Cohn-Gordon et al. (2020): ["A Formal Security Analysis of the Signal Messaging Protocol"](https://eprint.iacr.org/2016/1013.pdf) - Journal of Cryptology
+- Stebila & Mosca (2016): ["Post-quantum Key Exchange for the Internet"](https://eprint.iacr.org/2015/1092.pdf) - Selected Areas in Cryptography
 
 ### Security Analyses
 
-- Cryptography Engineering Blog (2024): "Is Telegram really an encrypted messaging app?"
-- Helius Blog (2025): "What Would Solana Need to Change to Become Quantum Resistant?"
-- Cantina Security (2025): "Signature Verification Risks in Solana"
+- Cryptography Engineering Blog (2024): ["Is Telegram really an encrypted messaging app?"](https://blog.cryptographyengineering.com/2024/08/25/telegram-is-not-really-an-encrypted-messaging-app/)
+- Helius Blog (2025): ["What Would Solana Need to Change to Become Quantum Resistant?"](https://www.helius.dev/blog/what-would-solana-need-to-change-to-become-quantum-resistant)
+- Cantina Security (2025): ["Signature Verification Risks in Solana"](https://cantina.xyz/blog/signature-verification-risks-in-solana)
