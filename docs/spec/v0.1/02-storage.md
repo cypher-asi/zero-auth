@@ -1,8 +1,8 @@
-# zero-id-storage Specification v0.1
+# zid-storage Specification v0.1
 
 ## 1. Overview
 
-The `zero-id-storage` crate provides the storage abstraction layer for Zero-Auth, with a RocksDB implementation. It defines traits for key-value operations and batch/transaction support, enabling both production use and mock implementations for testing.
+The `zid-storage` crate provides the storage abstraction layer for Zero-Auth, with a RocksDB implementation. It defines traits for key-value operations and batch/transaction support, enabling both production use and mock implementations for testing.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -23,13 +23,13 @@ The `zero-id-storage` crate provides the storage abstraction layer for Zero-Auth
 
 ```mermaid
 graph TD
-    STORAGE[zero-id-storage]
+    STORAGE[zid-storage]
     
-    POLICY[zero-id-policy] --> STORAGE
-    IDENTITY[zero-id-identity-core] --> STORAGE
-    INTEGRATIONS[zero-id-integrations] --> STORAGE
-    SESSIONS[zero-id-sessions] --> STORAGE
-    SERVER[zero-id-server] --> STORAGE
+    POLICY[zid-policy] --> STORAGE
+    IDENTITY[zid-identity-core] --> STORAGE
+    INTEGRATIONS[zid-integrations] --> STORAGE
+    SESSIONS[zid-sessions] --> STORAGE
+    SERVER[zid-server] --> STORAGE
     
     style STORAGE fill:#e1f5fe
 ```
@@ -481,7 +481,7 @@ Column families with TTL requirements must be enforced at the application layer:
 
 ### 7.1 Internal Crate Dependencies
 
-None. This is a foundational crate alongside `zero-id-crypto`.
+None. This is a foundational crate alongside `zid-crypto`.
 
 ### 7.2 External Dependencies
 

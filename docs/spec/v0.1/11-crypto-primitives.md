@@ -457,7 +457,7 @@ bitflags! {
 
 ```json
 {
-  "iss": "https://zero-id.cypher.io",
+  "iss": "https://zid.cypher.io",
   "sub": "<identity_id>",
   "aud": "zero-vault",
   "exp": 1706288400,
@@ -665,7 +665,7 @@ NeuralKey (32 bytes)
                     └── ML-KEM-768 (encryption)→ FIPS 203, NIST Level 3
 ```
 
-Post-quantum support is always available in `zero-id-crypto` - no feature flags required.
+Post-quantum support is always available in `zid-crypto` - no feature flags required.
 
 ### 15.3 Version Negotiation
 

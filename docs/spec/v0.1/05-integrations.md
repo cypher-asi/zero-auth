@@ -1,8 +1,8 @@
-# zero-id-integrations Specification v0.1
+# zid-integrations Specification v0.1
 
 ## 1. Overview
 
-The `zero-id-integrations` crate provides the Integrations & Events subsystem for Zero-Auth. It enables external services to receive real-time revocation events via SSE streaming or webhooks, authenticated with mTLS certificates.
+The `zid-integrations` crate provides the Integrations & Events subsystem for Zero-Auth. It enables external services to receive real-time revocation events via SSE streaming or webhooks, authenticated with mTLS certificates.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -25,14 +25,14 @@ The `zero-id-integrations` crate provides the Integrations & Events subsystem fo
 
 ```mermaid
 graph TD
-    CRYPTO[zero-id-crypto]
-    STORAGE[zero-id-storage]
-    INTEGRATIONS[zero-id-integrations]
+    CRYPTO[zid-crypto]
+    STORAGE[zid-storage]
+    INTEGRATIONS[zid-integrations]
     
     INTEGRATIONS --> CRYPTO
     INTEGRATIONS --> STORAGE
     
-    SERVER[zero-id-server] --> INTEGRATIONS
+    SERVER[zid-server] --> INTEGRATIONS
     
     style INTEGRATIONS fill:#e1f5fe
 ```
@@ -612,8 +612,8 @@ data: {"event_id":"...","event_type":"MachineRevoked",...}
 
 | Crate | Purpose |
 |-------|---------|
-| `zero-id-crypto` | Timestamps |
-| `zero-id-storage` | Persistent storage |
+| `zid-crypto` | Timestamps |
+| `zid-storage` | Persistent storage |
 
 ### 7.2 External Dependencies
 

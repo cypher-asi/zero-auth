@@ -1,8 +1,8 @@
-# zero-id-policy Specification v0.1
+# zid-policy Specification v0.1
 
 ## 1. Overview
 
-The `zero-id-policy` crate provides the Policy Engine for authorization decisions, rate limiting, and approval requirements. It evaluates operation contexts against a set of rules to produce allow/deny verdicts with optional requirements for MFA or approvals.
+The `zid-policy` crate provides the Policy Engine for authorization decisions, rate limiting, and approval requirements. It evaluates operation contexts against a set of rules to produce allow/deny verdicts with optional requirements for MFA or approvals.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -24,13 +24,13 @@ The `zero-id-policy` crate provides the Policy Engine for authorization decision
 
 ```mermaid
 graph TD
-    STORAGE[zero-id-storage]
-    POLICY[zero-id-policy]
+    STORAGE[zid-storage]
+    POLICY[zid-policy]
     
     POLICY --> STORAGE
     
-    METHODS[zero-id-methods] --> POLICY
-    SERVER[zero-id-server] --> POLICY
+    METHODS[zid-methods] --> POLICY
+    SERVER[zid-server] --> POLICY
     
     style POLICY fill:#e1f5fe
 ```
@@ -314,7 +314,7 @@ pub struct ReputationRecord {
 
 These capability flags define what permissions are required to perform specific operations. They are checked against the machine's granted capabilities during policy evaluation.
 
-> **Note**: These are distinct from `MachineKeyCapabilities` in `zero-id-crypto`, which define what cryptographic operations a key can perform. Policy capabilities define authorization requirements.
+> **Note**: These are distinct from `MachineKeyCapabilities` in `zid-crypto`, which define what cryptographic operations a key can perform. Policy capabilities define authorization requirements.
 
 ```rust
 pub mod capabilities {
@@ -662,7 +662,7 @@ Checks are ordered by security criticality:
 
 | Crate | Purpose |
 |-------|---------|
-| `zero-id-storage` | Persistent reputation storage |
+| `zid-storage` | Persistent reputation storage |
 
 ### 7.2 External Dependencies
 

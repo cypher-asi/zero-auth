@@ -1,0 +1,36 @@
+[package]
+name = "zid-policy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Async
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# UUID
+uuid = { workspace = true }
+
+# Tracing
+tracing = { workspace = true }
+
+# Storage (for persistent reputation)
+zid-storage = { path = "../zid-storage" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+bincode = { workspace = true }
+hex = { workspace = true }
+
+[lib]
+name = "zid_policy"
+path = "src/lib.rs"

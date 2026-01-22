@@ -1,12 +1,12 @@
 # Quantum Computing Risks and Migration Strategy
 
-This document assesses the quantum computing threat landscape for zero-id's cryptographic primitives and outlines a migration strategy to post-quantum cryptography (PQC).
+This document assesses the quantum computing threat landscape for zid's cryptographic primitives and outlines a migration strategy to post-quantum cryptography (PQC).
 
 ## Table of Contents
 
 1. [Quantum Computing Threat Overview](#1-quantum-computing-threat-overview)
 2. [Current Cryptographic Inventory](#2-current-cryptographic-inventory)
-3. [Risk Assessment for zero-id](#3-risk-assessment-for-zero-id)
+3. [Risk Assessment for zid](#3-risk-assessment-for-zid)
 4. [NIST Post-Quantum Standards](#4-nist-post-quantum-standards)
 5. [Migration Strategy](#5-migration-strategy)
 6. [Implementation Considerations](#6-implementation-considerations)
@@ -24,7 +24,7 @@ Shor's algorithm, when run on a sufficiently powerful quantum computer, can solv
 - **Discrete Logarithm Problem (DLP)**: Breaks DSA, Diffie-Hellman
 - **Elliptic Curve Discrete Logarithm Problem (ECDLP)**: Breaks ECDSA, Ed25519, X25519, ECDH
 
-**Impact on zero-id**: Ed25519 signatures and X25519 key exchange are vulnerable. A quantum computer with ~2,330 logical qubits could break 256-bit elliptic curve cryptography.
+**Impact on zid**: Ed25519 signatures and X25519 key exchange are vulnerable. A quantum computer with ~2,330 logical qubits could break 256-bit elliptic curve cryptography.
 
 ### 1.2 Grover's Algorithm
 
@@ -33,7 +33,7 @@ Grover's algorithm provides a quadratic speedup for unstructured search problems
 - **Symmetric Encryption**: Effective key strength is halved (256-bit → 128-bit post-quantum security)
 - **Hash Functions**: Collision resistance is reduced (256-bit → 128-bit post-quantum)
 
-**Impact on zero-id**: Symmetric primitives remain secure with current key sizes. A 256-bit key (XChaCha20) provides 128-bit post-quantum security, which is considered adequate.
+**Impact on zid**: Symmetric primitives remain secure with current key sizes. A 256-bit key (XChaCha20) provides 128-bit post-quantum security, which is considered adequate.
 
 ### 1.3 Timeline Estimates
 
@@ -53,9 +53,9 @@ Quantum computing timeline predictions vary significantly:
 
 ## 2. Current Cryptographic Inventory
 
-Based on analysis of `crates/zero-id-crypto/src/`, the system uses the following algorithms:
+Based on analysis of `crates/zid-crypto/src/`, the system uses the following algorithms:
 
-| Algorithm | Usage in zero-id | Key/Output Size | Quantum Status |
+| Algorithm | Usage in zid | Key/Output Size | Quantum Status |
 |-----------|-------------------|-----------------|----------------|
 | **XChaCha20-Poly1305** | Symmetric encryption (AEAD) | 256-bit key, 192-bit nonce | ✅ Safe (128-bit PQ security) |
 | **Ed25519** | Digital signatures | 32B public key, 64B signature | ⚠️ **Vulnerable** |
@@ -81,7 +81,7 @@ Based on analysis of `crates/zero-id-crypto/src/`, the system uses the following
 
 ---
 
-## 3. Risk Assessment for zero-id
+## 3. Risk Assessment for zid
 
 ### 3.1 High Risk Components
 
@@ -156,7 +156,7 @@ NIST finalized the first set of post-quantum cryptographic standards in 2024:
 | ML-KEM-768 | NIST Level 3 | 1,184 B | 1,088 B | 32 B |
 | ML-KEM-1024 | NIST Level 5 | 1,568 B | 1,568 B | 32 B |
 
-**Recommendation for zero-id**: ML-KEM-768 (128-bit classical / NIST Level 3)
+**Recommendation for zid**: ML-KEM-768 (128-bit classical / NIST Level 3)
 
 ### 4.2 ML-DSA (FIPS 204) - Digital Signatures
 
@@ -168,7 +168,7 @@ NIST finalized the first set of post-quantum cryptographic standards in 2024:
 | ML-DSA-65 | NIST Level 3 | 1,952 B | 3,309 B |
 | ML-DSA-87 | NIST Level 5 | 2,592 B | 4,627 B |
 
-**Recommendation for zero-id**: ML-DSA-65 (128-bit classical / NIST Level 3)
+**Recommendation for zid**: ML-DSA-65 (128-bit classical / NIST Level 3)
 
 ### 4.3 SLH-DSA (FIPS 205) - Hash-Based Signatures
 
@@ -294,7 +294,7 @@ Once hybrid mode is stable and ecosystem support matures:
 
 ### 6.1 Rust Ecosystem
 
-**Libraries Used in zero-id-crypto**:
+**Libraries Used in zid-crypto**:
 
 | Library | Purpose | Status |
 |---------|---------|--------|
@@ -310,7 +310,7 @@ Once hybrid mode is stable and ecosystem support matures:
 | `ml-kem` | RustCrypto ML-KEM implementation | Stable |
 | `ml-dsa` | RustCrypto ML-DSA implementation | Stable |
 
-**zero-id-crypto Cargo.toml**:
+**zid-crypto Cargo.toml**:
 
 ```toml
 [dependencies]
@@ -442,11 +442,11 @@ Areas requiring protocol changes:
 
 ### Usage
 
-Add `zero-id-crypto` to your dependencies:
+Add `zid-crypto` to your dependencies:
 
 ```toml
 [dependencies]
-zero-id-crypto = { version = "0.1" }
+zid-crypto = { version = "0.1" }
 ```
 
 Derive PQ-Hybrid machine keys:

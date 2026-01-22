@@ -1,0 +1,36 @@
+[package]
+name = "zid-identity-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Internal dependencies
+zid-crypto = { path = "../zid-crypto" }
+zid-storage = { path = "../zid-storage" }
+zid-policy = { path = "../zid-policy" }
+
+# Async
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# UUID
+uuid = { workspace = true }
+
+# Tracing
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lib]
+name = "zid_identity_core"
+path = "src/lib.rs"

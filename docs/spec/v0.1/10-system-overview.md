@@ -83,21 +83,21 @@ graph TB
 ```mermaid
 graph TD
     subgraph "Core Layer"
-        CRYPTO[zero-id-crypto]
-        STORAGE[zero-id-storage]
+        CRYPTO[zid-crypto]
+        STORAGE[zid-storage]
     end
 
     subgraph "Domain Layer"
-        POLICY[zero-id-policy]
-        IDENTITY[zero-id-identity-core]
-        INTEGRATIONS[zero-id-integrations]
-        SESSIONS[zero-id-sessions]
+        POLICY[zid-policy]
+        IDENTITY[zid-identity-core]
+        INTEGRATIONS[zid-integrations]
+        SESSIONS[zid-sessions]
     end
 
     subgraph "Application Layer"
-        METHODS[zero-id-methods]
-        SERVER[zero-id-server]
-        CLIENT[zero-id-client]
+        METHODS[zid-methods]
+        SERVER[zid-server]
+        CLIENT[zid-client]
     end
 
     %% Core has no internal deps
@@ -130,15 +130,15 @@ graph TD
 
 | Crate | Responsibility |
 |-------|----------------|
-| `zero-id-crypto` | Key derivation, encryption, signatures, Shamir secret sharing |
-| `zero-id-storage` | Storage abstraction, RocksDB implementation, column families |
-| `zero-id-policy` | Rate limiting, reputation scoring, authorization decisions |
-| `zero-id-identity-core` | Identity, machine, and namespace lifecycle management |
-| `zero-id-integrations` | mTLS service auth, SSE streaming, webhook delivery |
-| `zero-id-sessions` | JWT issuance, token refresh, introspection, key rotation |
-| `zero-id-methods` | Machine, email, OAuth, wallet, and MFA authentication |
-| `zero-id-server` | HTTP API, middleware, request handling |
-| `zero-id-client` | CLI interface, local credential storage |
+| `zid-crypto` | Key derivation, encryption, signatures, Shamir secret sharing |
+| `zid-storage` | Storage abstraction, RocksDB implementation, column families |
+| `zid-policy` | Rate limiting, reputation scoring, authorization decisions |
+| `zid-identity-core` | Identity, machine, and namespace lifecycle management |
+| `zid-integrations` | mTLS service auth, SSE streaming, webhook delivery |
+| `zid-sessions` | JWT issuance, token refresh, introspection, key rotation |
+| `zid-methods` | Machine, email, OAuth, wallet, and MFA authentication |
+| `zid-server` | HTTP API, middleware, request handling |
+| `zid-client` | CLI interface, local credential storage |
 
 ---
 
@@ -490,9 +490,9 @@ sequenceDiagram
 | Setting | Environment Variable | Default |
 |---------|---------------------|---------|
 | Server bind address | `BIND_ADDRESS` | `127.0.0.1:9999` |
-| Database path | `DATABASE_PATH` | `./data/zero-id.db` |
+| Database path | `DATABASE_PATH` | `./data/zid.db` |
 | Service master key | `SERVICE_MASTER_KEY` | Required in prod |
-| JWT issuer | `JWT_ISSUER` | `https://zero-id.cypher.io` |
+| JWT issuer | `JWT_ISSUER` | `https://zid.cypher.io` |
 | Access token expiry | `ACCESS_TOKEN_EXPIRY` | 900 (15 min) |
 | Refresh token expiry | `REFRESH_TOKEN_EXPIRY` | 2592000 (30 days) |
 
@@ -554,7 +554,7 @@ graph LR
 // Pattern 1: Introspection
 async fn validate_via_introspection(token: &str) -> Result<Claims> {
     let response = client
-        .post("http://zero-id:9999/v1/auth/introspect")
+        .post("http://zid:9999/v1/auth/introspect")
         .json(&json!({"token": token, "operation_type": "read"}))
         .send()
         .await?;

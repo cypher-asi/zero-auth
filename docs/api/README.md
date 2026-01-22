@@ -1,6 +1,6 @@
-# zero-id API Documentation
+# zid API Documentation
 
-This documentation covers the zero-id REST API for identity management, authentication, and session handling.
+This documentation covers the zid REST API for identity management, authentication, and session handling.
 
 ## Base URL
 
@@ -137,7 +137,7 @@ When rate limited, the API returns `429 Too Many Requests`.
 ### 1. Create an Identity
 
 ```bash
-# Generate keys client-side (using zero-id-client or your own implementation)
+# Generate keys client-side (using zid-client or your own implementation)
 # Then register with the server:
 
 curl -X POST http://127.0.0.1:9999/v1/identity \
@@ -216,20 +216,20 @@ curl -X POST http://127.0.0.1:9999/v1/auth/refresh \
 
 ### Official CLI Client
 
-The `zero-id-client` crate provides a command-line interface:
+The `zid-client` crate provides a command-line interface:
 
 ```bash
-cargo run -p zero-id-client -- create-identity --device-name "My Device"
-cargo run -p zero-id-client -- login
+cargo run -p zid-client -- create-identity --device-name "My Device"
+cargo run -p zid-client -- login
 ```
 
 ### Rust Integration
 
-For Rust applications, use the `zero-id-crypto` crate for client-side cryptographic operations:
+For Rust applications, use the `zid-crypto` crate for client-side cryptographic operations:
 
 ```toml
 [dependencies]
-zero-id-crypto = { git = "https://github.com/cypher-agi/zero-id" }
+zid-crypto = { git = "https://github.com/cypher-agi/zid" }
 ```
 
 ### Local JWT Validation
@@ -250,4 +250,4 @@ The response contains Ed25519 public keys in JWK format for signature verificati
 ## Related Documentation
 
 - [Main README](../../README.md) - System overview and architecture
-- [zero-id-client README](../../crates/zero-id-client/README.md) - CLI client documentation
+- [zid-client README](../../crates/zid-client/README.md) - CLI client documentation

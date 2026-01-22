@@ -755,7 +755,7 @@ Standardized algorithms for future blockchain/messaging migration:
 
 ### Zero-Auth Specifications
 
-- [**zero-id-crypto Specification v0.1**](../spec/v0.1/01-crypto.md): Cryptographic primitives and key derivation hierarchy
+- [**zid-crypto Specification v0.1**](../spec/v0.1/01-crypto.md): Cryptographic primitives and key derivation hierarchy
 - [**Cryptographic Primitives Specification v0.1**](../spec/v0.1/11-crypto-primitives.md): Algorithms, binary formats, and domain separation
 
 ### Standards and Specifications

@@ -21,7 +21,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
 use zeroize::Zeroize;
-use zero_id_crypto::{combine_shards, decrypt, encrypt, NeuralKey, NeuralShard};
+use zid_crypto::{combine_shards, decrypt, encrypt, NeuralKey, NeuralShard};
 
 use crate::types::{ClientCredentials, SessionData};
 
@@ -32,7 +32,7 @@ const ARGON2_T_COST: u32 = 3;
 const ARGON2_P_COST: u32 = 4;
 
 /// Domain separation for Neural Shard encryption
-const SHARD_ENCRYPTION_DOMAIN: &[u8] = b"zero-id:client:neural-shard-encryption:v1";
+const SHARD_ENCRYPTION_DOMAIN: &[u8] = b"zid:client:neural-shard-encryption:v1";
 
 pub fn get_credentials_path() -> PathBuf {
     PathBuf::from("./.session/credentials.json")

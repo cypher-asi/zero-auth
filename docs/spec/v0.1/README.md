@@ -8,15 +8,15 @@ The specifications are organized by dependency order, starting with the most fun
 
 | # | Document | Crate | Description |
 |---|----------|-------|-------------|
-| 01 | [01-crypto.md](./01-crypto.md) | `zero-id-crypto` | Cryptographic primitives: key derivation, encryption, signatures, Shamir |
-| 02 | [02-storage.md](./02-storage.md) | `zero-id-storage` | Storage abstraction: traits, column families, batch operations |
-| 03 | [03-policy.md](./03-policy.md) | `zero-id-policy` | Policy engine: rate limiting, reputation, authorization decisions |
-| 04 | [04-identity-core.md](./04-identity-core.md) | `zero-id-identity-core` | Identity management: identities, machines, namespaces, revocation |
-| 05 | [05-integrations.md](./05-integrations.md) | `zero-id-integrations` | External integrations: mTLS auth, SSE streaming, webhooks |
-| 06 | [06-sessions.md](./06-sessions.md) | `zero-id-sessions` | Session management: JWT issuance, refresh tokens, introspection |
-| 07 | [07-methods.md](./07-methods.md) | `zero-id-methods` | Authentication methods: machine, email, OAuth, wallet, MFA |
-| 08 | [08-server.md](./08-server.md) | `zero-id-server` | HTTP API server: endpoints, middleware, request handling |
-| 09 | [09-client.md](./09-client.md) | `zero-id-client` | CLI client: commands, local storage, user workflows |
+| 01 | [01-crypto.md](./01-crypto.md) | `zid-crypto` | Cryptographic primitives: key derivation, encryption, signatures, Shamir |
+| 02 | [02-storage.md](./02-storage.md) | `zid-storage` | Storage abstraction: traits, column families, batch operations |
+| 03 | [03-policy.md](./03-policy.md) | `zid-policy` | Policy engine: rate limiting, reputation, authorization decisions |
+| 04 | [04-identity-core.md](./04-identity-core.md) | `zid-identity-core` | Identity management: identities, machines, namespaces, revocation |
+| 05 | [05-integrations.md](./05-integrations.md) | `zid-integrations` | External integrations: mTLS auth, SSE streaming, webhooks |
+| 06 | [06-sessions.md](./06-sessions.md) | `zid-sessions` | Session management: JWT issuance, refresh tokens, introspection |
+| 07 | [07-methods.md](./07-methods.md) | `zid-methods` | Authentication methods: machine, email, OAuth, wallet, MFA |
+| 08 | [08-server.md](./08-server.md) | `zid-server` | HTTP API server: endpoints, middleware, request handling |
+| 09 | [09-client.md](./09-client.md) | `zid-client` | CLI client: commands, local storage, user workflows |
 | 10 | [10-system-overview.md](./10-system-overview.md) | — | System architecture: dependency graph, data flows, security model |
 | 11 | [11-crypto-primitives.md](./11-crypto-primitives.md) | — | Cryptographic primitives: algorithms, libraries, binary formats |
 
@@ -25,21 +25,21 @@ The specifications are organized by dependency order, starting with the most fun
 ```mermaid
 graph TD
     subgraph "Core Layer"
-        CRYPTO[zero-id-crypto]
-        STORAGE[zero-id-storage]
+        CRYPTO[zid-crypto]
+        STORAGE[zid-storage]
     end
 
     subgraph "Domain Layer"
-        POLICY[zero-id-policy]
-        IDENTITY[zero-id-identity-core]
-        INTEGRATIONS[zero-id-integrations]
-        SESSIONS[zero-id-sessions]
+        POLICY[zid-policy]
+        IDENTITY[zid-identity-core]
+        INTEGRATIONS[zid-integrations]
+        SESSIONS[zid-sessions]
     end
 
     subgraph "Application Layer"
-        METHODS[zero-id-methods]
-        SERVER[zero-id-server]
-        CLIENT[zero-id-client]
+        METHODS[zid-methods]
+        SERVER[zid-server]
+        CLIENT[zid-client]
     end
 
     %% Core has no internal deps

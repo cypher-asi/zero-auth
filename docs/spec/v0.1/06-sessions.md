@@ -1,8 +1,8 @@
-# zero-id-sessions Specification v0.1
+# zid-sessions Specification v0.1
 
 ## 1. Overview
 
-The `zero-id-sessions` crate provides session management and JWT token operations for Zero-Auth. It handles session creation, token issuance/refresh, revocation, and token introspection with refresh token rotation and reuse detection.
+The `zid-sessions` crate provides session management and JWT token operations for Zero-Auth. It handles session creation, token issuance/refresh, revocation, and token introspection with refresh token rotation and reuse detection.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -26,17 +26,17 @@ The `zero-id-sessions` crate provides session management and JWT token operation
 
 ```mermaid
 graph TD
-    CRYPTO[zero-id-crypto]
-    STORAGE[zero-id-storage]
-    IDENTITY[zero-id-identity-core]
-    SESSIONS[zero-id-sessions]
+    CRYPTO[zid-crypto]
+    STORAGE[zid-storage]
+    IDENTITY[zid-identity-core]
+    SESSIONS[zid-sessions]
     
     SESSIONS --> CRYPTO
     SESSIONS --> STORAGE
     SESSIONS --> IDENTITY
     
-    METHODS[zero-id-methods] --> SESSIONS
-    SERVER[zero-id-server] --> SESSIONS
+    METHODS[zid-methods] --> SESSIONS
+    SERVER[zid-server] --> SESSIONS
     
     style SESSIONS fill:#e1f5fe
 ```
@@ -299,9 +299,9 @@ pub struct JsonWebKey {
 
 #### Revocation Events
 
-Internal events used by the session service to communicate with the event publisher. These are transformed into the canonical `RevocationEvent` type (defined in `zero-id-identity-core`) before being published to the integrations subsystem.
+Internal events used by the session service to communicate with the event publisher. These are transformed into the canonical `RevocationEvent` type (defined in `zid-identity-core`) before being published to the integrations subsystem.
 
-> **Note**: This is an internal type for session-to-publisher communication. The canonical event type for external delivery is defined in `zero-id-identity-core`.
+> **Note**: This is an internal type for session-to-publisher communication. The canonical event type for external delivery is defined in `zid-identity-core`.
 
 ```rust
 pub struct RevocationEvent {
@@ -727,9 +727,9 @@ sequenceDiagram
 
 | Crate | Purpose |
 |-------|---------|
-| `zero-id-crypto` | Timestamps, key decryption |
-| `zero-id-storage` | Persistent storage |
-| `zero-id-identity-core` | Identity/machine lookup |
+| `zid-crypto` | Timestamps, key decryption |
+| `zid-storage` | Persistent storage |
+| `zid-identity-core` | Identity/machine lookup |
 
 ### 7.2 External Dependencies
 

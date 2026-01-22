@@ -8,28 +8,28 @@
 
 use std::sync::Arc;
 use uuid::Uuid;
-use zero_id_crypto::{
+use zid_crypto::{
     canonicalize_identity_creation_message, derive_identity_signing_keypair, sign_message,
     MachineKeyCapabilities, NeuralKey,
 };
-use zero_id_identity_core::{
+use zid_identity_core::{
     CreateIdentityRequest, IdentityCore, IdentityCoreService, IdentityStatus, MachineKey,
 };
-use zero_id_policy::{
+use zid_policy::{
     capabilities, IdentityStatus as PolicyIdentityStatus, Operation, PolicyContext, PolicyEngine,
     PolicyEngineImpl, RateLimitConfig, Verdict,
 };
-use zero_id_storage::RocksDbStorage;
+use zid_storage::RocksDbStorage;
 
 /// Mock event publisher for tests
 struct MockEventPublisher;
 
 #[async_trait::async_trait]
-impl zero_id_identity_core::EventPublisher for MockEventPublisher {
+impl zid_identity_core::EventPublisher for MockEventPublisher {
     async fn publish(
         &self,
-        _event: zero_id_identity_core::RevocationEvent,
-    ) -> zero_id_identity_core::Result<()> {
+        _event: zid_identity_core::RevocationEvent,
+    ) -> zid_identity_core::Result<()> {
         Ok(())
     }
 }
@@ -118,7 +118,7 @@ async fn test_policy_blocks_frozen_identity() {
         identity_id,
         machine_id: Some(machine_id),
         namespace_id: identity_id,
-        auth_method: zero_id_policy::AuthMethod::MachineKey,
+        auth_method: zid_policy::AuthMethod::MachineKey,
         mfa_verified: false,
         operation: Operation::Login,
         resource: None,
@@ -146,7 +146,7 @@ async fn test_policy_blocks_disabled_identity() {
         identity_id: Uuid::new_v4(),
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
-        auth_method: zero_id_policy::AuthMethod::MachineKey,
+        auth_method: zid_policy::AuthMethod::MachineKey,
         mfa_verified: false,
         operation: Operation::Login,
         resource: None,
@@ -174,7 +174,7 @@ async fn test_policy_blocks_revoked_machine() {
         identity_id: Uuid::new_v4(),
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
-        auth_method: zero_id_policy::AuthMethod::MachineKey,
+        auth_method: zid_policy::AuthMethod::MachineKey,
         mfa_verified: false,
         operation: Operation::Login,
         resource: None,
@@ -204,7 +204,7 @@ async fn test_policy_blocks_insufficient_capabilities() {
         identity_id: Uuid::new_v4(),
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
-        auth_method: zero_id_policy::AuthMethod::MachineKey,
+        auth_method: zid_policy::AuthMethod::MachineKey,
         mfa_verified: false,
         operation: Operation::EnrollMachine,
         resource: None,
@@ -233,7 +233,7 @@ async fn test_policy_allows_sufficient_capabilities() {
         identity_id: Uuid::new_v4(),
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
-        auth_method: zero_id_policy::AuthMethod::MachineKey,
+        auth_method: zid_policy::AuthMethod::MachineKey,
         mfa_verified: false,
         operation: Operation::EnrollMachine,
         resource: None,
@@ -262,7 +262,7 @@ async fn test_policy_blocks_inactive_namespace() {
         identity_id: Uuid::new_v4(),
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
-        auth_method: zero_id_policy::AuthMethod::MachineKey,
+        auth_method: zid_policy::AuthMethod::MachineKey,
         mfa_verified: false,
         operation: Operation::Login,
         resource: None,
@@ -300,7 +300,7 @@ async fn test_rate_limit_after_failures() {
         identity_id,
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
-        auth_method: zero_id_policy::AuthMethod::MachineKey,
+        auth_method: zid_policy::AuthMethod::MachineKey,
         mfa_verified: false,
         operation: Operation::Login,
         resource: None,
@@ -388,7 +388,7 @@ async fn test_evaluation_priority_frozen_over_others() {
         identity_id: Uuid::new_v4(),
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
-        auth_method: zero_id_policy::AuthMethod::MachineKey,
+        auth_method: zid_policy::AuthMethod::MachineKey,
         mfa_verified: false,
         operation: Operation::Login,
         resource: None,
@@ -418,7 +418,7 @@ async fn test_mfa_required_for_sensitive_operations() {
         identity_id: Uuid::new_v4(),
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
-        auth_method: zero_id_policy::AuthMethod::MachineKey,
+        auth_method: zid_policy::AuthMethod::MachineKey,
         mfa_verified: false, // MFA not verified
         operation: Operation::ChangePassword,
         resource: None,
@@ -447,7 +447,7 @@ async fn test_approvals_required_for_critical_operations() {
         identity_id: Uuid::new_v4(),
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
-        auth_method: zero_id_policy::AuthMethod::MachineKey,
+        auth_method: zid_policy::AuthMethod::MachineKey,
         mfa_verified: true,
         operation: Operation::UnfreezeIdentity,
         resource: None,

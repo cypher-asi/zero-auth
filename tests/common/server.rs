@@ -6,7 +6,7 @@ pub const TEST_MASTER_KEY: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 /// Test database path
-pub const TEST_DB_PATH: &str = "./data/zero-id-test.db";
+pub const TEST_DB_PATH: &str = "./data/zid-test.db";
 
 /// Server configuration for tests
 pub struct TestServer {
@@ -14,16 +14,16 @@ pub struct TestServer {
 }
 
 impl TestServer {
-    /// Start the zero-id-server with test configuration
+    /// Start the zid-server with test configuration
     pub fn start() -> Result<Self, Box<dyn std::error::Error>> {
         // Create database directory
         std::fs::create_dir_all("./data")?;
 
         let process = Command::new("cargo")
-            .args(["run", "--bin", "zero-id-server"])
+            .args(["run", "--bin", "zid-server"])
             .env("SERVICE_MASTER_KEY", TEST_MASTER_KEY)
             .env("DATABASE_PATH", TEST_DB_PATH)
-            .env("JWT_ISSUER", "https://test.zero-id.local")
+            .env("JWT_ISSUER", "https://test.zid.zero.tech")
             .env("JWT_AUDIENCE", "test-client")
             .env("RUST_LOG", "debug")
             .stderr(std::process::Stdio::piped())
@@ -69,7 +69,7 @@ impl Drop for TestServer {
 pub fn setup_test_environment() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("SERVICE_MASTER_KEY", TEST_MASTER_KEY);
     std::env::set_var("DATABASE_PATH", TEST_DB_PATH);
-    std::env::set_var("JWT_ISSUER", "https://test.zero-id.local");
+    std::env::set_var("JWT_ISSUER", "https://test.zid.zero.tech");
     std::env::set_var("JWT_AUDIENCE", "test-client");
 
     // Create database directory

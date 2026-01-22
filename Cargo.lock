@@ -3436,220 +3436,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zero-id-client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "argon2",
- "base64 0.22.1",
- "chrono",
- "clap",
- "colored",
- "hex",
- "rand 0.8.5",
- "reqwest 0.11.27",
- "rpassword",
- "serde",
- "serde_json",
- "tokio",
- "uuid",
- "zero-id-crypto",
- "zeroize",
-]
-
-[[package]]
-name = "zero-id-crypto"
-version = "0.1.0"
-dependencies = [
- "argon2",
- "bitflags 2.10.0",
- "blake3",
- "chacha20poly1305",
- "ed25519-dalek",
- "fips203",
- "fips204",
- "hex",
- "hkdf",
- "proptest",
- "rand 0.8.5",
- "serde",
- "sha2",
- "sharks",
- "thiserror 1.0.69",
- "uuid",
- "x25519-dalek",
- "zeroize",
-]
-
-[[package]]
-name = "zero-id-identity-core"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "serde",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "uuid",
- "zero-id-crypto",
- "zero-id-policy",
- "zero-id-storage",
-]
-
-[[package]]
-name = "zero-id-integration-tests"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "hex",
- "reqwest 0.12.28",
- "serde_json",
- "tokio",
- "uuid",
- "zero-id-crypto",
- "zero-id-identity-core",
- "zero-id-policy",
- "zero-id-storage",
-]
-
-[[package]]
-name = "zero-id-integrations"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "hex",
- "hmac",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha2",
- "subtle",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tokio-stream",
- "uuid",
- "zero-id-crypto",
- "zero-id-storage",
-]
-
-[[package]]
-name = "zero-id-methods"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "hex",
- "jsonwebtoken",
- "k256",
- "rand 0.8.5",
- "reqwest 0.11.27",
- "serde",
- "serde_json",
- "sha3",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "totp-rs",
- "tracing",
- "url",
- "uuid",
- "zero-id-crypto",
- "zero-id-identity-core",
- "zero-id-policy",
- "zero-id-storage",
- "zeroize",
-]
-
-[[package]]
-name = "zero-id-policy"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bincode",
- "hex",
- "serde",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "uuid",
- "zero-id-storage",
-]
-
-[[package]]
-name = "zero-id-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "base64 0.21.7",
- "chrono",
- "futures",
- "hex",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tokio-stream",
- "tower-http 0.5.2",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "zero-id-crypto",
- "zero-id-identity-core",
- "zero-id-integrations",
- "zero-id-methods",
- "zero-id-policy",
- "zero-id-sessions",
- "zero-id-storage",
-]
-
-[[package]]
-name = "zero-id-sessions"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "base64 0.21.7",
- "bincode",
- "ed25519-dalek",
- "jsonwebtoken",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "uuid",
- "zero-id-crypto",
- "zero-id-identity-core",
- "zero-id-policy",
- "zero-id-storage",
- "zeroize",
-]
-
-[[package]]
-name = "zero-id-storage"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bincode",
- "rocksdb",
- "serde",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "zerocopy"
 version = "0.8.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3741,6 +3527,220 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "zid-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "colored",
+ "hex",
+ "rand 0.8.5",
+ "reqwest 0.11.27",
+ "rpassword",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+ "zeroize",
+ "zid-crypto",
+]
+
+[[package]]
+name = "zid-crypto"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "bitflags 2.10.0",
+ "blake3",
+ "chacha20poly1305",
+ "ed25519-dalek",
+ "fips203",
+ "fips204",
+ "hex",
+ "hkdf",
+ "proptest",
+ "rand 0.8.5",
+ "serde",
+ "sha2",
+ "sharks",
+ "thiserror 1.0.69",
+ "uuid",
+ "x25519-dalek",
+ "zeroize",
+]
+
+[[package]]
+name = "zid-identity-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "uuid",
+ "zid-crypto",
+ "zid-policy",
+ "zid-storage",
+]
+
+[[package]]
+name = "zid-integration-tests"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "hex",
+ "reqwest 0.12.28",
+ "serde_json",
+ "tokio",
+ "uuid",
+ "zid-crypto",
+ "zid-identity-core",
+ "zid-policy",
+ "zid-storage",
+]
+
+[[package]]
+name = "zid-integrations"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "hex",
+ "hmac",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "uuid",
+ "zid-crypto",
+ "zid-storage",
+]
+
+[[package]]
+name = "zid-methods"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "hex",
+ "jsonwebtoken",
+ "k256",
+ "rand 0.8.5",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "sha3",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "totp-rs",
+ "tracing",
+ "url",
+ "uuid",
+ "zeroize",
+ "zid-crypto",
+ "zid-identity-core",
+ "zid-policy",
+ "zid-storage",
+]
+
+[[package]]
+name = "zid-policy"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "hex",
+ "serde",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "uuid",
+ "zid-storage",
+]
+
+[[package]]
+name = "zid-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "base64 0.21.7",
+ "chrono",
+ "futures",
+ "hex",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "zid-crypto",
+ "zid-identity-core",
+ "zid-integrations",
+ "zid-methods",
+ "zid-policy",
+ "zid-sessions",
+ "zid-storage",
+]
+
+[[package]]
+name = "zid-sessions"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.21.7",
+ "bincode",
+ "ed25519-dalek",
+ "jsonwebtoken",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "uuid",
+ "zeroize",
+ "zid-crypto",
+ "zid-identity-core",
+ "zid-policy",
+ "zid-storage",
+]
+
+[[package]]
+name = "zid-storage"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "rocksdb",
+ "serde",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

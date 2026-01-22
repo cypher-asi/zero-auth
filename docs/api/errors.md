@@ -1,6 +1,6 @@
-# zero-id API Error Reference
+# zid API Error Reference
 
-This document describes all error codes returned by the zero-id API, their HTTP status codes, and troubleshooting guidance.
+This document describes all error codes returned by the zid API, their HTTP status codes, and troubleshooting guidance.
 
 ## Error Response Format
 

@@ -1,8 +1,8 @@
-# zero-id-client Specification v0.1
+# zid-client Specification v0.1
 
 ## 1. Overview
 
-The `zero-id-client` crate provides a command-line interface (CLI) for interacting with Zero-Auth. It demonstrates the complete client-side workflow including identity creation, machine key authentication, token management, and Neural Key recovery using the 2+1 Neural Shard split storage model.
+The `zid-client` crate provides a command-line interface (CLI) for interacting with Zero-Auth. It demonstrates the complete client-side workflow including identity creation, machine key authentication, token management, and Neural Key recovery using the 2+1 Neural Shard split storage model.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -25,9 +25,9 @@ The `zero-id-client` crate provides a command-line interface (CLI) for interacti
 
 ```mermaid
 graph TD
-    CRYPTO[zero-id-crypto]
-    CLIENT[zero-id-client]
-    SERVER[zero-id-server]
+    CRYPTO[zid-crypto]
+    CLIENT[zid-client]
+    SERVER[zid-server]
     
     CLIENT --> CRYPTO
     CLIENT -.->|HTTP| SERVER
@@ -44,7 +44,7 @@ graph TD
 ```rust
 #[derive(Parser)]
 #[command(name = "client")]
-#[command(about = "Official client for zero-id integration")]
+#[command(about = "Official client for zid integration")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -463,7 +463,7 @@ const ARGON2_P_COST: u32 = 4;      // 4 parallelism
 ### 6.3 Domain Separation
 
 ```rust
-const SHARD_ENCRYPTION_DOMAIN: &[u8] = b"zero-id:client:neural-shard-encryption:v1";
+const SHARD_ENCRYPTION_DOMAIN: &[u8] = b"zid:client:neural-shard-encryption:v1";
 ```
 
 ### 6.4 Password Requirements
@@ -507,7 +507,7 @@ pub fn is_legacy_credentials() -> bool {
 
 | Crate | Version | Purpose |
 |-------|---------|---------|
-| `zero-id-crypto` | path | Client-side cryptography |
+| `zid-crypto` | path | Client-side cryptography |
 
 ### 7.2 External Dependencies
 

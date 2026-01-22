@@ -1,4 +1,4 @@
-# zero-id
+# zid
 
 A cryptographic identity and authentication service with client-controlled roots.
 
@@ -41,7 +41,7 @@ A cryptographic identity and authentication service with client-controlled roots
 
 ## Quantum-Resistant Cryptography
 
-zero-id supports **post-quantum cryptography** via PQ-Hybrid key derivation, protecting against future quantum computing threats while maintaining backward compatibility.
+zid supports **post-quantum cryptography** via PQ-Hybrid key derivation, protecting against future quantum computing threats while maintaining backward compatibility.
 
 ### Key Schemes
 
@@ -95,7 +95,7 @@ See [Quantum Considerations](docs/encryption/quantum.md) for threat analysis and
 | [API Documentation](docs/api/README.md) | REST API overview, authentication, and quick start |
 | [API v1 Reference](docs/api/v1-reference.md) | Complete endpoint documentation |
 | [API Errors](docs/api/errors.md) | Error codes and troubleshooting |
-| [CLI Client Reference](crates/zero-id-client/REFERENCE.md) | Complete CLI command reference |
+| [CLI Client Reference](crates/zid-client/REFERENCE.md) | Complete CLI command reference |
 | [Encryption Comparison](docs/encryption/comparison.md) | Cryptographic algorithm comparison |
 | [Quantum Considerations](docs/encryption/quantum.md) | Post-quantum cryptography notes |
 
@@ -105,21 +105,21 @@ For detailed technical specifications of each component:
 
 | Spec | Crate | Description |
 |------|-------|-------------|
-| [Crypto Primitives](docs/spec/v0.1/01-crypto.md) | `zero-id-crypto` | Key derivation, encryption, signatures, Shamir |
-| [Storage](docs/spec/v0.1/02-storage.md) | `zero-id-storage` | Storage abstraction and column families |
-| [Policy Engine](docs/spec/v0.1/03-policy.md) | `zero-id-policy` | Rate limiting, reputation, authorization |
-| [Identity Core](docs/spec/v0.1/04-identity-core.md) | `zero-id-identity-core` | Identities, machines, namespaces |
-| [Integrations](docs/spec/v0.1/05-integrations.md) | `zero-id-integrations` | mTLS auth, SSE streaming, webhooks |
-| [Sessions](docs/spec/v0.1/06-sessions.md) | `zero-id-sessions` | JWT issuance, refresh tokens |
-| [Auth Methods](docs/spec/v0.1/07-methods.md) | `zero-id-methods` | Machine, email, OAuth, wallet, MFA |
-| [Server](docs/spec/v0.1/08-server.md) | `zero-id-server` | HTTP API endpoints and middleware |
-| [Client](docs/spec/v0.1/09-client.md) | `zero-id-client` | CLI commands and workflows |
+| [Crypto Primitives](docs/spec/v0.1/01-crypto.md) | `zid-crypto` | Key derivation, encryption, signatures, Shamir |
+| [Storage](docs/spec/v0.1/02-storage.md) | `zid-storage` | Storage abstraction and column families |
+| [Policy Engine](docs/spec/v0.1/03-policy.md) | `zid-policy` | Rate limiting, reputation, authorization |
+| [Identity Core](docs/spec/v0.1/04-identity-core.md) | `zid-identity-core` | Identities, machines, namespaces |
+| [Integrations](docs/spec/v0.1/05-integrations.md) | `zid-integrations` | mTLS auth, SSE streaming, webhooks |
+| [Sessions](docs/spec/v0.1/06-sessions.md) | `zid-sessions` | JWT issuance, refresh tokens |
+| [Auth Methods](docs/spec/v0.1/07-methods.md) | `zid-methods` | Machine, email, OAuth, wallet, MFA |
+| [Server](docs/spec/v0.1/08-server.md) | `zid-server` | HTTP API endpoints and middleware |
+| [Client](docs/spec/v0.1/09-client.md) | `zid-client` | CLI commands and workflows |
 | [System Overview](docs/spec/v0.1/10-system-overview.md) | — | Architecture and data flows |
 | [Crypto Primitives Deep Dive](docs/spec/v0.1/11-crypto-primitives.md) | — | Algorithms and binary formats |
 
 ## Overview
 
-zero-id is a modular authentication system built on the principle that cryptographic root material should never leave client devices. The server operates in a zero-trust model where it cannot decrypt, sign, or impersonate users without their active participation.
+zid is a modular authentication system built on the principle that cryptographic root material should never leave client devices. The server operates in a zero-trust model where it cannot decrypt, sign, or impersonate users without their active participation.
 
 ### Core Principles
 
@@ -131,7 +131,7 @@ zero-id is a modular authentication system built on the principle that cryptogra
 
 ### Open Source & Self-Hosting
 
-zero-id is fully open source. Cypher operates the main authentication server at **https://auth.zero.tech** for public use, but anyone can run their own zero-id server. The system is designed to be self-hosted with no vendor lock-in—your cryptographic keys remain under your control regardless of which server you use.
+zid is fully open source. Cypher operates the main authentication server at **https://auth.zero.tech** for public use, but anyone can run their own zid server. The system is designed to be self-hosted with no vendor lock-in—your cryptographic keys remain under your control regardless of which server you use.
 
 ## How the System Works
 
@@ -203,7 +203,7 @@ Machine Key capabilities include:
 
 | Capability | Description |
 |------------|-------------|
-| AUTHENTICATE | Can authenticate to zero-id |
+| AUTHENTICATE | Can authenticate to zid |
 | SIGN | Can sign challenges and messages |
 | ENCRYPT | Can encrypt/decrypt data |
 | SVK_UNWRAP | Can unwrap vault keys (for zero-vault integration) |
@@ -221,7 +221,7 @@ Machine Key capabilities include:
 
 ### Namespaces
 
-Namespaces provide multi-tenant isolation and organizational boundaries within zero-id. Every identity operates within at least one namespace, and all sessions and tokens are scoped to a specific namespace context.
+Namespaces provide multi-tenant isolation and organizational boundaries within zid. Every identity operates within at least one namespace, and all sessions and tokens are scoped to a specific namespace context.
 
 #### Namespace Structure
 
@@ -463,7 +463,7 @@ Recovery process:
 
 ## Authentication Methods
 
-zero-id supports multiple authentication methods:
+zid supports multiple authentication methods:
 
 | Method | Description | Use Case |
 |--------|-------------|----------|
@@ -483,15 +483,15 @@ The system is composed of modular crates:
 
 | Crate | Purpose |
 |-------|---------|
-| `zero-id-crypto` | Cryptographic primitives (Ed25519, X25519, XChaCha20-Poly1305, HKDF, Argon2id) |
-| `zero-id-storage` | RocksDB abstraction layer with column families on server |
-| `zero-id-policy` | Policy engine for authorization and rate limiting |
-| `zero-id-identity-core` | Identity and Machine Key management |
-| `zero-id-methods` | Authentication methods (Machine Key, Email, OAuth, Wallet, MFA) |
-| `zero-id-sessions` | Session and JWT token management |
-| `zero-id-integrations` | Event streaming (SSE) and webhooks |
-| `zero-id-server` | HTTP API server (Axum) |
-| `zero-id-client` | Official CLI client |
+| `zid-crypto` | Cryptographic primitives (Ed25519, X25519, XChaCha20-Poly1305, HKDF, Argon2id) |
+| `zid-storage` | RocksDB abstraction layer with column families on server |
+| `zid-policy` | Policy engine for authorization and rate limiting |
+| `zid-identity-core` | Identity and Machine Key management |
+| `zid-methods` | Authentication methods (Machine Key, Email, OAuth, Wallet, MFA) |
+| `zid-sessions` | Session and JWT token management |
+| `zid-integrations` | Event streaming (SSE) and webhooks |
+| `zid-server` | HTTP API server (Axum) |
+| `zid-client` | Official CLI client |
 
 ## Getting Started
 
@@ -524,7 +524,7 @@ export SERVICE_MASTER_KEY=$(openssl rand -hex 32)
 $env:SERVICE_MASTER_KEY = -join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
 
 # Run the server
-cargo run -p zero-id-server
+cargo run -p zid-server
 ```
 
 The server starts on `http://127.0.0.1:9999` by default.
@@ -535,8 +535,8 @@ The server starts on `http://127.0.0.1:9999` by default.
 |----------|----------|---------|-------------|
 | `SERVICE_MASTER_KEY` | Yes | - | 64-character hex string (32 bytes) for cryptographic operations |
 | `BIND_ADDRESS` | No | `127.0.0.1:9999` | Server bind address |
-| `DATABASE_PATH` | No | `./data/zero-id.db` | Path to RocksDB database |
-| `JWT_ISSUER` | No | `https://zero-id.cypher.io` | JWT issuer claim |
+| `DATABASE_PATH` | No | `./data/zid.db` | Path to RocksDB database |
+| `JWT_ISSUER` | No | `https://zid.zero.tech` | JWT issuer claim |
 | `JWT_AUDIENCE` | No | `zero-vault` | JWT audience claim |
 | `ACCESS_TOKEN_EXPIRY_SECONDS` | No | `900` (15 min) | Access token lifetime |
 | `REFRESH_TOKEN_EXPIRY_SECONDS` | No | `2592000` (30 days) | Refresh token lifetime |
@@ -545,33 +545,33 @@ The server starts on `http://127.0.0.1:9999` by default.
 
 ```bash
 # Create an identity with client-side cryptography
-cargo run -p zero-id-client -- create-identity --device-name "My Laptop"
+cargo run -p zid-client -- create-identity --device-name "My Laptop"
 
 # Authenticate with machine key challenge-response
-cargo run -p zero-id-client -- login
+cargo run -p zid-client -- login
 
 # View your credentials (Neural Key, identity, machine info)
-cargo run -p zero-id-client -- show-credentials
+cargo run -p zid-client -- show-credentials
 
 # Enroll another device
-cargo run -p zero-id-client -- enroll-machine --device-name "My Phone"
+cargo run -p zid-client -- enroll-machine --device-name "My Phone"
 
 # List all enrolled machines
-cargo run -p zero-id-client -- list-machines
+cargo run -p zid-client -- list-machines
 
 # Refresh expired access token
-cargo run -p zero-id-client -- refresh-token
+cargo run -p zid-client -- refresh-token
 ```
 
 #### Machine Management
 
 ```bash
 # Remove a compromised or lost device
-cargo run -p zero-id-client -- revoke-machine <machine-id> --reason "Device lost"
+cargo run -p zid-client -- revoke-machine <machine-id> --reason "Device lost"
 
 # Rotate a machine key (enroll replacement, then revoke old)
-cargo run -p zero-id-client -- enroll-machine --device-name "My Laptop (rotated)"
-cargo run -p zero-id-client -- revoke-machine <old-machine-id> --reason "Key rotation"
+cargo run -p zid-client -- enroll-machine --device-name "My Laptop (rotated)"
+cargo run -p zid-client -- revoke-machine <old-machine-id> --reason "Key rotation"
 ```
 
 #### Neural Key Recovery
@@ -580,7 +580,7 @@ If you lose access to your Neural Key, reconstruct it from any 3 of your 5 Neura
 
 ```bash
 # Recover identity using 3 Neural Shards (displayed during identity creation)
-cargo run -p zero-id-client -- recover \
+cargo run -p zid-client -- recover \
   --shard <shard1-hex> \
   --shard <shard2-hex> \
   --shard <shard3-hex> \
@@ -589,7 +589,7 @@ cargo run -p zero-id-client -- recover \
 
 This reconstructs the Neural Key, derives fresh Machine Keys, and enrolls the recovery device. Store your Neural Shards securely in separate locations (password manager, safe deposit box, trusted contacts).
 
-See `crates/zero-id-client/README.md` for complete client documentation.
+See `crates/zid-client/README.md` for complete client documentation.
 
 ### Testing
 
@@ -608,14 +608,14 @@ cargo test --test identity_creation -- --ignored --nocapture
 
 | Crate | Unit Tests | Description |
 |-------|------------|-------------|
-| `zero-id-crypto` | 59 | Cryptographic primitives, key derivation, Shamir sharing |
-| `zero-id-methods` | 35 | Authentication methods, OAuth/OIDC, MFA, wallet signing |
-| `zero-id-integrations` | 24 | Webhooks, SSE events, external service integration |
-| `zero-id-sessions` | 21 | JWT tokens, session lifecycle, introspection |
-| `zero-id-policy` | 16 | Policy engine, rate limiting, authorization rules |
-| `zero-id-storage` | 9 | RocksDB operations, column families |
-| `zero-id-identity-core` | 5 | Identity and machine key management |
-| `zero-id-server` | 4 | API handlers, request context |
+| `zid-crypto` | 59 | Cryptographic primitives, key derivation, Shamir sharing |
+| `zid-methods` | 35 | Authentication methods, OAuth/OIDC, MFA, wallet signing |
+| `zid-integrations` | 24 | Webhooks, SSE events, external service integration |
+| `zid-sessions` | 21 | JWT tokens, session lifecycle, introspection |
+| `zid-policy` | 16 | Policy engine, rate limiting, authorization rules |
+| `zid-storage` | 9 | RocksDB operations, column families |
+| `zid-identity-core` | 5 | Identity and machine key management |
+| `zid-server` | 4 | API handlers, request context |
 | **Total** | **173** | |
 
 **Integration Tests:** 1 end-to-end test (requires running server)
@@ -720,7 +720,7 @@ cargo llvm-cov --workspace --html
 
 ### Post-Quantum Cryptography
 
-zero-id supports PQ-Hybrid key derivation with ML-DSA-65 and ML-KEM-768 always available. Machine keys can include post-quantum keys alongside classical keys for defense against future quantum computers.
+zid supports PQ-Hybrid key derivation with ML-DSA-65 and ML-KEM-768 always available. Machine keys can include post-quantum keys alongside classical keys for defense against future quantum computers.
 
 | Operation | Algorithm | Standard | Key/Signature Size |
 |-----------|-----------|----------|-------------------|
@@ -735,7 +735,7 @@ Machine keys support two schemes:
 - **PqHybrid**: Classical keys plus ML-DSA-65 + ML-KEM-768. Provides post-quantum protection while maintaining backward compatibility.
 
 ```rust
-use zero_id_crypto::{derive_machine_keypair_with_scheme, KeyScheme, MachineKeyCapabilities};
+use zid_crypto::{derive_machine_keypair_with_scheme, KeyScheme, MachineKeyCapabilities};
 
 // Derive machine keys with post-quantum protection
 let keypair = derive_machine_keypair_with_scheme(
@@ -772,7 +772,7 @@ See [Quantum Considerations](docs/encryption/quantum.md) for migration strategy 
 
 ## Security Auditing
 
-**This software is in alpha and has not undergone professional security audits.** We do not guarantee the security of this system. While we have designed zero-id with security as a primary concern and follow cryptographic best practices, unaudited software may contain vulnerabilities.
+**This software is in alpha and has not undergone professional security audits.** We do not guarantee the security of this system. While we have designed zid with security as a primary concern and follow cryptographic best practices, unaudited software may contain vulnerabilities.
 
 Users and developers should:
 
@@ -780,13 +780,13 @@ Users and developers should:
 - Consider the alpha status when making decisions about sensitive deployments
 - Wait for further hardening and audit completion if your threat model requires verified security
 
-Our intention is to pursue multiple independent security audits as zero-id matures. This section will be updated with audit reports, findings, and remediations as they become available.
+Our intention is to pursue multiple independent security audits as zid matures. This section will be updated with audit reports, findings, and remediations as they become available.
 
 ## Integrating with Your Application
 
 ### Getting Started
 
-You can integrate zero-id into your application by either using the hosted service at **https://auth.zero.tech** or running your own server.
+You can integrate zid into your application by either using the hosted service at **https://auth.zero.tech** or running your own server.
 
 **Option 1: Use the hosted service**
 
@@ -798,7 +798,7 @@ const AUTH_SERVER: &str = "https://auth.zero.tech";
 
 **Option 2: Self-host**
 
-Run your own zero-id server (see [Running the Server](#running-the-server)) and point to your instance.
+Run your own zid server (see [Running the Server](#running-the-server)) and point to your instance.
 
 ### Required Dependencies
 
@@ -817,7 +817,7 @@ For client-side cryptographic operations (identity creation, machine enrollment)
 
 ```toml
 [dependencies]
-zero-id-crypto = { git = "https://github.com/cypher-agi/zero-id" }
+zid-crypto = { git = "https://github.com/cypher-agi/zero-id" }
 ```
 
 ### SDK Roadmap

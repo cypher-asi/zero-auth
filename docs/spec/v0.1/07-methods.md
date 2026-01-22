@@ -1,8 +1,8 @@
-# zero-id-methods Specification v0.1
+# zid-methods Specification v0.1
 
 ## 1. Overview
 
-The `zero-id-methods` crate provides multiple authentication mechanisms for Zero-Auth. It supports five distinct authentication methods: machine key challenge-response, email+password, OAuth/OIDC providers, EVM wallet signatures, and multi-factor authentication (TOTP).
+The `zid-methods` crate provides multiple authentication mechanisms for Zero-Auth. It supports five distinct authentication methods: machine key challenge-response, email+password, OAuth/OIDC providers, EVM wallet signatures, and multi-factor authentication (TOTP).
 
 ### 1.1 Purpose and Responsibilities
 
@@ -27,18 +27,18 @@ The `zero-id-methods` crate provides multiple authentication mechanisms for Zero
 
 ```mermaid
 graph TD
-    CRYPTO[zero-id-crypto]
-    STORAGE[zero-id-storage]
-    IDENTITY[zero-id-identity-core]
-    POLICY[zero-id-policy]
-    METHODS[zero-id-methods]
+    CRYPTO[zid-crypto]
+    STORAGE[zid-storage]
+    IDENTITY[zid-identity-core]
+    POLICY[zid-policy]
+    METHODS[zid-methods]
     
     METHODS --> CRYPTO
     METHODS --> STORAGE
     METHODS --> IDENTITY
     METHODS --> POLICY
     
-    SERVER[zero-id-server] --> METHODS
+    SERVER[zid-server] --> METHODS
     
     style METHODS fill:#e1f5fe
 ```
@@ -986,10 +986,10 @@ if !password_valid || credential.is_none() {
 
 | Crate | Purpose |
 |-------|---------|
-| `zero-id-crypto` | Key derivation, encryption, signatures, timestamps |
-| `zero-id-storage` | Persistent storage for challenges, credentials |
-| `zero-id-policy` | Policy evaluation, rate limiting |
-| `zero-id-identity-core` | Identity and machine lookup |
+| `zid-crypto` | Key derivation, encryption, signatures, timestamps |
+| `zid-storage` | Persistent storage for challenges, credentials |
+| `zid-policy` | Policy evaluation, rate limiting |
+| `zid-identity-core` | Identity and machine lookup |
 
 ### 7.2 External Dependencies
 
@@ -1019,7 +1019,7 @@ if !password_valid || credential.is_none() {
 ```rust
 // Challenge configuration
 const CHALLENGE_EXPIRY_SECONDS: u64 = 60;
-const DEFAULT_AUDIENCE: &str = "zero-id.cypher.io";
+const DEFAULT_AUDIENCE: &str = "zid.cypher.io";
 
 // TOTP configuration
 const TOTP_DIGITS: usize = 6;
