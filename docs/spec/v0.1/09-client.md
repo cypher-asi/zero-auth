@@ -275,6 +275,9 @@ sequenceDiagram
     Client->>Server: POST /v1/identity
     Server-->>Client: {identity_id, machine_id, namespace_id}
     
+    Client->>Crypto: compute_commitment()
+    Crypto-->>Client: neural_key_commitment (BLAKE3 hash)
+    
     Client->>Crypto: split_neural_key()
     Crypto-->>Client: [5 shards]
     
@@ -285,7 +288,7 @@ sequenceDiagram
     Client->>Crypto: encrypt(shard_1, KEK)
     Client->>Crypto: encrypt(shard_2, KEK)
     
-    Client->>Client: Save credentials.json
+    Client->>Client: Save credentials.json (includes commitment)
     
     Client->>User: Display 3 user shards
     User->>User: Store shards securely
@@ -325,6 +328,8 @@ sequenceDiagram
         Client->>Crypto: decrypt(shard_1), decrypt(shard_2)
         Client->>Crypto: combine_shards([s1, s2, user_shard])
         Crypto-->>Client: neural_key (in memory)
+        Client->>Crypto: verify_commitment(stored_commitment)
+        Note right of Client: Rejects fake/wrong shards
         Client->>Crypto: derive_machine_keypair()
         Crypto-->>Client: signing_keypair
     end
@@ -462,6 +467,11 @@ sequenceDiagram
 ```
 Neural Key (32 bytes, client-generated)
     │
+    ├── compute_commitment() → BLAKE3 Hash (32 bytes)
+    │       │
+    │       └── Stored as neural_key_commitment
+    │           (Used to verify reconstruction)
+    │
     ├── derive_machine_keypair() → Machine Signing Key Seed
     │       │
     │       └── Encrypted with KEK → encrypted_machine_signing_seed
@@ -483,6 +493,9 @@ Recovery/Enrollment (requires Neural Key):
     Passphrase → KEK → decrypt(shards 0,1)
   + 1 User Shard
   = 3 shards (threshold met) → Neural Key reconstructed
+  → verify_commitment(neural_key_commitment)
+  = If mismatch: ERROR (fake/wrong shards detected)
+  = If match: proceed with operation
 ```
 
 ---
