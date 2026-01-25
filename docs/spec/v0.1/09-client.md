@@ -394,6 +394,10 @@ sequenceDiagram
     Client->>Crypto: combine_shards([3+ shards])
     Crypto-->>Client: neural_key
     
+    Note right of Client: For existing credentials with commitment:
+    Client->>Crypto: verify_commitment(stored_commitment)
+    Note right of Client: Rejects if shards produce wrong key
+    
     User->>Client: new passphrase
     
     alt Create New Identity
