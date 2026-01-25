@@ -201,16 +201,25 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> Generated: NeuralKey::generate()
     
-    Generated --> Split: split_neural_key()
+    Generated --> Committed: compute_commitment()
+    Committed --> Split: split_neural_key()
     Split --> Stored: save_credentials_with_shards()
     Split --> UserShards: 3 shards given to user
     
     Stored --> Reconstructed: load_and_reconstruct()
     UserShards --> Reconstructed: 1 shard provided
     
-    Reconstructed --> InMemory: combine_shards()
+    Reconstructed --> Verified: verify_commitment()
+    Verified --> InMemory: commitment matches
+    Reconstructed --> Rejected: commitment mismatch
     InMemory --> Zeroized: operation complete
     Zeroized --> [*]
+    Rejected --> [*]: Error returned
+    
+    note right of Committed
+        BLAKE3 hash stored
+        for verification
+    end note
     
     note right of Stored
         2 shards encrypted
@@ -225,6 +234,11 @@ stateDiagram-v2
     note right of InMemory
         Neural Key reconstructed
         ONLY in memory
+    end note
+    
+    note right of Rejected
+        Fake or wrong shards
+        detected
     end note
 ```
 
@@ -419,6 +433,7 @@ sequenceDiagram
   "kek_salt": "hex-encoded salt (32 bytes)",
   "encrypted_machine_signing_seed": "hex-encoded ciphertext (48 bytes)",
   "machine_key_nonce": "hex-encoded nonce (24 bytes)",
+  "neural_key_commitment": "hex-encoded BLAKE3 hash (32 bytes)",
   "identity_id": "uuid",
   "machine_id": "uuid",
   "identity_signing_public_key": "hex (64 chars)",
@@ -427,7 +442,9 @@ sequenceDiagram
 }
 ```
 
-**Note:** The `encrypted_machine_signing_seed` and `machine_key_nonce` fields enable passphrase-only login. Legacy credentials without these fields require Neural Shard input for login.
+**Note:** 
+- The `encrypted_machine_signing_seed` and `machine_key_nonce` fields enable passphrase-only login. Legacy credentials without these fields require Neural Shard input for login.
+- The `neural_key_commitment` field stores a BLAKE3 hash of the original Neural Key. During reconstruction, the client verifies the reconstructed key matches this commitment, preventing fake shards from producing a wrong key.
 
 ### 5.3 Session File Format
 
@@ -480,6 +497,7 @@ Recovery/Enrollment (requires Neural Key):
 | Memory scraping | KEK and Neural Key zeroized immediately after use |
 | Passphrase brute-force | Argon2id with 64 MiB memory, 3 iterations |
 | Nonce reuse | Unique 24-byte random nonce per encryption |
+| Fake/wrong shards | BLAKE3 commitment verification rejects invalid reconstructions |
 
 ### 6.2 Argon2id Parameters
 
