@@ -38,6 +38,20 @@ pub struct ClientCredentials {
     /// Salt used for Argon2id key derivation (32 bytes)
     #[serde(with = "hex_serde")]
     pub kek_salt: Vec<u8>,
+    /// Encrypted machine signing seed (XChaCha20-Poly1305 ciphertext + 16-byte tag)
+    /// This allows login without reconstructing the Neural Key.
+    #[serde(with = "hex_serde", default)]
+    pub encrypted_machine_signing_seed: Vec<u8>,
+    /// Nonce for machine signing seed encryption (24 bytes for XChaCha20)
+    #[serde(with = "hex_serde", default)]
+    pub machine_key_nonce: Vec<u8>,
+    /// Neural Key commitment (BLAKE3 hash of the original Neural Key)
+    ///
+    /// Used to verify that reconstructed Neural Keys from shards are correct.
+    /// Without this, any 3 valid-format shards would reconstruct *some* secret,
+    /// but not necessarily the correct one.
+    #[serde(with = "hex_serde", default)]
+    pub neural_key_commitment: Vec<u8>,
     /// Identity ID (not sensitive, skipped from zeroization)
     #[zeroize(skip)]
     pub identity_id: Uuid,

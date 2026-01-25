@@ -51,6 +51,7 @@ pub struct NeuralKey([u8; 32]);
 
 impl NeuralKey {
     /// Generate a new Neural Key using cryptographically secure RNG
+    /// Uses `getrandom` for WASM compatibility (crypto.getRandomValues in browsers)
     pub fn generate() -> Result<Self>;
     
     /// Create from existing bytes (e.g., after Shamir reconstruction)
@@ -89,6 +90,11 @@ impl Ed25519KeyPair {
     
     /// Get the public key bytes
     pub fn public_key_bytes(&self) -> [u8; 32];
+    
+    /// Get the private key seed bytes (32 bytes)
+    /// WARNING: Use with extreme caution. Only for secure encrypted storage.
+    /// These bytes can reconstruct the full keypair via from_seed().
+    pub fn seed_bytes(&self) -> [u8; 32];
     
     /// Get a reference to the private key (use with caution)
     pub fn private_key(&self) -> &SigningKey;
@@ -768,13 +774,16 @@ None. This is the foundational crate.
 | `blake3` | workspace | Fast hashing |
 | `argon2` | workspace | Password hashing |
 | `zeroize` | workspace | Secure memory clearing |
-| `rand` | workspace | Cryptographic RNG |
+| `rand` | workspace | Random number generation utilities |
+| `getrandom` | workspace | WASM-compatible CSPRNG |
 | `sharks` | workspace | Shamir Secret Sharing |
 | `serde` | workspace | Serialization |
 | `hex` | workspace | Hex encoding |
 | `uuid` | workspace | UUID handling |
 | `thiserror` | workspace | Error types |
 | `bitflags` | workspace | Capability flags |
+
+**Note:** Random number generation uses `getrandom` directly for WASM compatibility. In browser environments, this uses `crypto.getRandomValues()`. The `rand` crate is still used for `OsRng` in password salt generation.
 
 ---
 

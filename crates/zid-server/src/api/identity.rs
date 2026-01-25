@@ -13,7 +13,7 @@ use zid_identity_core::{
 
 use crate::{
     error::{map_service_error, ApiError},
-    extractors::AuthenticatedUser,
+    extractors::{AuthenticatedUser, JsonWithErrors},
     state::AppState,
 };
 
@@ -111,7 +111,7 @@ pub struct CeremonyResponse {
 /// POST /v1/identity
 pub async fn create_identity(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<CreateIdentityRequest>,
+    JsonWithErrors(req): JsonWithErrors<CreateIdentityRequest>,
 ) -> Result<Json<CreateIdentityResponse>, ApiError> {
     // Parse hex strings
     let identity_signing_public_key = parse_hex_32(&req.identity_signing_public_key)?;

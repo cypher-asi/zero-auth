@@ -59,6 +59,9 @@ pub async fn create_identity(server: &str, device_name: &str, platform: &str, ke
             .bold()
     );
 
+    // Compute commitment before splitting (for verification during reconstruction)
+    let neural_key_commitment = neural_key.compute_commitment();
+
     // Split neural key into 5 shards
     let shards = split_neural_key(&neural_key)
         .map_err(|e| anyhow::anyhow!("Failed to split Neural Key: {}", e))?;
@@ -67,14 +70,14 @@ pub async fn create_identity(server: &str, device_name: &str, platform: &str, ke
     println!();
     let passphrase = prompt_new_passphrase()?;
 
-    // Save 2 shards encrypted, get back 3 user shards
+    // Save 2 shards encrypted + machine signing key + commitment, get back 3 user shards
     let user_shards = save_credentials_with_shards(
         &shards,
+        &neural_key_commitment,
+        &machine_keypair,
         identity_id,
         machine_id,
         &hex::encode(identity_signing_public_key),
-        &hex::encode(machine_keypair.signing_public_key()),
-        &hex::encode(machine_keypair.encryption_public_key()),
         device_name,
         platform,
         &passphrase,
@@ -98,7 +101,12 @@ pub async fn create_identity(server: &str, device_name: &str, platform: &str, ke
 
 fn generate_neural_key() -> Result<NeuralKey> {
     println!("\n{}", "Step 1: Generating Neural Key...".yellow());
-    let neural_key = NeuralKey::generate()?;
+    // Use getrandom for WASM compatibility instead of NeuralKey::generate()
+    // which internally uses thread_rng() (not available in WASM)
+    let mut key_bytes = [0u8; 32];
+    getrandom::getrandom(&mut key_bytes)
+        .map_err(|e| anyhow::anyhow!("Failed to generate random bytes: {}", e))?;
+    let neural_key = NeuralKey::from_bytes(key_bytes);
     println!("{}", "✓ Neural Key generated (in memory only)".green());
     Ok(neural_key)
 }
@@ -321,13 +329,13 @@ fn display_user_shards(shards: &[NeuralShard; 3]) -> Result<()> {
     );
     println!(
         "{}",
-        "║  You need your PASSPHRASE + ONE of these shards to log in.            ║"
+        "║  Login only requires your PASSPHRASE (no shard needed).               ║"
             .white()
             .bold()
     );
     println!(
         "{}",
-        "║  Store these in separate secure locations.                            ║"
+        "║  Store these shards in separate secure locations for RECOVERY.        ║"
             .white()
     );
     println!(

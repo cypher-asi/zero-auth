@@ -146,6 +146,15 @@ pub fn split_neural_key(neural_key: &NeuralKey) -> Result<[NeuralShard; SHAMIR_T
 ///
 /// Requires at least 3 shards to reconstruct the original Neural Key.
 ///
+/// # Security Warning
+///
+/// This function does NOT verify that the reconstructed key is correct!
+/// Shamir's Secret Sharing will reconstruct *some* 32-byte value from any
+/// 3 valid-format shards, even if they're fake or from different identities.
+///
+/// For secure reconstruction, use `combine_shards_with_commitment` which
+/// verifies the reconstructed key against a stored commitment.
+///
 /// # Arguments
 ///
 /// * `shards` - A slice of 3-5 NeuralShard objects
@@ -411,5 +420,60 @@ mod tests {
         bytes.extend_from_slice(&[1u8; 32]); // dummy data
         let hex_str = hex::encode(bytes);
         assert!(NeuralShard::from_hex(&hex_str).is_err());
+    }
+
+    #[test]
+    fn test_fake_shards_reconstruct_wrong_key_detected_by_commitment() {
+        // This test demonstrates why commitment verification is necessary.
+        // Shamir will reconstruct *some* key from any 3 valid-format shards,
+        // but commitment verification detects this is the wrong key.
+
+        let real_neural_key = NeuralKey::generate().unwrap();
+        let real_commitment = real_neural_key.compute_commitment();
+        let _real_shards = split_neural_key(&real_neural_key).unwrap();
+
+        // Create 3 completely fake shards with arbitrary data
+        let fake_shards = vec![
+            NeuralShard::new(1, [0x11u8; 32]),
+            NeuralShard::new(2, [0x22u8; 32]),
+            NeuralShard::new(3, [0x33u8; 32]),
+        ];
+
+        // Shamir WILL successfully reconstruct something from fake shards
+        let reconstructed = combine_shards(&fake_shards);
+        assert!(
+            reconstructed.is_ok(),
+            "Shamir should reconstruct some key from valid-format shards"
+        );
+
+        // But the reconstructed key will NOT match the real commitment
+        let fake_key = reconstructed.unwrap();
+        assert!(
+            fake_key.verify_commitment(&real_commitment).is_err(),
+            "Fake key should fail commitment verification"
+        );
+
+        // The commitment of the fake key is different from the real commitment
+        let fake_commitment = fake_key.compute_commitment();
+        assert_ne!(
+            fake_commitment, real_commitment,
+            "Fake key should have different commitment"
+        );
+    }
+
+    #[test]
+    fn test_correct_shards_pass_commitment_verification() {
+        let neural_key = NeuralKey::generate().unwrap();
+        let commitment = neural_key.compute_commitment();
+        let shards = split_neural_key(&neural_key).unwrap();
+
+        // Reconstruct from correct shards
+        let reconstructed = combine_shards(&shards[0..3]).unwrap();
+
+        // Should pass commitment verification
+        assert!(
+            reconstructed.verify_commitment(&commitment).is_ok(),
+            "Correct shards should pass commitment verification"
+        );
     }
 }

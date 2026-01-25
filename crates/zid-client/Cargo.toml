@@ -47,5 +47,8 @@ rpassword = "7.3"
 # Argon2id for key derivation
 argon2 = "0.5"
 
-# Random number generation
-rand = "0.8"
+# Cryptographically secure random number generation (WASM-compatible)
+getrandom = "0.2"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }

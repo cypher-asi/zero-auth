@@ -16,10 +16,12 @@ The `zid-client` crate provides a command-line interface (CLI) for interacting w
 ### 1.2 Key Design Decisions
 
 - **Client-Side Cryptography**: Neural Key generation and all key derivations happen locally
-- **2+1 Neural Shard Split**: 2 shards encrypted on device + 1 user shard required for login
-- **No Persistent Neural Key**: Neural Key is NEVER written to disk, only reconstructed in memory
+- **Passphrase-Only Login**: Machine signing key seed stored encrypted; regular login requires only passphrase
+- **Neural Shards for Recovery**: 2 shards encrypted on device + 3 user shards for disaster recovery (3-of-5 threshold)
+- **No Persistent Neural Key**: Neural Key is NEVER written to disk, only reconstructed when needed for recovery/enrollment
 - **Passphrase Protection**: KEK derived via Argon2id from user passphrase
 - **HTTP Client**: Uses `reqwest` for async HTTP communication with server
+- **WASM Compatibility**: Uses `getrandom` for cryptographic RNG (works in browsers)
 
 ### 1.3 Position in Dependency Graph
 
@@ -83,23 +85,29 @@ enum Commands {
 ### 2.2 Local Storage Types
 
 ```rust
-/// Client credentials with 2+1 Neural Shard split storage
+/// Client credentials with encrypted storage
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct ClientCredentials {
     /// Encrypted Neural Shard 1 (XChaCha20-Poly1305)
-    pub encrypted_shard_1: Vec<u8>,      // 33 + 16 = 49 bytes
+    pub encrypted_shard_1: Vec<u8>,              // 33 + 16 = 49 bytes
     /// Encrypted Neural Shard 2 (XChaCha20-Poly1305)
-    pub encrypted_shard_2: Vec<u8>,      // 33 + 16 = 49 bytes
+    pub encrypted_shard_2: Vec<u8>,              // 33 + 16 = 49 bytes
     /// Nonce for shard encryption (24 bytes)
-    pub shards_nonce: Vec<u8>,           // 24 bytes
+    pub shards_nonce: Vec<u8>,                   // 24 bytes
     /// Salt for Argon2id KEK derivation (32 bytes)
-    pub kek_salt: Vec<u8>,               // 32 bytes
+    pub kek_salt: Vec<u8>,                       // 32 bytes
+    /// Encrypted machine signing seed (XChaCha20-Poly1305)
+    /// Enables passphrase-only login without Neural Key reconstruction
+    pub encrypted_machine_signing_seed: Vec<u8>, // 32 + 16 = 48 bytes
+    /// Nonce for machine signing seed encryption (24 bytes)
+    pub machine_key_nonce: Vec<u8>,              // 24 bytes
+    /// Neural Key commitment (BLAKE3 hash)
+    /// Used to verify reconstructed Neural Keys are correct
+    pub neural_key_commitment: Vec<u8>,          // 32 bytes
     
     pub identity_id: Uuid,
     pub machine_id: Uuid,
-    pub identity_signing_public_key: String,   // hex
-    pub machine_signing_public_key: String,    // hex
-    pub machine_encryption_public_key: String, // hex
+    pub identity_signing_public_key: String,     // hex
     pub device_name: String,
     pub device_platform: String,
 }
@@ -271,6 +279,8 @@ sequenceDiagram
 
 ### 4.2 Machine Key Login Flow
 
+The login flow uses the stored encrypted machine signing key, requiring only a passphrase:
+
 ```mermaid
 sequenceDiagram
     participant User
@@ -282,21 +292,29 @@ sequenceDiagram
     User->>Client: login
     
     Client->>Storage: load_credentials()
-    Storage-->>Client: credentials (no neural key)
+    Storage-->>Client: credentials
     
     Client->>Server: GET /v1/auth/challenge?machine_id=X
     Server-->>Client: {challenge_id, challenge, expires_at}
     
     User->>Client: passphrase
-    User->>Client: neural shard (1 of 3)
     
-    Client->>Storage: load encrypted shards
-    Client->>Crypto: Argon2id(passphrase) → KEK
-    Client->>Crypto: decrypt(shard_1), decrypt(shard_2)
-    Client->>Crypto: combine_shards([s1, s2, user_shard])
-    Crypto-->>Client: neural_key (in memory)
+    alt New Credential Format (has stored machine key)
+        Client->>Crypto: Argon2id(passphrase) → KEK
+        Client->>Crypto: decrypt(encrypted_machine_signing_seed)
+        Crypto-->>Client: machine_signing_seed
+        Client->>Crypto: Ed25519KeyPair::from_seed()
+        Crypto-->>Client: signing_keypair
+    else Legacy Format (requires shard)
+        User->>Client: neural shard (1 of 3)
+        Client->>Crypto: Argon2id(passphrase) → KEK
+        Client->>Crypto: decrypt(shard_1), decrypt(shard_2)
+        Client->>Crypto: combine_shards([s1, s2, user_shard])
+        Crypto-->>Client: neural_key (in memory)
+        Client->>Crypto: derive_machine_keypair()
+        Crypto-->>Client: signing_keypair
+    end
     
-    Client->>Crypto: derive_machine_keypair()
     Client->>Crypto: canonicalize_challenge()
     Client->>Crypto: sign_message(challenge)
     Crypto-->>Client: signature
@@ -306,7 +324,7 @@ sequenceDiagram
     Server-->>Client: {access_token, refresh_token, session_id}
     
     Client->>Storage: save_session()
-    Client->>Crypto: zeroize neural_key
+    Client->>Crypto: zeroize sensitive material
 ```
 
 ### 4.3 Machine Enrollment Flow
@@ -399,15 +417,17 @@ sequenceDiagram
   "encrypted_shard_2": "hex-encoded ciphertext (49 bytes)",
   "shards_nonce": "hex-encoded nonce (24 bytes)",
   "kek_salt": "hex-encoded salt (32 bytes)",
+  "encrypted_machine_signing_seed": "hex-encoded ciphertext (48 bytes)",
+  "machine_key_nonce": "hex-encoded nonce (24 bytes)",
   "identity_id": "uuid",
   "machine_id": "uuid",
   "identity_signing_public_key": "hex (64 chars)",
-  "machine_signing_public_key": "hex (64 chars)",
-  "machine_encryption_public_key": "hex (64 chars)",
   "device_name": "string",
   "device_platform": "string"
 }
 ```
+
+**Note:** The `encrypted_machine_signing_seed` and `machine_key_nonce` fields enable passphrase-only login. Legacy credentials without these fields require Neural Shard input for login.
 
 ### 5.3 Session File Format
 
@@ -420,10 +440,15 @@ sequenceDiagram
 }
 ```
 
-### 5.4 Neural Shard Storage Model
+### 5.4 Credential Storage Model
 
 ```
 Neural Key (32 bytes, client-generated)
+    │
+    ├── derive_machine_keypair() → Machine Signing Key Seed
+    │       │
+    │       └── Encrypted with KEK → encrypted_machine_signing_seed
+    │           (Enables passphrase-only login)
     │
     └── split_neural_key() → 5 Neural Shards (Shamir 3-of-5)
             │
@@ -433,10 +458,14 @@ Neural Key (32 bytes, client-generated)
             ├── Shard 3: User Shard B (displayed once)
             └── Shard 4: User Shard C (displayed once)
 
-Login requires:
-    Passphrase (decrypts shards 0,1)
+Regular Login:
+    Passphrase → KEK → decrypt(encrypted_machine_signing_seed)
+    = Machine signing key ready (no Neural Key reconstruction)
+
+Recovery/Enrollment (requires Neural Key):
+    Passphrase → KEK → decrypt(shards 0,1)
   + 1 User Shard
-  = 3 shards (threshold met)
+  = 3 shards (threshold met) → Neural Key reconstructed
 ```
 
 ---
@@ -527,7 +556,7 @@ pub fn is_legacy_credentials() -> bool {
 | `zeroize` | 1.7 | Secure memory |
 | `rpassword` | 7.3 | Hidden password input |
 | `argon2` | 0.5 | KEK derivation |
-| `rand` | 0.8 | Random generation |
+| `getrandom` | 0.2 | WASM-compatible CSPRNG |
 
 ---
 

@@ -451,7 +451,11 @@ The Neural Key is split into 5 Neural Shards using 3-of-5 Shamir Secret Sharing:
 - Fewer than 3 shards reveal absolutely no information about the key
 - Shards should be distributed to trusted custodians or stored in separate secure locations
 
-**Local shard encryption:** Two Neural Shards are stored encrypted on the client device using a password-derived key. The encryption key is derived from the user's password using Argon2id (64MB memory, 3 iterations), and the shards are encrypted with XChaCha20-Poly1305 AEAD. This allows users to recover locally if they remember their password, while the remaining 3 shards can be distributed to trusted custodians for disaster recovery.
+**Credential storage model:** The client stores:
+1. **Encrypted machine signing seed** - Enables passphrase-only login without Neural Key reconstruction
+2. **Two encrypted Neural Shards** - For recovery operations that require Neural Key
+
+Both are encrypted with XChaCha20-Poly1305 using a key derived from the user's passphrase via Argon2id (64MB memory, 3 iterations). The remaining 3 shards are given to the user to distribute to trusted custodians for disaster recovery.
 
 Recovery process:
 
@@ -545,15 +549,16 @@ The server starts on `http://127.0.0.1:9999` by default.
 
 ```bash
 # Create an identity with client-side cryptography
+# (You'll receive 3 Neural Shards to store securely for recovery)
 cargo run -p zid-client -- create-identity --device-name "My Laptop"
 
-# Authenticate with machine key challenge-response
+# Authenticate with machine key (passphrase only required)
 cargo run -p zid-client -- login
 
-# View your credentials (Neural Key, identity, machine info)
+# View your credentials (identity, machine info)
 cargo run -p zid-client -- show-credentials
 
-# Enroll another device
+# Enroll another device (requires passphrase + 1 Neural Shard)
 cargo run -p zid-client -- enroll-machine --device-name "My Phone"
 
 # List all enrolled machines
@@ -576,10 +581,11 @@ cargo run -p zid-client -- revoke-machine <old-machine-id> --reason "Key rotatio
 
 #### Neural Key Recovery
 
-If you lose access to your Neural Key, reconstruct it from any 3 of your 5 Neural Shards:
+If you lose access to your device or need to recover your identity, use your Neural Shards:
 
 ```bash
-# Recover identity using 3 Neural Shards (displayed during identity creation)
+# Recover identity using 3 Neural Shards
+# (You need any 3 of the 5 total: 2 encrypted on device + 3 given to you)
 cargo run -p zid-client -- recover \
   --shard <shard1-hex> \
   --shard <shard2-hex> \
@@ -587,7 +593,14 @@ cargo run -p zid-client -- recover \
   --device-name "Recovery Device"
 ```
 
-This reconstructs the Neural Key, derives fresh Machine Keys, and enrolls the recovery device. Store your Neural Shards securely in separate locations (password manager, safe deposit box, trusted contacts).
+This reconstructs the Neural Key, derives fresh Machine Keys, and enrolls the recovery device.
+
+**Shard storage recommendations:**
+- Store your 3 user shards in separate secure locations
+- Password manager (1 shard)
+- Physical safe or safe deposit box (1 shard)
+- Trusted family member or friend (1 shard)
+- Never store all shards in the same location
 
 See `crates/zid-client/README.md` for complete client documentation.
 

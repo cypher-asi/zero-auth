@@ -17,6 +17,7 @@ blake3 = { workspace = true }
 argon2 = { workspace = true }
 zeroize = { workspace = true }
 rand = { workspace = true }
+getrandom = { workspace = true }
 sharks = { workspace = true }
 
 # Post-quantum cryptography (always available)
@@ -37,6 +38,9 @@ thiserror = { workspace = true }
 
 # Utilities
 bitflags = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
 
 [dev-dependencies]
 proptest = { workspace = true }

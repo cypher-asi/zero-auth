@@ -75,8 +75,10 @@ pub fn verify_password(password: &[u8], hash_str: &str) -> Result<()> {
 }
 
 /// Generate a random salt for password hashing
+///
+/// Uses `OsRng` for WASM compatibility (backed by getrandom with js feature)
 pub fn generate_salt() -> SaltString {
-    SaltString::generate(&mut rand::thread_rng())
+    SaltString::generate(&mut rand::rngs::OsRng)
 }
 
 /// Securely compare two byte slices in constant time

@@ -323,18 +323,21 @@ fn save_recovered_credentials(
         "Step 7: Securing Neural Key with Neural Shards...".yellow()
     );
 
+    // Compute commitment before splitting (for verification during reconstruction)
+    let neural_key_commitment = neural_key.compute_commitment();
+
     // Split neural key into 5 shards
     let shards = split_neural_key(neural_key)
         .map_err(|e| anyhow::anyhow!("Failed to split Neural Key: {}", e))?;
 
-    // Save 2 shards encrypted, get back 3 user shards
+    // Save 2 shards encrypted + machine signing key + commitment, get back 3 user shards
     let user_shards = save_credentials_with_shards(
         &shards,
+        &neural_key_commitment,
+        machine_keypair,
         *identity_id,
         *machine_id,
         &hex::encode(identity_signing_public_key),
-        &hex::encode(machine_keypair.signing_public_key()),
-        &hex::encode(machine_keypair.encryption_public_key()),
         device_name,
         platform,
         passphrase,
@@ -377,13 +380,13 @@ fn display_user_shards(shards: &[NeuralShard; 3]) -> Result<()> {
     );
     println!(
         "{}",
-        "║  You need your PASSPHRASE + ONE of these shards to log in.            ║"
+        "║  Login only requires your PASSPHRASE (no shard needed).               ║"
             .white()
             .bold()
     );
     println!(
         "{}",
-        "║  Store these in separate secure locations.                            ║"
+        "║  Store these shards in separate secure locations for RECOVERY.        ║"
             .white()
     );
     println!(

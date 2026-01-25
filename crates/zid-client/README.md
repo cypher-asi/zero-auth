@@ -39,7 +39,8 @@ A complete Rust example demonstrating how to integrate with the zid identity sys
 ### What Gets Created
 
 - **`.session/client-session.json`** - Your session tokens (access + refresh)
-- **`.session/credentials.json`** - Your Neural Key and identity info (**keep secure!**)
+- **`.session/credentials.json`** - Encrypted shards, machine signing key, and identity info (**keep secure!**)
+- **3 Neural Shards displayed** - Store these in separate secure locations for recovery
 
 ## Common Commands
 
@@ -72,11 +73,14 @@ For complete command reference, see [REFERENCE.md](REFERENCE.md).
 - **Root cryptographic secret** (32 bytes, generated client-side)
 - **Never leaves your device** - server never sees it
 - **All keys derived** from it using HKDF-SHA256
-- **Store securely** in production (OS keychain, HSM)
+- **Split into 5 shards** for disaster recovery (you keep 3, device stores 2 encrypted)
+- **Not needed for daily login** - machine signing key is stored encrypted separately
+- **Commitment verified** - BLAKE3 hash stored to detect invalid/fake shards during reconstruction
 
 ### Machine Key
 - **Per-device key** derived from Neural Key
 - **Signing + Encryption** key pairs (Ed25519 + X25519)
+- **Signing key seed stored encrypted** - decrypted with passphrase for login
 - **Capabilities** control what the device can do
 - **Can be revoked** independently
 
@@ -227,12 +231,13 @@ async fn auth_middleware<B>(
 
 ## Security Notes
 
-1. **Neural Key Storage** - Use OS keychain in production (Windows Credential Manager, macOS Keychain, Linux Secret Service)
-2. **Token Storage** - Store tokens securely, never in version control
-3. **HTTPS** - Always use HTTPS in production
-4. **Token Expiry** - Implement automatic token refresh
-5. **Revocation** - Check token validity before sensitive operations
-6. **MFA** - Enable multi-factor authentication for high-security operations
+1. **Passphrase Security** - Use a strong, unique passphrase; it protects your machine signing key and encrypted shards
+2. **Neural Shard Storage** - Store your 3 user shards in separate secure locations (password manager, safe deposit box, trusted contact)
+3. **Token Storage** - Store tokens securely, never in version control
+4. **HTTPS** - Always use HTTPS in production
+5. **Token Expiry** - Implement automatic token refresh
+6. **Revocation** - Check token validity before sensitive operations
+7. **MFA** - Enable multi-factor authentication for high-security operations
 
 ## Troubleshooting
 
@@ -243,6 +248,8 @@ async fn auth_middleware<B>(
 | "Invalid signature" | Credentials may be corrupted, recreate identity |
 | "Token expired" | Run `refresh-token` to get a new access token |
 | "Failed to load session" | Run `login` first |
+| "Wrong passphrase" | The passphrase used doesn't match what was set during identity creation |
+| "Legacy credentials detected" | Re-enroll the device to enable passphrase-only login |
 
 ## Production Checklist
 
@@ -280,6 +287,8 @@ client/
 - **uuid** - UUID generation and parsing
 - **clap** - Command-line interface
 - **colored** - Terminal output formatting
+- **getrandom** - WASM-compatible cryptographic RNG
+- **argon2** - Passphrase-based key derivation (Argon2id)
 
 ## Next Steps
 

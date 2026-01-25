@@ -8,12 +8,14 @@ use colored::*;
 use std::io::{self, Write};
 use uuid::Uuid;
 use zid_crypto::{
-    derive_machine_keypair, sign_message, MachineKeyCapabilities, NeuralKey, NeuralShard,
+    derive_machine_keypair, sign_message, Ed25519KeyPair, MachineKeyCapabilities, NeuralKey,
+    NeuralShard,
 };
 
 use crate::storage::{
-    is_legacy_credentials, load_and_reconstruct_neural_key, load_credentials,
-    migrate_legacy_credentials, prompt_neural_shard, prompt_passphrase, save_session,
+    has_stored_machine_key, is_legacy_credentials, load_and_reconstruct_neural_key,
+    load_credentials, load_machine_signing_key, migrate_legacy_credentials, prompt_neural_shard,
+    prompt_passphrase, save_session,
 };
 use crate::types::{ChallengeResponse, ClientCredentials, LoginResponse, SessionData};
 
@@ -43,28 +45,55 @@ pub async fn login(server: &str) -> Result<()> {
 
     let challenge_data = request_challenge(server, &credentials.machine_id).await?;
 
-    // Prompt for passphrase and user shard to reconstruct Neural Key
-    println!(
-        "\n{}",
-        "Step 3: Reconstructing Neural Key from shards...".yellow()
-    );
-    let passphrase = prompt_passphrase("Enter passphrase: ")?;
-    let user_shard = prompt_neural_shard()?;
+    // Check if we have stored machine key (new format) or need Neural Key reconstruction
+    if has_stored_machine_key() {
+        // Simplified flow: only passphrase needed
+        println!("\n{}", "Step 3: Decrypting machine signing key...".yellow());
+        let passphrase = prompt_passphrase("Enter passphrase: ")?;
 
-    let (neural_key, _) = load_and_reconstruct_neural_key(&passphrase, &user_shard)?;
-    println!("{}", "✓ Neural Key reconstructed in memory".green());
+        let (signing_keypair, _) = load_machine_signing_key(&passphrase)?;
+        println!("{}", "✓ Machine signing key decrypted".green());
 
-    let signature = sign_challenge(&challenge_data, &credentials, &neural_key)?;
-    let login_result = submit_login(
-        server,
-        &challenge_data.challenge_id,
-        &credentials.machine_id,
-        &signature,
-    )
-    .await?;
+        let signature = sign_challenge_with_key(&challenge_data, &signing_keypair)?;
+        let login_result = submit_login(
+            server,
+            &challenge_data.challenge_id,
+            &credentials.machine_id,
+            &signature,
+        )
+        .await?;
 
-    print_login_success(&login_result);
-    save_session_data(&login_result)?;
+        print_login_success(&login_result);
+        save_session_data(&login_result)?;
+    } else {
+        // Legacy flow: requires passphrase + shard for Neural Key reconstruction
+        println!(
+            "\n{}",
+            "Step 3: Credentials in old format - Neural Key reconstruction required...".yellow()
+        );
+        println!(
+            "{}",
+            "  (Tip: Re-enroll this device to enable passphrase-only login)".dimmed()
+        );
+        let passphrase = prompt_passphrase("Enter passphrase: ")?;
+        let user_shard = prompt_neural_shard()?;
+
+        let (neural_key, _) = load_and_reconstruct_neural_key(&passphrase, &user_shard)?;
+        println!("{}", "✓ Neural Key reconstructed in memory".green());
+
+        let signature = sign_challenge_with_neural_key(&challenge_data, &credentials, &neural_key)?;
+        let login_result = submit_login(
+            server,
+            &challenge_data.challenge_id,
+            &credentials.machine_id,
+            &signature,
+        )
+        .await?;
+
+        print_login_success(&login_result);
+        save_session_data(&login_result)?;
+    }
+
     Ok(())
 }
 
@@ -89,13 +118,13 @@ fn display_migration_shards(shards: &[NeuralShard; 3]) -> Result<()> {
     );
     println!(
         "{}",
-        "║  You need your PASSPHRASE + ONE of these shards to log in.            ║"
+        "║  Login now only requires your PASSPHRASE (no shard needed).           ║"
             .white()
             .bold()
     );
     println!(
         "{}",
-        "║  Store these in separate secure locations.                            ║"
+        "║  Store these shards in separate secure locations for RECOVERY.        ║"
             .white()
     );
     println!(
@@ -237,7 +266,29 @@ async fn request_challenge(server: &str, machine_id: &Uuid) -> Result<ChallengeR
     Ok(challenge_data)
 }
 
-fn sign_challenge(
+/// Sign challenge using stored machine signing key (simplified flow)
+fn sign_challenge_with_key(
+    challenge_data: &ChallengeResponse,
+    signing_keypair: &Ed25519KeyPair,
+) -> Result<Vec<u8>> {
+    println!("\n{}", "Step 4: Signing challenge...".yellow());
+
+    let challenge_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&challenge_data.challenge)
+        .context("Failed to decode challenge")?;
+
+    let challenge: zid_crypto::Challenge =
+        serde_json::from_slice(&challenge_bytes).context("Failed to deserialize challenge")?;
+
+    let canonical_challenge = zid_crypto::canonicalize_challenge(&challenge);
+
+    let signature = sign_message(signing_keypair, &canonical_challenge);
+    println!("{}", "✓ Challenge signed".green());
+    Ok(signature.to_vec())
+}
+
+/// Sign challenge by deriving machine key from Neural Key (legacy flow)
+fn sign_challenge_with_neural_key(
     challenge_data: &ChallengeResponse,
     credentials: &ClientCredentials,
     neural_key: &NeuralKey,

@@ -124,6 +124,14 @@ pub enum CryptoError {
     /// Post-quantum KEM error
     #[error("Post-quantum KEM error: {0}")]
     PqKemError(String),
+
+    /// Neural Key commitment mismatch
+    ///
+    /// The reconstructed Neural Key does not match the stored commitment.
+    /// This indicates invalid shards were provided (either corrupted, wrong identity,
+    /// or an attacker attempting to use fake shards).
+    #[error("Neural Key commitment mismatch: reconstructed key does not match stored commitment")]
+    NeuralKeyCommitmentMismatch,
 }
 
 /// Result type for cryptographic operations

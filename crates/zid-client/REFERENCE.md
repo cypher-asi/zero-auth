@@ -66,6 +66,8 @@ cargo run -p client -- login
 ```
 
 **What happens:**
+- Prompts for your passphrase
+- Decrypts your machine signing key using the passphrase
 - Requests a challenge from the server
 - Signs the challenge with your machine private key
 - Submits the signature to complete authentication
@@ -73,6 +75,8 @@ cargo run -p client -- login
 - Saves session to `.session/client-session.json`
 
 **Prerequisites:** Must have credentials (run `create-identity` first)
+
+**Note:** With the new credential format, login only requires your passphrase. If you have legacy credentials (old format), you'll be prompted for a Neural Shard as well, and you can re-enroll the device to upgrade to passphrase-only login.
 
 ---
 
@@ -302,14 +306,13 @@ cargo run -p client -- test-protected
 
 ### Flow 1: Machine Key Authentication (Primary)
 
-The most secure method using cryptographic challenge-response.
+The most secure method using cryptographic challenge-response. With the new credential format, login only requires your passphrase - the machine signing key is stored encrypted and decrypted at login time.
 
 ```rust
-use zid_crypto::{derive_machine_keypair, sign_message, NeuralKey};
+use zid_crypto::{sign_message, Ed25519KeyPair};
 
 async fn login_with_machine_key(
-    neural_key: &NeuralKey,
-    identity_id: Uuid,
+    signing_keypair: &Ed25519KeyPair,  // Loaded from encrypted storage
     machine_id: Uuid,
 ) -> Result<SessionTokens> {
     let client = reqwest::Client::new();
@@ -328,22 +331,14 @@ async fn login_with_machine_key(
     // Step 2: Decode challenge
     let challenge_bytes = base64::decode(&challenge_response.challenge)?;
     
-    // Step 3: Derive machine keypair from Neural Key
-    let machine_keypair = derive_machine_keypair(
-        neural_key,
-        &identity_id,
-        &machine_id,
-        0,  // epoch
-        MachineKeyCapabilities::FULL_DEVICE,
-    )?;
-    
-    // Step 4: Sign challenge
+    // Step 3: Sign challenge with stored machine signing key
+    // (No Neural Key reconstruction needed for regular login)
     let signature = sign_message(
-        machine_keypair.signing_key_pair(),
+        signing_keypair,
         &challenge_bytes
     );
     
-    // Step 5: Submit signature
+    // Step 4: Submit signature
     let login_response = client
         .post("http://127.0.0.1:9999/v1/auth/login/machine")
         .json(&json!({
@@ -366,6 +361,8 @@ async fn login_with_machine_key(
 ```
 
 **Run:** `cargo run -p client -- login`
+
+**Note:** The machine signing key seed is stored encrypted with XChaCha20-Poly1305 using a KEK derived from your passphrase via Argon2id. Neural Key reconstruction (using shards) is only needed for recovery operations or enrolling new machines.
 
 ---
 
@@ -708,17 +705,24 @@ async fn revoke_machine(
 
 ## Security Best Practices
 
-### 1. Neural Key Storage
+### 1. Credential Storage
 
-**Development:**
+**Current implementation:**
 - JSON file in `.session/credentials.json`
+- Neural Shards and machine signing key encrypted with passphrase-derived KEK
+- Neural Key itself is NEVER stored, only reconstructed when needed
 
-**Production:**
-- **Windows**: Windows Credential Manager
-- **macOS**: Keychain
-- **Linux**: Secret Service / libsecret
-- **Hardware**: HSM or TPM
+**Production recommendations:**
+- **Windows**: Windows Credential Manager for passphrase/KEK
+- **macOS**: Keychain for passphrase/KEK
+- **Linux**: Secret Service / libsecret for passphrase/KEK
+- **Hardware**: HSM or TPM for additional protection
 - **Never**: Plain text files, version control, network transmission
+
+**Neural Shard distribution:**
+- 2 shards encrypted on device
+- 3 shards given to user at creation time
+- Store user shards in separate secure locations (password manager, safe, trusted contact)
 
 ### 2. Token Management
 
@@ -779,16 +783,17 @@ async fn revoke_machine(
 ### 5. Recovery Procedures
 
 **Before you need it:**
-- Set up multiple machines
-- Store recovery codes offline
-- Document recovery procedures
+- Store your 3 Neural Shards in separate secure locations
+- Set up multiple machines if possible
+- Document your shard storage locations
 - Test recovery process
 
-**Neural Key backup:**
-- Encrypted backup on USB drive
-- Paper backup in safe
-- Split across multiple locations
-- Never in cloud unencrypted
+**Neural Shard storage recommendations:**
+- Password manager (one shard)
+- Physical safe or safe deposit box (one shard)
+- Trusted family member or friend (one shard)
+- Never store all 3 in the same location
+- Never store shards unencrypted in cloud storage
 
 ### 6. Production Deployment
 
@@ -940,18 +945,26 @@ cargo run -p client -- refresh-token
 ### `.session/credentials.json`
 ```json
 {
-  "neural_key_hex": "[SENSITIVE - 64 hex chars]",
+  "encrypted_shard_1": "hex (49 bytes ciphertext)",
+  "encrypted_shard_2": "hex (49 bytes ciphertext)",
+  "shards_nonce": "hex (24 bytes)",
+  "kek_salt": "hex (32 bytes)",
+  "encrypted_machine_signing_seed": "hex (48 bytes ciphertext)",
+  "machine_key_nonce": "hex (24 bytes)",
   "identity_id": "uuid",
   "machine_id": "uuid",
-  "central_public_key": "hex",
-  "machine_signing_public_key": "hex",
-  "machine_encryption_public_key": "hex",
+  "identity_signing_public_key": "hex (64 chars)",
   "device_name": "Device Name",
   "device_platform": "platform"
 }
 ```
 
-**⚠️ CRITICAL:** Contains your Neural Key. Keep secure! Never commit to version control.
+**⚠️ CRITICAL:** Contains encrypted secrets protected by your passphrase. Keep secure! Never commit to version control.
+
+**Storage model:**
+- 2 Neural Shards encrypted on device (need passphrase to decrypt)
+- Machine signing key seed encrypted separately (enables passphrase-only login)
+- 3 user shards given to you during creation (store in separate secure locations for recovery)
 
 ### `.session/client-session.json`
 ```json

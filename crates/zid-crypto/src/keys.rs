@@ -14,7 +14,6 @@
 use crate::{constants::*, errors::*};
 use bitflags::bitflags;
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519PrivateKey};
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -84,10 +83,11 @@ pub struct NeuralKey([u8; NEURAL_KEY_SIZE]);
 
 impl NeuralKey {
     /// Generate a new Neural Key using cryptographically secure RNG
+    ///
+    /// Uses `getrandom` for WASM compatibility (works in browsers via crypto.getRandomValues())
     pub fn generate() -> Result<Self> {
         let mut key = [0u8; NEURAL_KEY_SIZE];
-        rand::thread_rng()
-            .try_fill_bytes(&mut key)
+        getrandom::getrandom(&mut key)
             .map_err(|e| CryptoError::RandomGenerationFailed(e.to_string()))?;
         Ok(Self(key))
     }
@@ -133,6 +133,50 @@ impl NeuralKey {
 
         Ok(())
     }
+
+    /// Compute a commitment (BLAKE3 hash) of the Neural Key.
+    ///
+    /// This commitment can be stored to verify that reconstructed Neural Keys
+    /// from Shamir shards are correct. Without this verification, any 3 valid-format
+    /// shards would reconstruct *some* secret, but not necessarily the correct one.
+    ///
+    /// # Security
+    ///
+    /// - The commitment is a one-way hash; it cannot be reversed to obtain the Neural Key
+    /// - The commitment should be stored alongside encrypted shards
+    /// - When reconstructing, verify: `BLAKE3(reconstructed_key) == stored_commitment`
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use zid_crypto::NeuralKey;
+    ///
+    /// let neural_key = NeuralKey::generate().unwrap();
+    /// let commitment = neural_key.compute_commitment();
+    ///
+    /// // Store commitment with credentials...
+    /// // Later, after reconstruction:
+    /// // assert_eq!(reconstructed_key.compute_commitment(), stored_commitment);
+    /// ```
+    pub fn compute_commitment(&self) -> [u8; 32] {
+        crate::hashing::blake3_hash(&self.0)
+    }
+
+    /// Verify that this Neural Key matches a stored commitment.
+    ///
+    /// Returns `Ok(())` if the commitment matches, `Err` otherwise.
+    ///
+    /// # Security
+    ///
+    /// Uses constant-time comparison to prevent timing attacks.
+    pub fn verify_commitment(&self, expected_commitment: &[u8; 32]) -> Result<()> {
+        let actual_commitment = self.compute_commitment();
+        if crate::hashing::constant_time_compare(&actual_commitment, expected_commitment) {
+            Ok(())
+        } else {
+            Err(CryptoError::NeuralKeyCommitmentMismatch)
+        }
+    }
 }
 
 /// Ed25519 signing key pair
@@ -166,6 +210,16 @@ impl Ed25519KeyPair {
     /// Get the public key bytes
     pub fn public_key_bytes(&self) -> [u8; PUBLIC_KEY_SIZE] {
         self.public_key.to_bytes()
+    }
+
+    /// Get the private key seed bytes (32 bytes)
+    ///
+    /// # Security
+    ///
+    /// Use with extreme caution. Only for secure encrypted storage.
+    /// These bytes can reconstruct the full keypair via `from_seed()`.
+    pub fn seed_bytes(&self) -> [u8; 32] {
+        self.private_key.to_bytes()
     }
 
     /// Get a reference to the private key
@@ -830,8 +884,7 @@ impl MachineKeyPair {
 /// Current implementation is cryptographically sound for typical usage.
 pub fn generate_nonce() -> Result<[u8; NONCE_SIZE]> {
     let mut nonce = [0u8; NONCE_SIZE];
-    rand::thread_rng()
-        .try_fill_bytes(&mut nonce)
+    getrandom::getrandom(&mut nonce)
         .map_err(|e| CryptoError::RandomGenerationFailed(e.to_string()))?;
     Ok(nonce)
 }
@@ -839,8 +892,7 @@ pub fn generate_nonce() -> Result<[u8; NONCE_SIZE]> {
 /// Generate a random challenge nonce
 pub fn generate_challenge_nonce() -> Result<[u8; CHALLENGE_NONCE_SIZE]> {
     let mut nonce = [0u8; CHALLENGE_NONCE_SIZE];
-    rand::thread_rng()
-        .try_fill_bytes(&mut nonce)
+    getrandom::getrandom(&mut nonce)
         .map_err(|e| CryptoError::RandomGenerationFailed(e.to_string()))?;
     Ok(nonce)
 }
@@ -856,6 +908,98 @@ mod tests {
 
         // Keys should be different (extremely high probability)
         assert_ne!(key1.as_bytes(), key2.as_bytes());
+    }
+
+    #[test]
+    fn test_neural_key_uniqueness_across_many_generations() {
+        use std::collections::HashSet;
+
+        const NUM_KEYS: usize = 100;
+        let mut keys: HashSet<[u8; NEURAL_KEY_SIZE]> = HashSet::new();
+
+        for i in 0..NUM_KEYS {
+            let key = NeuralKey::generate().expect("key generation should succeed");
+
+            // Verify basic entropy
+            key.validate_entropy()
+                .expect("generated key should have sufficient entropy");
+
+            // Check uniqueness - insert returns false if key already exists
+            let is_unique = keys.insert(*key.as_bytes());
+            assert!(
+                is_unique,
+                "Neural key collision detected at iteration {}! This should be astronomically unlikely.",
+                i
+            );
+        }
+
+        // Verify we have the expected number of unique keys
+        assert_eq!(
+            keys.len(),
+            NUM_KEYS,
+            "Should have {} unique keys, but got {}",
+            NUM_KEYS,
+            keys.len()
+        );
+    }
+
+    #[test]
+    fn test_neural_key_commitment_is_deterministic() {
+        let key = NeuralKey::generate().unwrap();
+        let commitment1 = key.compute_commitment();
+        let commitment2 = key.compute_commitment();
+        assert_eq!(commitment1, commitment2, "Commitment should be deterministic");
+    }
+
+    #[test]
+    fn test_neural_key_commitment_differs_for_different_keys() {
+        let key1 = NeuralKey::generate().unwrap();
+        let key2 = NeuralKey::generate().unwrap();
+        let commitment1 = key1.compute_commitment();
+        let commitment2 = key2.compute_commitment();
+        assert_ne!(
+            commitment1, commitment2,
+            "Different keys should have different commitments"
+        );
+    }
+
+    #[test]
+    fn test_neural_key_verify_commitment_succeeds_for_correct() {
+        let key = NeuralKey::generate().unwrap();
+        let commitment = key.compute_commitment();
+        assert!(
+            key.verify_commitment(&commitment).is_ok(),
+            "Verification should succeed for correct commitment"
+        );
+    }
+
+    #[test]
+    fn test_neural_key_verify_commitment_fails_for_wrong() {
+        let key = NeuralKey::generate().unwrap();
+        let wrong_commitment = [0xABu8; 32]; // arbitrary wrong commitment
+        let result = key.verify_commitment(&wrong_commitment);
+        assert!(
+            result.is_err(),
+            "Verification should fail for wrong commitment"
+        );
+        match result {
+            Err(CryptoError::NeuralKeyCommitmentMismatch) => {} // expected
+            _ => panic!("Expected NeuralKeyCommitmentMismatch error"),
+        }
+    }
+
+    #[test]
+    fn test_neural_key_verify_commitment_fails_for_different_key() {
+        let key1 = NeuralKey::generate().unwrap();
+        let key2 = NeuralKey::generate().unwrap();
+        let commitment_from_key1 = key1.compute_commitment();
+
+        // key2 should fail verification against key1's commitment
+        let result = key2.verify_commitment(&commitment_from_key1);
+        assert!(
+            result.is_err(),
+            "Different key should fail verification against another key's commitment"
+        );
     }
 
     #[test]

@@ -29,6 +29,7 @@ This document specifies the cryptographic primitives, algorithms, and binary for
 | JWT Signing | `jsonwebtoken` | 9.2 | EdDSA (Ed25519) |
 | Webhook MAC | `hmac` + `sha2` | 0.12 | HMAC-SHA256 |
 | Secure Memory | `zeroize` | 1.7 | Memory zeroization |
+| CSPRNG | `getrandom` | 0.2 | OS/Browser RNG (WASM compatible) |
 
 ---
 
@@ -589,17 +590,17 @@ X-Zero-Auth-Timestamp: <unix-timestamp>
 
 ### 14.1 Nonce Generation
 
-All nonces MUST be generated using a CSPRNG:
+All nonces MUST be generated using a CSPRNG. For WASM compatibility, use `getrandom`:
 
 ```rust
-use rand::RngCore;
-
-fn generate_nonce() -> [u8; 24] {
+fn generate_nonce() -> Result<[u8; 24], getrandom::Error> {
     let mut nonce = [0u8; 24];
-    rand::thread_rng().fill_bytes(&mut nonce);
-    nonce
+    getrandom::getrandom(&mut nonce)?;
+    Ok(nonce)
 }
 ```
+
+**Note:** `getrandom` provides WASM-compatible cryptographic random number generation. In browser environments with the `js` feature enabled, it uses `crypto.getRandomValues()`. This is preferred over `rand::thread_rng()` which is not available in WASM.
 
 ### 14.2 Zeroization
 

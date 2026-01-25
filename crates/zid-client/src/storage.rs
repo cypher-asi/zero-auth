@@ -22,7 +22,10 @@ use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 use zeroize::Zeroize;
-use zid_crypto::{combine_shards, decrypt, encrypt, split_neural_key, NeuralKey, NeuralShard};
+use zid_crypto::{
+    combine_shards, decrypt, encrypt, split_neural_key, Ed25519KeyPair, MachineKeyPair, NeuralKey,
+    NeuralShard,
+};
 
 use crate::types::{ClientCredentials, SessionData};
 
@@ -34,6 +37,9 @@ const ARGON2_P_COST: u32 = 4;
 
 /// Domain separation for Neural Shard encryption
 const SHARD_ENCRYPTION_DOMAIN: &[u8] = b"zid:client:neural-shard-encryption:v1";
+
+/// Domain separation for machine signing key encryption
+const MACHINE_KEY_ENCRYPTION_DOMAIN: &[u8] = b"zid:client:machine-key-encryption:v1";
 
 pub fn get_credentials_path() -> PathBuf {
     PathBuf::from("./.session/credentials.json")
@@ -60,16 +66,16 @@ fn derive_kek_from_passphrase(passphrase: &str, salt: &[u8]) -> Result<[u8; 32]>
     Ok(kek)
 }
 
-/// Save credentials with 2 Neural Shards encrypted on device.
+/// Save credentials with 2 Neural Shards and machine signing key encrypted on device.
 ///
 /// # Arguments
 ///
 /// * `shards` - All 5 Neural Shards (shards 0-1 will be stored, 2-4 returned to user)
+/// * `neural_key_commitment` - BLAKE3 hash of the Neural Key (for verification during reconstruction)
+/// * `machine_keypair` - Machine keypair (signing seed will be encrypted for fast login)
 /// * `identity_id` - Identity UUID
 /// * `machine_id` - Machine UUID
 /// * `identity_signing_public_key` - Identity signing public key (hex-encoded)
-/// * `machine_signing_public_key` - Machine signing public key (hex-encoded)
-/// * `machine_encryption_public_key` - Machine encryption public key (hex-encoded)
 /// * `device_name` - Human-readable device name
 /// * `device_platform` - Platform identifier (e.g., "windows", "linux", "macos")
 /// * `passphrase` - User-provided passphrase to derive KEK
@@ -77,30 +83,32 @@ fn derive_kek_from_passphrase(passphrase: &str, salt: &[u8]) -> Result<[u8; 32]>
 /// # Returns
 ///
 /// The 3 user shards that must be displayed and saved by the user.
+///
+/// # Security
+///
+/// The `neural_key_commitment` is stored to verify that reconstructed Neural Keys
+/// from shards are correct. Without this, any 3 valid-format shards would reconstruct
+/// *some* secret, but not necessarily the correct one.
 #[allow(clippy::too_many_arguments)]
 pub fn save_credentials_with_shards(
     shards: &[NeuralShard; 5],
+    neural_key_commitment: &[u8; 32],
+    machine_keypair: &MachineKeyPair,
     identity_id: uuid::Uuid,
     machine_id: uuid::Uuid,
     identity_signing_public_key: &str,
-    machine_signing_public_key: &str,
-    machine_encryption_public_key: &str,
     device_name: &str,
     device_platform: &str,
     passphrase: &str,
 ) -> Result<[NeuralShard; 3]> {
-    use rand::RngCore;
-
     // Generate random salt (32 bytes)
     let mut salt = [0u8; 32];
-    rand::thread_rng()
-        .try_fill_bytes(&mut salt)
+    getrandom::getrandom(&mut salt)
         .map_err(|e| anyhow::anyhow!("Failed to generate salt: {}", e))?;
 
     // Generate random nonce (24 bytes for XChaCha20)
     let mut nonce = [0u8; 24];
-    rand::thread_rng()
-        .try_fill_bytes(&mut nonce)
+    getrandom::getrandom(&mut nonce)
         .map_err(|e| anyhow::anyhow!("Failed to generate nonce: {}", e))?;
 
     // Derive KEK from passphrase
@@ -121,20 +129,34 @@ pub fn save_credentials_with_shards(
     let encrypted_shard_2 = encrypt(&kek, &shard_2_bytes, &nonce_2, SHARD_ENCRYPTION_DOMAIN)
         .map_err(|e| anyhow::anyhow!("Failed to encrypt Neural Shard 2: {}", e))?;
 
+    // Generate separate nonce for machine key encryption
+    let mut machine_key_nonce = [0u8; 24];
+    getrandom::getrandom(&mut machine_key_nonce)
+        .map_err(|e| anyhow::anyhow!("Failed to generate machine key nonce: {}", e))?;
+
+    // Encrypt machine signing seed (32 bytes)
+    let signing_seed = machine_keypair.signing_key_pair().seed_bytes();
+    let encrypted_machine_signing_seed =
+        encrypt(&kek, &signing_seed, &machine_key_nonce, MACHINE_KEY_ENCRYPTION_DOMAIN)
+            .map_err(|e| anyhow::anyhow!("Failed to encrypt machine signing seed: {}", e))?;
+
     // Zeroize KEK after use
     kek.zeroize();
 
-    // Create credentials with encrypted shards
+    // Create credentials with encrypted shards, machine key, and commitment
     let credentials = ClientCredentials {
         encrypted_shard_1,
         encrypted_shard_2,
         shards_nonce: nonce.to_vec(),
         kek_salt: salt.to_vec(),
+        encrypted_machine_signing_seed,
+        machine_key_nonce: machine_key_nonce.to_vec(),
+        neural_key_commitment: neural_key_commitment.to_vec(),
         identity_id,
         machine_id,
         identity_signing_public_key: identity_signing_public_key.to_string(),
-        machine_signing_public_key: machine_signing_public_key.to_string(),
-        machine_encryption_public_key: machine_encryption_public_key.to_string(),
+        machine_signing_public_key: hex::encode(machine_keypair.signing_public_key()),
+        machine_encryption_public_key: hex::encode(machine_keypair.encryption_public_key()),
         device_name: device_name.to_string(),
         device_platform: device_platform.to_string(),
     };
@@ -162,6 +184,12 @@ pub fn save_credentials_with_shards(
 /// # Returns
 ///
 /// Tuple of (NeuralKey, ClientCredentials)
+///
+/// # Security
+///
+/// This function verifies the reconstructed Neural Key against the stored commitment.
+/// If the commitment doesn't match (e.g., wrong shards provided), an error is returned.
+/// This prevents attackers from using arbitrary shards to derive wrong keys.
 pub fn load_and_reconstruct_neural_key(
     passphrase: &str,
     user_shard: &NeuralShard,
@@ -215,7 +243,106 @@ pub fn load_and_reconstruct_neural_key(
     let neural_key = combine_shards(&shards)
         .map_err(|e| anyhow::anyhow!("Failed to reconstruct Neural Key: {}", e))?;
 
+    // Verify the reconstructed key against stored commitment
+    // This prevents using fake shards to derive wrong keys
+    if !credentials.neural_key_commitment.is_empty() {
+        let expected_commitment: [u8; 32] = credentials
+            .neural_key_commitment
+            .as_slice()
+            .try_into()
+            .context("Invalid neural key commitment length")?;
+
+        neural_key
+            .verify_commitment(&expected_commitment)
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "Neural Key commitment mismatch: the provided shard does not match this identity. \
+                     Ensure you are using a shard from this identity's original set."
+                )
+            })?;
+    }
+
     Ok((neural_key, credentials))
+}
+
+/// Load and decrypt machine signing key for authentication.
+///
+/// This is the simplified login flow - only requires passphrase, no Neural Shard needed.
+/// The Neural Key reconstruction via shards is only needed for privileged operations
+/// like enrolling new machines.
+///
+/// # Arguments
+///
+/// * `passphrase` - User-provided passphrase to derive KEK and decrypt machine key
+///
+/// # Returns
+///
+/// Tuple of (Ed25519KeyPair, ClientCredentials)
+pub fn load_machine_signing_key(passphrase: &str) -> Result<(Ed25519KeyPair, ClientCredentials)> {
+    let json = fs::read_to_string(get_credentials_path())
+        .context("Failed to load credentials. Run 'create-identity' first.")?;
+    let credentials: ClientCredentials = serde_json::from_str(&json)?;
+
+    // Check if machine key is stored (new format)
+    if credentials.encrypted_machine_signing_seed.is_empty() {
+        anyhow::bail!(
+            "Credentials are in old format without stored machine key. \
+             Please run migration or re-enroll this device."
+        );
+    }
+
+    // Derive KEK from passphrase using stored salt
+    let mut kek = derive_kek_from_passphrase(passphrase, &credentials.kek_salt)?;
+
+    // Convert nonce to fixed-size array
+    let nonce: [u8; 24] = credentials
+        .machine_key_nonce
+        .as_slice()
+        .try_into()
+        .context("Invalid machine key nonce length")?;
+
+    // Decrypt machine signing seed
+    let decrypted_seed = decrypt(
+        &kek,
+        &credentials.encrypted_machine_signing_seed,
+        &nonce,
+        MACHINE_KEY_ENCRYPTION_DOMAIN,
+    )
+    .map_err(|_| anyhow::anyhow!("Failed to decrypt machine signing key. Wrong passphrase?"))?;
+
+    // Zeroize KEK after use
+    kek.zeroize();
+
+    // Convert to fixed-size array and create keypair
+    let seed: [u8; 32] = decrypted_seed
+        .as_slice()
+        .try_into()
+        .context("Invalid machine signing seed length")?;
+
+    let keypair = Ed25519KeyPair::from_seed(&seed)
+        .map_err(|e| anyhow::anyhow!("Failed to reconstruct machine signing key: {}", e))?;
+
+    Ok((keypair, credentials))
+}
+
+/// Check if credentials have stored machine key (new format)
+pub fn has_stored_machine_key() -> bool {
+    let path = get_credentials_path();
+    if !path.exists() {
+        return false;
+    }
+
+    let json = match fs::read_to_string(&path) {
+        Ok(j) => j,
+        Err(_) => return false,
+    };
+
+    let credentials: ClientCredentials = match serde_json::from_str(&json) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    !credentials.encrypted_machine_signing_seed.is_empty()
 }
 
 /// Load credentials without decryption (for operations that don't need the Neural Key)
@@ -439,6 +566,22 @@ pub fn migrate_legacy_credentials(passphrase: &str) -> Result<[NeuralShard; 3]> 
 
     println!("{}", "✓ Legacy Neural Key decrypted".green());
 
+    // Derive machine keypair from Neural Key
+    println!("{}", "Deriving machine keypair...".yellow());
+    let machine_keypair = zid_crypto::derive_machine_keypair(
+        &neural_key,
+        &legacy.identity_id,
+        &legacy.machine_id,
+        0,
+        zid_crypto::MachineKeyCapabilities::AUTHENTICATE
+            | zid_crypto::MachineKeyCapabilities::SIGN
+            | zid_crypto::MachineKeyCapabilities::ENCRYPT,
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to derive machine keypair: {}", e))?;
+
+    // Compute commitment before splitting (for verification during reconstruction)
+    let neural_key_commitment = neural_key.compute_commitment();
+
     // Split into 5 Neural Shards
     println!(
         "{}",
@@ -471,14 +614,14 @@ pub fn migrate_legacy_credentials(passphrase: &str) -> Result<[NeuralShard; 3]> 
         new_passphrase_input.to_string()
     };
 
-    // Save in new format
+    // Save in new format with machine signing key and commitment
     let user_shards = save_credentials_with_shards(
         &shards,
+        &neural_key_commitment,
+        &machine_keypair,
         legacy.identity_id,
         legacy.machine_id,
         &legacy.identity_signing_public_key,
-        &legacy.machine_signing_public_key,
-        &legacy.machine_encryption_public_key,
         &legacy.device_name,
         &legacy.device_platform,
         &final_passphrase,

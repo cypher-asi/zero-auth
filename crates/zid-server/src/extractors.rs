@@ -1,9 +1,39 @@
-use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
+use axum::{
+    async_trait,
+    extract::{FromRequest, FromRequestParts, Request},
+    http::request::Parts,
+};
+use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use uuid::Uuid;
 use zid_sessions::SessionManager;
 
 use crate::{error::ApiError, state::AppState};
+
+/// Custom JSON extractor that provides detailed error messages on parse failure
+pub struct JsonWithErrors<T>(pub T);
+
+#[async_trait]
+impl<S, T> FromRequest<S> for JsonWithErrors<T>
+where
+    T: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let bytes = axum::body::Bytes::from_request(req, state)
+            .await
+            .map_err(|e| ApiError::InvalidRequest(format!("Failed to read body: {}", e)))?;
+
+        let value: T = serde_json::from_slice(&bytes).map_err(|e| {
+            tracing::warn!("JSON parse error: {}", e);
+            ApiError::InvalidRequest(format!("Invalid JSON: {}", e))
+        })?;
+
+        Ok(JsonWithErrors(value))
+    }
+}
 
 /// JWT claims extracted from Authorization header
 ///
