@@ -178,6 +178,9 @@ pub fn map_service_error(error: anyhow::Error) -> ApiError {
     } else if error_str.contains("Machine ID required") {
         // Machine ID required errors should be 400 Bad Request
         ApiError::InvalidRequest(error_str)
+    } else if error_str.contains("Refresh token reuse") {
+        // Refresh token reuse is a security violation - return 403 Forbidden
+        ApiError::Forbidden("Refresh token reuse detected. All tokens in this family have been revoked.".to_string())
     } else {
         ApiError::Internal(error)
     }
