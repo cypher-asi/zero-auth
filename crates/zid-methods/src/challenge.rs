@@ -5,6 +5,10 @@ use rand::Rng;
 use uuid::Uuid;
 use zid_crypto::current_timestamp;
 
+// Re-export canonicalize_challenge from zid-crypto.
+// The canonical implementation lives in zid-crypto for use by both client and server.
+pub use zid_crypto::canonicalize_challenge;
+
 /// Challenge expiry time in seconds (60 seconds)
 pub const CHALLENGE_EXPIRY_SECONDS: u64 = 60;
 
@@ -29,55 +33,6 @@ pub fn generate_challenge(machine_id: Uuid, purpose: Option<String>) -> Challeng
         nonce,
         used: false,
     }
-}
-
-/// Canonicalize challenge into binary format for signing
-///
-/// Binary layout (130 bytes total):
-/// - version: u8 (1 byte)
-/// - challenge_id: UUID (16 bytes)
-/// - entity_id: UUID (16 bytes)
-/// - entity_type: u8 (1 byte)
-/// - purpose: [u8; 16] padded (16 bytes)
-/// - aud: [u8; 32] padded (32 bytes)
-/// - iat: u64 big-endian (8 bytes)
-/// - exp: u64 big-endian (8 bytes)
-/// - nonce: [u8; 32] (32 bytes)
-pub fn canonicalize_challenge(challenge: &Challenge) -> [u8; 130] {
-    let mut message = [0u8; 130];
-
-    // Version
-    message[0] = 0x01;
-
-    // Challenge ID
-    message[1..17].copy_from_slice(challenge.challenge_id.as_bytes());
-
-    // Entity ID
-    message[17..33].copy_from_slice(challenge.entity_id.as_bytes());
-
-    // Entity type
-    message[33] = challenge.entity_type as u8;
-
-    // Purpose (padded to 16 bytes)
-    let purpose_bytes = challenge.purpose.as_bytes();
-    let purpose_len = purpose_bytes.len().min(16);
-    message[34..(34 + purpose_len)].copy_from_slice(&purpose_bytes[..purpose_len]);
-
-    // Audience (padded to 32 bytes)
-    let aud_bytes = challenge.aud.as_bytes();
-    let aud_len = aud_bytes.len().min(32);
-    message[50..(50 + aud_len)].copy_from_slice(&aud_bytes[..aud_len]);
-
-    // IAT (issued at)
-    message[82..90].copy_from_slice(&challenge.iat.to_be_bytes());
-
-    // EXP (expiry)
-    message[90..98].copy_from_slice(&challenge.exp.to_be_bytes());
-
-    // Nonce
-    message[98..130].copy_from_slice(&challenge.nonce);
-
-    message
 }
 
 /// Check if challenge is expired

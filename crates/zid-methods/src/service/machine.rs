@@ -269,6 +269,15 @@ where
     ) -> Result<()> {
         let canonical_message = canonicalize_challenge(challenge);
 
+        // Debug logging to diagnose signature mismatches
+        debug!(
+            machine_id = %response.machine_id,
+            stored_public_key = %hex::encode(&machine.signing_public_key),
+            signature_len = response.signature.len(),
+            canonical_message_hex = %hex::encode(&canonical_message[..32]), // First 32 bytes
+            "Verifying challenge signature"
+        );
+
         verify_signature(
             &machine.signing_public_key,
             &canonical_message,
@@ -276,9 +285,22 @@ where
                 .signature
                 .as_slice()
                 .try_into()
-                .map_err(|_| AuthMethodsError::InvalidSignature)?,
+                .map_err(|_| {
+                    warn!(
+                        signature_len = response.signature.len(),
+                        "Invalid signature length (expected 64 bytes)"
+                    );
+                    AuthMethodsError::InvalidSignature
+                })?,
         )
-        .map_err(|_| AuthMethodsError::InvalidSignature)?;
+        .map_err(|e| {
+            warn!(
+                machine_id = %response.machine_id,
+                error = %e,
+                "Signature verification failed - possible key mismatch or wrong canonicalization"
+            );
+            AuthMethodsError::InvalidSignature
+        })?;
 
         Ok(())
     }
