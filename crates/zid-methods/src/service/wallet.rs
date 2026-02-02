@@ -397,4 +397,63 @@ where
 
         Ok(())
     }
+
+    /// Authenticate using a pre-verified wallet address (message-based auth).
+    ///
+    /// This is used when the caller has already verified the wallet signature
+    /// (e.g., EIP-191 message-based authentication). Skips challenge validation.
+    ///
+    /// # Arguments
+    ///
+    /// * `wallet_address` - Verified wallet address
+    /// * `mfa_code` - Optional MFA code
+    /// * `ip_address` - Client IP address for policy evaluation
+    /// * `user_agent` - Client user agent for policy evaluation
+    ///
+    /// # Returns
+    ///
+    /// Authentication result with identity and machine information
+    pub async fn authenticate_wallet_by_address(
+        &self,
+        wallet_address: String,
+        mfa_code: Option<String>,
+        ip_address: String,
+        user_agent: String,
+    ) -> Result<AuthResult> {
+        info!("Authenticating wallet by address {}", wallet_address);
+
+        // Step 1: Get wallet credential
+        let credential = self.get_wallet_credential(&wallet_address).await?;
+
+        // Step 2: Check identity status and MFA
+        let (identity, mfa_verified) = self
+            .check_wallet_identity_and_mfa(credential.identity_id, mfa_code)
+            .await?;
+
+        // Step 3: Create virtual machine
+        let machine_id = self.create_virtual_machine(credential.identity_id).await?;
+
+        // Step 4: Evaluate policy
+        let auth_result = self
+            .evaluate_wallet_auth_policy(
+                credential.identity_id,
+                identity.identity_id,
+                machine_id,
+                mfa_verified,
+                ip_address,
+                user_agent,
+            )
+            .await?;
+
+        // Step 5: Update credential last_used_at
+        self.update_wallet_credential_usage(&wallet_address, &credential)
+            .await?;
+
+        info!(
+            "Wallet authentication by address successful for identity {}",
+            credential.identity_id
+        );
+
+        Ok(auth_result)
+    }
 }

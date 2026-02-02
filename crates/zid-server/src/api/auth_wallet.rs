@@ -4,7 +4,6 @@ use axum::{extract::State, response::Json};
 use std::sync::Arc;
 use uuid::Uuid;
 use zid_identity_core::IdentityCore;
-use zid_methods::AuthMethods;
 use zid_sessions::SessionManager;
 
 use crate::{
@@ -33,8 +32,8 @@ pub async fn login_wallet(
     // Verify EVM signature
     verify_evm_signature(&req.message, &signature_bytes, &req.wallet_address)?;
 
-    // Authenticate with wallet service
-    let auth_result = authenticate_wallet(&state, &req, &ctx, signature_bytes).await?;
+    // Authenticate with wallet service (signature already verified above)
+    let auth_result = authenticate_wallet(&state, &req, &ctx).await?;
 
     // Create session
     create_wallet_session(&state, &auth_result).await
@@ -149,20 +148,16 @@ async fn authenticate_wallet(
     state: &Arc<AppState>,
     req: &WalletLoginRequest,
     ctx: &crate::request_context::RequestContext,
-    signature_bytes: Vec<u8>,
 ) -> Result<WalletAuthResult, ApiError> {
-    use zid_methods::WalletSignature;
-
-    let wallet_sig = WalletSignature {
-        challenge_id: Uuid::nil(), // Wallet login uses message-based auth, not challenge-based
-        wallet_address: req.wallet_address.clone(),
-        signature: signature_bytes,
-        mfa_code: None,
-    };
-
+    // Use message-based authentication - signature already verified by caller
     let auth_result = state
         .auth_service
-        .authenticate_wallet(wallet_sig, ctx.ip_address.clone(), ctx.user_agent.clone())
+        .authenticate_wallet_by_address(
+            req.wallet_address.clone(),
+            None, // MFA code not yet supported in wallet login
+            ctx.ip_address.clone(),
+            ctx.user_agent.clone(),
+        )
         .await
         .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
 

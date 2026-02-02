@@ -110,6 +110,17 @@ pub trait AuthMethods: Send + Sync {
         user_agent: String,
     ) -> Result<AuthResult>;
 
+    /// Authenticate with pre-verified wallet address
+    ///
+    /// Used for message-based authentication where signature is already verified.
+    async fn authenticate_wallet_by_address(
+        &self,
+        wallet_address: String,
+        mfa_code: Option<String>,
+        ip_address: String,
+        user_agent: String,
+    ) -> Result<AuthResult>;
+
     /// Attach wallet credential to existing identity
     ///
     /// Links a wallet address to an identity.

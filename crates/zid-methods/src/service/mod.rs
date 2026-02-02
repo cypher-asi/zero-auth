@@ -371,6 +371,17 @@ where
             .await
     }
 
+    async fn authenticate_wallet_by_address(
+        &self,
+        wallet_address: String,
+        mfa_code: Option<String>,
+        ip_address: String,
+        user_agent: String,
+    ) -> Result<AuthResult> {
+        self.authenticate_wallet_by_address(wallet_address, mfa_code, ip_address, user_agent)
+            .await
+    }
+
     async fn attach_wallet_credential(
         &self,
         identity_id: Uuid,
