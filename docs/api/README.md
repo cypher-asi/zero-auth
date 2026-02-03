@@ -54,10 +54,13 @@ Integration endpoints (`/v1/integrations/*`, `/v1/events/*`) require mutual TLS 
 The following endpoints do not require authentication:
 
 - `GET /health` - Liveness probe
-- `GET /ready` - Readiness probe
-- `POST /v1/identity` - Create new identity
+- `GET /health/ready` - Readiness probe
+- `POST /v1/identity` - Create new identity (self-sovereign)
+- `POST /v1/auth/login/email` - Email/password login (creates managed identity if new)
+- `POST /v1/auth/login/oauth` - OAuth login (creates managed identity if new)
+- `POST /v1/auth/login/wallet` - Wallet login (creates managed identity if new)
 - `GET /v1/auth/challenge` - Get authentication challenge
-- `GET /v1/auth/oauth/:provider` - Initiate OAuth flow
+- `GET /v1/oauth/:provider/login` - Initiate OAuth login flow
 - `GET /.well-known/jwks.json` - JWT public keys
 
 ## Request Format

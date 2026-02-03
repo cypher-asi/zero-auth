@@ -103,45 +103,45 @@ fn display_migration_shards(shards: &[NeuralShard; 3]) -> Result<()> {
     println!();
     println!(
         "{}",
-        "╔═══════════════════════════════════════════════════════════════════════╗"
+        "╔════════════════════════════════════════════════════════════╗"
             .red()
             .bold()
     );
     println!(
         "{}",
-        "║                    YOUR NEW NEURAL SHARDS                             ║"
+        "║              YOUR NEW NEURAL SHARDS                        ║"
             .red()
             .bold()
     );
     println!(
         "{}",
-        "║                                                                       ║"
+        "║                                                            ║"
             .red()
     );
     println!(
         "{}",
-        "║  Login now only requires your PASSPHRASE (no shard needed).           ║"
+        "║  Login now only requires your PASSPHRASE (no shard).       ║"
             .white()
             .bold()
     );
     println!(
         "{}",
-        "║  Store these shards in separate secure locations for RECOVERY.        ║"
+        "║  Store shards in separate secure locations for RECOVERY.   ║"
             .white()
     );
     println!(
         "{}",
-        "║  Any 3 shards can recover your identity if you lose this device.      ║"
+        "║  Any 3 shards can recover your identity if device lost.    ║"
             .white()
     );
     println!(
         "{}",
-        "╠═══════════════════════════════════════════════════════════════════════╣"
+        "╠════════════════════════════════════════════════════════════╣"
             .red()
     );
     println!(
         "{}",
-        "║                                                                       ║"
+        "║                                                            ║"
             .red()
     );
 
@@ -153,7 +153,7 @@ fn display_migration_shards(shards: &[NeuralShard; 3]) -> Result<()> {
     );
     println!(
         "{}",
-        "║                                                                       ║"
+        "║                                                            ║"
             .red()
     );
     println!(
@@ -163,7 +163,7 @@ fn display_migration_shards(shards: &[NeuralShard; 3]) -> Result<()> {
     );
     println!(
         "{}",
-        "║                                                                       ║"
+        "║                                                            ║"
             .red()
     );
     println!(
@@ -173,35 +173,35 @@ fn display_migration_shards(shards: &[NeuralShard; 3]) -> Result<()> {
     );
     println!(
         "{}",
-        "║                                                                       ║"
+        "║                                                            ║"
             .red()
     );
     println!(
         "{}",
-        "╠═══════════════════════════════════════════════════════════════════════╣"
+        "╠════════════════════════════════════════════════════════════╣"
             .red()
     );
     println!(
         "{}",
-        "║  WARNING: These Neural Shards will NOT be shown again!                ║"
-            .red()
-            .bold()
-    );
-    println!(
-        "{}",
-        "║  WARNING: If you lose all 3 shards AND this device, recovery is       ║"
+        "║  WARNING: Neural Shards will NOT be shown again!           ║"
             .red()
             .bold()
     );
     println!(
         "{}",
-        "║           IMPOSSIBLE.                                                 ║"
+        "║  WARNING: Lose all 3 shards AND device = recovery          ║"
             .red()
             .bold()
     );
     println!(
         "{}",
-        "╚═══════════════════════════════════════════════════════════════════════╝"
+        "║           IMPOSSIBLE.                                      ║"
+            .red()
+            .bold()
+    );
+    println!(
+        "{}",
+        "╚════════════════════════════════════════════════════════════╝"
             .red()
             .bold()
     );

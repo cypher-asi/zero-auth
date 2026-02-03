@@ -13,5 +13,5 @@ pub mod types;
 pub use engine::{PolicyEngine, PolicyEngineImpl};
 pub use errors::{PolicyError, Result};
 pub use evaluator::PolicyEvaluator;
-pub use rate_limit::RateLimiter;
+pub use rate_limit::{AsyncRateLimiter, LimitState, PersistentRateLimiter, RateLimiter};
 pub use types::*;

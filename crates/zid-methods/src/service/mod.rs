@@ -13,6 +13,7 @@ use zid_storage::Storage;
 use zeroize::Zeroizing;
 
 // Sub-modules
+mod cleanup;
 mod email;
 mod identity_creation;
 mod machine;
@@ -22,6 +23,9 @@ mod wallet;
 
 // Re-export identity creation types
 pub use identity_creation::IdentityCreationResponse;
+
+// Re-export cleanup utilities
+pub use cleanup::{start_cleanup_task, CleanupStats, DEFAULT_CLEANUP_INTERVAL_SECS};
 
 /// Column family names
 /// Column family name for challenge storage

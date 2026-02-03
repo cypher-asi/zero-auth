@@ -157,16 +157,36 @@ impl<T, E: std::error::Error + Send + Sync + 'static> MapServiceErr<T> for Resul
 /// Helper to convert service errors to API errors
 pub fn map_service_error(error: anyhow::Error) -> ApiError {
     // Try to downcast to specific error types first
-    if let Some(zid_methods::AuthMethodsError::MachineIdRequired {
-        hint,
-        available_machines,
-    }) = error.downcast_ref::<zid_methods::AuthMethodsError>()
-    {
-        return ApiError::InvalidRequest(format!(
-            "{} Available machines: {}",
-            hint,
-            available_machines.len()
-        ));
+    if let Some(auth_err) = error.downcast_ref::<zid_methods::AuthMethodsError>() {
+        match auth_err {
+            zid_methods::AuthMethodsError::MachineIdRequired {
+                hint,
+                available_machines,
+            } => {
+                return ApiError::InvalidRequest(format!(
+                    "{} Available machines: {}",
+                    hint,
+                    available_machines.len()
+                ));
+            }
+            zid_methods::AuthMethodsError::InvalidCredentials => {
+                // Invalid credentials (wrong email/password) - return 401 Unauthorized
+                return ApiError::Unauthorized;
+            }
+            zid_methods::AuthMethodsError::MfaRequired => {
+                return ApiError::MfaRequired;
+            }
+            zid_methods::AuthMethodsError::InvalidMfaCode => {
+                return ApiError::InvalidRequest("Invalid MFA code".to_string());
+            }
+            zid_methods::AuthMethodsError::IdentityFrozen { .. } => {
+                return ApiError::IdentityFrozen;
+            }
+            zid_methods::AuthMethodsError::MachineRevoked(_) => {
+                return ApiError::MachineRevoked;
+            }
+            _ => {} // Fall through to string matching for other errors
+        }
     }
 
     let error_str = error.to_string();
@@ -181,6 +201,9 @@ pub fn map_service_error(error: anyhow::Error) -> ApiError {
         ApiError::MachineRevoked
     } else if error_str.contains("signature") {
         ApiError::InvalidSignature
+    } else if error_str.contains("Invalid credentials") {
+        // Fallback for InvalidCredentials as string
+        ApiError::Unauthorized
     } else if error_str.contains("Password")
         || error_str.contains("password")
         || error_str.contains("Email")

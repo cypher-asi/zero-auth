@@ -1,6 +1,11 @@
 //! Policy Engine trait and implementation.
 
-use crate::{errors::Result, evaluator::PolicyEvaluator, rate_limit::RateLimiter, types::*};
+use crate::{
+    errors::Result,
+    evaluator::PolicyEvaluator,
+    rate_limit::{PersistentRateLimiter, RateLimiter},
+    types::*,
+};
 use async_trait::async_trait;
 use std::sync::Arc;
 use zid_storage::{Storage, CF_REPUTATION};
@@ -31,17 +36,21 @@ pub trait PolicyEngine: Send + Sync {
     fn check_identity_rate_limit(&self, identity_id: uuid::Uuid) -> Option<RateLimit>;
 }
 
-/// Policy Engine implementation with persistent reputation storage
+/// Policy Engine implementation with persistent reputation and rate limit storage
 pub struct PolicyEngineImpl<S: Storage> {
     storage: Arc<S>,
+    /// In-memory rate limiter for synchronous checks (used by middleware)
     rate_limiter: Arc<RateLimiter>,
+    /// Persistent rate limiter for async operations
+    persistent_rate_limiter: Arc<PersistentRateLimiter<S>>,
     config: RateLimitConfig,
 }
 
-impl<S: Storage> PolicyEngineImpl<S> {
+impl<S: Storage + 'static> PolicyEngineImpl<S> {
     /// Create a new policy engine with storage and default config
     pub fn new(storage: Arc<S>) -> Self {
         Self {
+            persistent_rate_limiter: Arc::new(PersistentRateLimiter::new(Arc::clone(&storage))),
             storage,
             rate_limiter: Arc::new(RateLimiter::new()),
             config: RateLimitConfig::default(),
@@ -51,9 +60,34 @@ impl<S: Storage> PolicyEngineImpl<S> {
     /// Create a new policy engine with custom rate limit configuration
     pub fn with_config(storage: Arc<S>, config: RateLimitConfig) -> Self {
         Self {
+            persistent_rate_limiter: Arc::new(PersistentRateLimiter::new(Arc::clone(&storage))),
             storage,
             rate_limiter: Arc::new(RateLimiter::new()),
             config,
+        }
+    }
+
+    /// Initialize the policy engine by loading persistent state
+    ///
+    /// Should be called at startup to restore rate limit state from storage.
+    /// This prevents rate limit bypass by server restart.
+    pub async fn initialize(&self) -> Result<()> {
+        match self.persistent_rate_limiter.load_from_storage().await {
+            Ok(count) => {
+                tracing::info!(
+                    entries = count,
+                    "Policy engine initialized with persistent rate limit state"
+                );
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "Failed to load rate limit state from storage, starting fresh"
+                );
+                // Don't fail startup, just log the warning
+                Ok(())
+            }
         }
     }
 

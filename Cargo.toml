@@ -87,6 +87,10 @@ hex = "0.4"
 base64 = "0.21"
 bitflags = "2.4"
 
+# Validation
+validator = { version = "0.18", features = ["derive"] }
+zxcvbn = "3"
+
 # Testing
 proptest = "1.4"
 tempfile = "3.8"

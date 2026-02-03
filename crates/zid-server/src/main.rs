@@ -19,6 +19,7 @@ mod extractors;
 mod middleware;
 mod request_context;
 mod state;
+mod validation;
 
 use config::Config;
 use state::AppState;

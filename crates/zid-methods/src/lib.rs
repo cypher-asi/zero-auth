@@ -24,6 +24,9 @@ pub mod wallet;
 
 // Re-exports
 pub use errors::{AuthMethodsError, Result};
-pub use service::{AuthMethodsService, OAuthConfigs, OAuthProviderConfig};
+pub use service::{
+    start_cleanup_task, AuthMethodsService, CleanupStats, OAuthConfigs, OAuthProviderConfig,
+    DEFAULT_CLEANUP_INTERVAL_SECS,
+};
 pub use traits::AuthMethods;
 pub use types::*;

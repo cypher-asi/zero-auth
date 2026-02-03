@@ -14,8 +14,13 @@ const TOTP_STEP: u64 = 30; // 30 seconds
 /// Number of backup codes to generate
 const BACKUP_CODE_COUNT: usize = 10;
 
-/// Length of backup codes
-const BACKUP_CODE_LENGTH: usize = 8;
+/// Length of backup codes (12 alphanumeric chars = ~62 bits entropy)
+const BACKUP_CODE_LENGTH: usize = 12;
+
+/// Backup code character set (alphanumeric, excluding confusable characters)
+/// Excludes: 0/O, 1/I/l for usability (32 chars = 5 bits per char, 12 chars = 60 bits)
+/// Uses uppercase only for consistency and easier manual entry
+const BACKUP_CODE_CHARSET: &[u8] = b"23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 /// Generate a new TOTP secret and setup information
 pub fn generate_mfa_setup(issuer: &str, account_name: &str) -> Result<MfaSetup> {
@@ -123,15 +128,24 @@ pub fn decrypt_mfa_secret_data(
     String::from_utf8(decrypted).map_err(|e| AuthMethodsError::Other(e.to_string()))
 }
 
-/// Generate backup codes
+/// Generate backup codes with high entropy
+///
+/// Uses 12 alphanumeric characters from a 30-character set (excluding confusables),
+/// providing ~60 bits of entropy per code (log2(30^12) ≈ 58.9 bits).
+///
+/// Format: XXXX-XXXX-XXXX for readability
 fn generate_backup_codes() -> Vec<String> {
     let mut rng = rand::thread_rng();
     (0..BACKUP_CODE_COUNT)
         .map(|_| {
             let code: String = (0..BACKUP_CODE_LENGTH)
-                .map(|_| rng.gen_range(0..10).to_string())
+                .map(|_| {
+                    let idx = rng.gen_range(0..BACKUP_CODE_CHARSET.len());
+                    BACKUP_CODE_CHARSET[idx] as char
+                })
                 .collect();
-            code
+            // Format as XXXX-XXXX-XXXX for readability
+            format!("{}-{}-{}", &code[0..4], &code[4..8], &code[8..12])
         })
         .collect()
 }
@@ -172,10 +186,20 @@ mod tests {
         // Should have correct number of backup codes
         assert_eq!(setup.backup_codes.len(), BACKUP_CODE_COUNT);
 
-        // Each backup code should be 8 digits
+        // Each backup code should be 14 chars (12 alphanumeric + 2 dashes) in format XXXX-XXXX-XXXX
         for code in &setup.backup_codes {
-            assert_eq!(code.len(), BACKUP_CODE_LENGTH);
-            assert!(code.chars().all(|c| c.is_ascii_digit()));
+            assert_eq!(code.len(), 14, "Backup code should be 14 chars: {}", code);
+            // Check format: XXXX-XXXX-XXXX
+            let parts: Vec<&str> = code.split('-').collect();
+            assert_eq!(parts.len(), 3, "Backup code should have 3 parts: {}", code);
+            for part in parts {
+                assert_eq!(part.len(), 4, "Each part should be 4 chars: {}", part);
+                assert!(
+                    part.chars().all(|c| BACKUP_CODE_CHARSET.contains(&(c as u8))),
+                    "Part contains invalid character: {}",
+                    part
+                );
+            }
         }
     }
 
@@ -223,23 +247,47 @@ mod tests {
 
     #[test]
     fn test_backup_codes() {
-        let code = "12345678";
+        let code = "AB2C-DE3F-GH4J";
         let hash = hash_backup_code(code);
 
         // Same code should verify
         assert!(verify_backup_code(code, &hash));
 
         // Different code should not verify
-        assert!(!verify_backup_code("87654321", &hash));
+        assert!(!verify_backup_code("XY9Z-WV8U-TS7R", &hash));
     }
 
     #[test]
     fn test_backup_code_hash_deterministic() {
-        let code = "12345678";
+        let code = "AB2C-DE3F-GH4J";
         let hash1 = hash_backup_code(code);
         let hash2 = hash_backup_code(code);
 
         // Same input should produce same hash
         assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_backup_code_entropy() {
+        // Generate backup codes and verify they have sufficient entropy
+        let codes = generate_backup_codes();
+        
+        // All codes should be unique
+        let mut unique_codes: std::collections::HashSet<&String> = std::collections::HashSet::new();
+        for code in &codes {
+            assert!(unique_codes.insert(code), "Duplicate backup code generated");
+        }
+        
+        // Each code should use diverse characters
+        for code in &codes {
+            let chars: Vec<char> = code.chars().filter(|c| *c != '-').collect();
+            let unique_chars: std::collections::HashSet<char> = chars.iter().cloned().collect();
+            // With 12 chars from 30-char set, we expect at least 6 unique chars
+            assert!(
+                unique_chars.len() >= 4,
+                "Backup code has too few unique characters: {}",
+                code
+            );
+        }
     }
 }

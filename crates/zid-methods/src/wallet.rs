@@ -7,6 +7,7 @@
 use crate::{errors::*, types::*};
 use k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
 use sha3::{Digest, Keccak256};
+use zid_crypto::Challenge;
 
 // ============================================================================
 // Unified Wallet Signature Verification
@@ -227,7 +228,51 @@ pub fn build_eip191_message(message: &str) -> String {
     format!("\x19Ethereum Signed Message:\n{}{}", message.len(), message)
 }
 
+/// Canonicalize a wallet challenge into a deterministic, human-readable message.
+///
+/// This creates a standardized text format that:
+/// - Is human-readable for wallet users to verify
+/// - Is deterministic (same challenge = same message)
+/// - Contains all necessary challenge data
+///
+/// Format:
+/// ```text
+/// Zero-ID Wallet Authentication
+/// Challenge: <challenge_id>
+/// Address: <entity_id>
+/// Purpose: <purpose>
+/// Issued: <iat>
+/// Expires: <exp>
+/// Nonce: <nonce_hex>
+/// ```
+///
+/// # Arguments
+/// * `challenge` - The challenge to canonicalize
+///
+/// # Returns
+/// A deterministic string representation of the challenge
+pub fn canonicalize_wallet_challenge(challenge: &Challenge) -> String {
+    format!(
+        "Zero-ID Wallet Authentication\n\
+         Challenge: {}\n\
+         Address: {}\n\
+         Purpose: {}\n\
+         Issued: {}\n\
+         Expires: {}\n\
+         Nonce: {}",
+        challenge.challenge_id,
+        challenge.entity_id,
+        challenge.purpose,
+        challenge.iat,
+        challenge.exp,
+        hex::encode(challenge.nonce)
+    )
+}
+
 /// Verify wallet signature against challenge (EVM only - legacy compatibility)
+///
+/// Uses deterministic binary canonicalization of the challenge to ensure
+/// consistent signature verification regardless of JSON serialization order.
 ///
 /// # Arguments
 /// * `challenge` - The challenge that was signed
@@ -241,12 +286,12 @@ pub fn verify_wallet_signature(
     wallet_address: &str,
     signature: &[u8; 65],
 ) -> Result<()> {
-    // Serialize challenge to JSON (canonical)
-    let challenge_json = serde_json::to_string(challenge)
-        .map_err(|e| AuthMethodsError::Other(format!("Challenge serialization failed: {}", e)))?;
+    // Use deterministic text canonicalization for wallet signing
+    // This ensures consistent message format regardless of JSON serialization order
+    let canonical_message = canonicalize_wallet_challenge(challenge);
 
     // Build EIP-191 message
-    let message = build_eip191_message(&challenge_json);
+    let message = build_eip191_message(&canonical_message);
 
     // Hash message
     let message_hash = keccak256(message.as_bytes());
@@ -375,5 +420,68 @@ mod tests {
 
         let result = verify_solana_signature(addr, message, &sig);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_canonicalize_wallet_challenge_deterministic() {
+        use zid_crypto::EntityType;
+
+        let challenge = Challenge {
+            challenge_id: uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            entity_id: uuid::Uuid::parse_str("660f9511-f3ac-52e5-b827-557766551111").unwrap(),
+            entity_type: EntityType::Machine,
+            purpose: "wallet_auth".to_string(),
+            aud: "zid.zero.tech".to_string(),
+            iat: 1700000000,
+            exp: 1700000060,
+            nonce: [0x42; 32],
+            used: false,
+        };
+
+        // Multiple calls should produce identical output
+        let canonical1 = canonicalize_wallet_challenge(&challenge);
+        let canonical2 = canonicalize_wallet_challenge(&challenge);
+        assert_eq!(canonical1, canonical2);
+
+        // Should contain expected fields in deterministic format
+        assert!(canonical1.contains("Zero-ID Wallet Authentication"));
+        assert!(canonical1.contains("550e8400-e29b-41d4-a716-446655440000"));
+        assert!(canonical1.contains("wallet_auth"));
+        assert!(canonical1.contains("1700000000"));
+        assert!(canonical1.contains("1700000060"));
+        // Nonce should be hex encoded
+        assert!(canonical1.contains(&hex::encode([0x42; 32])));
+    }
+
+    #[test]
+    fn test_canonicalize_wallet_challenge_format() {
+        use zid_crypto::EntityType;
+
+        let challenge = Challenge {
+            challenge_id: uuid::Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
+            entity_id: uuid::Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap(),
+            entity_type: EntityType::Machine,
+            purpose: "auth".to_string(),
+            aud: "test".to_string(),
+            iat: 100,
+            exp: 200,
+            nonce: [0x00; 32],
+            used: false,
+        };
+
+        let canonical = canonicalize_wallet_challenge(&challenge);
+
+        // Verify exact format (order matters for determinism)
+        let expected = format!(
+            "Zero-ID Wallet Authentication\n\
+             Challenge: 11111111-1111-1111-1111-111111111111\n\
+             Address: 22222222-2222-2222-2222-222222222222\n\
+             Purpose: auth\n\
+             Issued: 100\n\
+             Expires: 200\n\
+             Nonce: {}",
+            hex::encode([0x00; 32])
+        );
+        assert_eq!(canonical, expected);
     }
 }

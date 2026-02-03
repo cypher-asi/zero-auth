@@ -105,6 +105,10 @@ pub const CF_WEBHOOK_DELIVERY_LOG: &str = "webhook_delivery_log";
 /// Reputation records: identity_id → ReputationRecord
 pub const CF_REPUTATION: &str = "reputation";
 
+/// Rate limit state: rate_limit_key → RateLimitState
+/// Keys are prefixed (e.g., "ip:192.168.1.1", "identity:uuid")
+pub const CF_RATE_LIMITS: &str = "rate_limits";
+
 /// Get all column family names
 pub fn all_column_families() -> Vec<&'static str> {
     vec![
@@ -142,6 +146,7 @@ pub fn all_column_families() -> Vec<&'static str> {
         CF_PROCESSED_EVENT_IDS,
         CF_WEBHOOK_DELIVERY_LOG,
         CF_REPUTATION,
+        CF_RATE_LIMITS,
     ]
 }
 

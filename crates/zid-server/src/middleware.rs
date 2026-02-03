@@ -11,6 +11,7 @@ use zid_policy::PolicyEngine;
 
 use crate::request_context::extract_client_ip;
 use crate::state::AppState;
+use crate::validation::validate_request_id;
 
 fn direct_ip_from_request(req: &Request<Body>) -> Option<IpAddr> {
     req.extensions()
@@ -29,19 +30,14 @@ pub async fn request_id_middleware(
     mut req: Request<Body>,
     next: Next,
 ) -> Result<Response<Body>, StatusCode> {
-    // Generate or extract request ID
-    let request_id = req
+    // Extract and validate request ID (must be valid UUID or generate server-side)
+    // This prevents log injection attacks via client-provided request IDs
+    let client_request_id = req
         .headers()
         .get("X-Request-ID")
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("")
-        .to_string();
+        .and_then(|h| h.to_str().ok());
 
-    let request_id = if request_id.is_empty() {
-        uuid::Uuid::new_v4().to_string()
-    } else {
-        request_id
-    };
+    let request_id = validate_request_id(client_request_id);
 
     // Insert request ID into headers for downstream use
     if let Ok(header_value) = request_id.parse() {

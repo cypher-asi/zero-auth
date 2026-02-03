@@ -40,6 +40,10 @@ pub enum PolicyError {
     /// Lock poisoned (mutex was held during a panic)
     #[error("Lock poisoned: internal state may be corrupted")]
     LockPoisoned,
+
+    /// Storage error
+    #[error("Storage error: {0}")]
+    StorageError(String),
 }
 
 /// Result type for policy operations

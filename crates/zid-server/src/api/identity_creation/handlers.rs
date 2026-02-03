@@ -24,6 +24,7 @@ use crate::{
     extractors::JsonWithErrors,
     request_context::RequestContext,
     state::AppState,
+    validation::{validate_email, validate_password_strength},
 };
 
 /// POST /v1/identity/email - Create identity via email (auto-login)
@@ -38,25 +39,18 @@ pub async fn create_email_identity(
         "Email identity creation attempt"
     );
 
-    // Validate email format
-    if !req.email.contains('@') || req.email.len() < 5 {
-        return Err(ApiError::InvalidRequest("Invalid email format".to_string()));
-    }
+    // Validate email format using RFC 5322 compliant validation
+    let email = validate_email(&req.email)?;
 
-    // Validate password strength
-    if req.password.len() < 8 {
-        return Err(ApiError::InvalidRequest(
-            "Password must be at least 8 characters".to_string(),
-        ));
-    }
+    // Validate password strength using entropy-based analysis
+    // Pass email username as user input to detect weak passwords containing the email
+    let email_username = email.split('@').next().unwrap_or("");
+    validate_password_strength(&req.password, Some(&[email_username]))?;
 
-    // Store email for response before moving into service call
-    let email = req.email.clone();
-
-    // Create the identity
+    // Create the identity (use normalized email)
     let response = state
         .auth_service
-        .create_identity_via_email(req.email, req.password, req.namespace_name)
+        .create_identity_via_email(email.clone(), req.password, req.namespace_name)
         .await
         .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
 

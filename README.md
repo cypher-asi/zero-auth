@@ -92,7 +92,7 @@ See [Quantum Considerations](docs/encryption/quantum.md) for threat analysis and
 
 | Document | Description |
 |----------|-------------|
-| [Specification v0.1.0](docs/spec/v0.1.0/README.md) | Comprehensive system specification with architecture diagrams |
+| [Specification v0.1.1](docs/spec/v0.1.1/README.md) | Comprehensive system specification with architecture diagrams |
 | [API Documentation](docs/api/README.md) | REST API overview, authentication, and quick start |
 | [API v1 Reference](docs/api/v1-reference.md) | Complete endpoint documentation |
 | [API Errors](docs/api/errors.md) | Error codes and troubleshooting |
@@ -106,17 +106,17 @@ For detailed technical specifications of each component:
 
 | Spec | Crate | Description |
 |------|-------|-------------|
-| [Crypto Primitives](docs/spec/v0.1.0/01-crypto.md) | `zid-crypto` | Key derivation, encryption, signatures, Shamir, DIDs |
-| [Storage](docs/spec/v0.1.0/02-storage.md) | `zid-storage` | Storage abstraction and column families |
-| [Policy Engine](docs/spec/v0.1.0/03-policy.md) | `zid-policy` | Rate limiting, reputation, authorization |
-| [Identity Core](docs/spec/v0.1.0/04-identity-core.md) | `zid-identity-core` | Identities, machines, namespaces |
-| [Integrations](docs/spec/v0.1.0/05-integrations.md) | `zid-integrations` | mTLS auth, SSE streaming, webhooks |
-| [Sessions](docs/spec/v0.1.0/06-sessions.md) | `zid-sessions` | JWT issuance, refresh tokens |
-| [Auth Methods](docs/spec/v0.1.0/07-methods.md) | `zid-methods` | Machine, email, OAuth, wallet, MFA |
-| [Server](docs/spec/v0.1.0/08-server.md) | `zid-server` | HTTP API endpoints and middleware |
-| [Client](docs/spec/v0.1.0/09-client.md) | `zid-client` | CLI commands and workflows |
-| [System Overview](docs/spec/v0.1.0/10-system-overview.md) | — | Architecture and data flows |
-| [Crypto Primitives Deep Dive](docs/spec/v0.1.0/11-crypto-primitives.md) | — | Algorithms and binary formats |
+| [System Overview](docs/spec/v0.1.1/00-system-overview.md) | — | Architecture, dependency graph, security model |
+| [Crypto Primitives](docs/spec/v0.1.1/01-crypto.md) | `zid-crypto` | Key derivation, encryption, signatures, Shamir, DIDs |
+| [Storage](docs/spec/v0.1.1/02-storage.md) | `zid-storage` | Storage abstraction and 33 column families |
+| [Policy Engine](docs/spec/v0.1.1/03-policy.md) | `zid-policy` | Rate limiting, reputation, authorization |
+| [Identity Core](docs/spec/v0.1.1/04-identity-core.md) | `zid-identity-core` | Identities, machines, namespaces, ceremonies |
+| [Sessions](docs/spec/v0.1.1/05-sessions.md) | `zid-sessions` | JWT issuance, refresh tokens, introspection |
+| [Integrations](docs/spec/v0.1.1/06-integrations.md) | `zid-integrations` | mTLS auth, SSE streaming, webhooks |
+| [Auth Methods](docs/spec/v0.1.1/07-methods.md) | `zid-methods` | Machine, email, OAuth, wallet, MFA |
+| [Server](docs/spec/v0.1.1/08-server.md) | `zid-server` | HTTP API endpoints and middleware |
+| [Client](docs/spec/v0.1.1/09-client.md) | `zid-client` | CLI commands and workflows |
+| [Crypto Primitives Deep Dive](docs/spec/v0.1.1/10-crypto-primitives.md) | — | Algorithms and binary formats |
 
 ## Overview
 
@@ -133,6 +133,49 @@ zid is a modular authentication system built on the principle that cryptographic
 ### Open Source & Self-Hosting
 
 zid is fully open source. Cypher operates the main authentication server at **https://auth.zero.tech** for public use, but anyone can run their own zid server. The system is designed to be self-hosted with no vendor lock-in—your cryptographic keys remain under your control regardless of which server you use.
+
+### Identity Tiers
+
+zid supports two identity tiers to accommodate different security requirements and onboarding flows:
+
+| Tier | ISK Source | Shamir Backup | Use Case |
+|------|-----------|---------------|----------|
+| **Managed** | Server (from service master key) | No | Traditional auth flows (OAuth, email, wallet signup) |
+| **Self-Sovereign** | Client (from Neural Key) | Yes (3-of-5) | Maximum security with client-controlled keys |
+
+**Managed identities** are created when users sign up via OAuth, email/password, or wallet authentication. The server derives the Identity Signing Key (ISK) from the service master key, allowing seamless onboarding without requiring users to manage cryptographic material.
+
+**Self-sovereign identities** are created with a client-generated Neural Key that never leaves the device. These identities have full access to ceremonies like key rotation and recovery, and are protected by 3-of-5 Shamir secret sharing.
+
+```
+Identity Tier Lifecycle
+┌─────────────────────┐
+│  OAuth/Email/Wallet │
+│      Signup         │
+└─────────┬───────────┘
+          │
+          ▼
+    ┌───────────┐          ┌────────────────┐
+    │  Managed  │──────────│ Upgrade        │
+    │  Identity │ ceremony │ Ceremony       │
+    └───────────┘          └───────┬────────┘
+                                   │
+          ┌────────────────────────┘
+          │
+          ▼
+    ┌─────────────────┐
+    │ Self-Sovereign  │
+    │    Identity     │
+    └─────────────────┘
+          ▲
+          │
+┌─────────┴───────────┐
+│  Neural Key         │
+│  Creation           │
+└─────────────────────┘
+```
+
+Managed identities can be **upgraded** to self-sovereign through an upgrade ceremony, which generates a Neural Key and transfers control to the client.
 
 ## How the System Works
 
@@ -468,35 +511,35 @@ Recovery process:
 
 ## Authentication Methods
 
-zid supports multiple authentication methods:
+zid supports multiple authentication methods, each associated with an identity tier:
 
-| Method | Description | Use Case |
-|--------|-------------|----------|
-| Machine Key | Ed25519 challenge-response | Primary authentication for enrolled devices |
-| Email + Password | Argon2id password hashing | Fallback authentication, account linking |
-| OAuth | Google, X/Twitter, Epic Games | Social login, account linking |
-| Wallet | EVM signatures (EIP-191, SECP256k1) | Blockchain-based authentication |
-| MFA | TOTP with backup codes | Additional security for sensitive operations |
+| Method | Description | Identity Tier | Use Case |
+|--------|-------------|---------------|----------|
+| Machine Key | Ed25519 challenge-response | Self-Sovereign | Primary authentication for enrolled devices |
+| Email + Password | Argon2id password hashing | Managed | Traditional account creation, account linking |
+| OAuth | Google, X/Twitter, Epic Games | Managed | Social login, account linking |
+| Wallet | EVM (SECP256k1), Solana (Ed25519) | Managed | Blockchain-based authentication |
+| MFA | TOTP with backup codes | Both | Additional security for sensitive operations |
 
 The authentication system is designed to be extensible with OAuth and OIDC, allowing integration with any range of trusted identity providers. New providers can be added as modules to the system without modifying the core authentication logic.
 
-All methods can be combined with MFA for high-security operations.
+All methods can be combined with MFA for high-security operations. Managed identities created through email, OAuth, or wallet authentication can be upgraded to self-sovereign status through an upgrade ceremony.
 
 ## Architecture
 
-The system is composed of modular crates:
+The system is composed of modular crates organized in three layers:
 
-| Crate | Purpose |
-|-------|---------|
-| `zid-crypto` | Cryptographic primitives (Ed25519, X25519, XChaCha20-Poly1305, HKDF, Argon2id, DIDs) |
-| `zid-storage` | RocksDB abstraction layer with column families on server |
-| `zid-policy` | Policy engine for authorization and rate limiting |
-| `zid-identity-core` | Identity and Machine Key management |
-| `zid-methods` | Authentication methods (Machine Key, Email, OAuth, Wallet, MFA) |
-| `zid-sessions` | Session and JWT token management |
-| `zid-integrations` | Event streaming (SSE) and webhooks |
-| `zid-server` | HTTP API server (Axum) |
-| `zid-client` | Official CLI client |
+| Crate | Layer | Purpose |
+|-------|-------|---------|
+| `zid-crypto` | Core | Cryptographic primitives (Ed25519, X25519, XChaCha20-Poly1305, HKDF, Argon2id, DIDs) |
+| `zid-storage` | Core | RocksDB abstraction layer with 33 column families |
+| `zid-policy` | Domain | Policy engine for authorization and rate limiting |
+| `zid-identity-core` | Domain | Identity, Machine Key, and namespace management |
+| `zid-sessions` | Domain | Session and JWT token management |
+| `zid-integrations` | Domain | Event streaming (SSE) and webhooks |
+| `zid-methods` | Application | Authentication methods (Machine Key, Email, OAuth, Wallet, MFA) |
+| `zid-server` | Application | HTTP API server (Axum) |
+| `zid-client` | Application | Official CLI client |
 
 ## Getting Started
 
@@ -541,10 +584,13 @@ The server starts on `http://127.0.0.1:9999` by default.
 | `SERVICE_MASTER_KEY` | Yes | - | 64-character hex string (32 bytes) for cryptographic operations |
 | `BIND_ADDRESS` | No | `127.0.0.1:9999` | Server bind address |
 | `DATABASE_PATH` | No | `./data/zid.db` | Path to RocksDB database |
+| `RUN_MODE` | No | `prod` | Run mode (`dev` or `prod`) |
 | `JWT_ISSUER` | No | `https://zid.zero.tech` | JWT issuer claim |
 | `JWT_AUDIENCE` | No | `zero-vault` | JWT audience claim |
 | `ACCESS_TOKEN_EXPIRY_SECONDS` | No | `900` (15 min) | Access token lifetime |
 | `REFRESH_TOKEN_EXPIRY_SECONDS` | No | `2592000` (30 days) | Refresh token lifetime |
+| `CORS_ALLOWED_ORIGINS` | No | `http://localhost:3000` | Allowed CORS origins (comma-separated) |
+| `TRUSTED_PROXIES` | No | (empty) | Trusted proxy addresses for X-Forwarded-For |
 
 ### Using the CLI Client
 
@@ -641,82 +687,101 @@ cargo llvm-cov --workspace --html
 
 ## API Reference
 
-### Health and Status
+### Health
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/ready` | GET | Readiness check |
-
-### Identity Management
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/identity` | POST | Create new identity |
-| `/v1/identity/:id` | GET | Get identity details |
-| `/v1/identity/freeze` | POST | Freeze identity |
-| `/v1/identity/unfreeze` | POST | Unfreeze identity |
-| `/v1/identity/recovery` | POST | Perform recovery ceremony |
-| `/v1/identity/rotation` | POST | Rotate Neural Key |
-
-### Machine Key Management
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/machines/enroll` | POST | Enroll new device |
-| `/v1/machines` | GET | List enrolled devices |
-| `/v1/machines/:id` | DELETE | Revoke device access |
-
-### Namespace Management
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/namespaces` | POST | Create new namespace |
-| `/v1/namespaces` | GET | List namespaces for authenticated identity |
-| `/v1/namespaces/:id` | GET | Get namespace details |
-| `/v1/namespaces/:id` | PATCH | Update namespace (owner only) |
-| `/v1/namespaces/:id/deactivate` | POST | Deactivate namespace (owner only) |
-| `/v1/namespaces/:id/reactivate` | POST | Reactivate namespace (owner only) |
-| `/v1/namespaces/:id` | DELETE | Delete namespace (owner only, must be empty) |
-| `/v1/namespaces/:id/members` | GET | List namespace members |
-| `/v1/namespaces/:id/members` | POST | Add member (owner/admin) |
-| `/v1/namespaces/:id/members/:identity_id` | PATCH | Update member role (owner/admin) |
-| `/v1/namespaces/:id/members/:identity_id` | DELETE | Remove member (owner/admin) |
+| `/health` | GET | Liveness probe |
+| `/health/ready` | GET | Readiness probe (checks storage) |
 
 ### Authentication
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/v1/auth/challenge` | GET | Get authentication challenge |
-| `/v1/auth/login/machine` | POST | Login with machine key |
-| `/v1/auth/login/email` | POST | Login with email/password |
-| `/v1/auth/login/wallet` | POST | Login with crypto wallet |
-| `/v1/auth/oauth/:provider` | GET | Initiate OAuth flow |
-| `/v1/auth/oauth/:provider/callback` | POST | Complete OAuth flow |
+| `/v1/auth/login/machine` | POST | Machine key authentication |
+| `/v1/auth/login/email` | POST | Email/password authentication |
+| `/v1/auth/login/oauth` | POST | OAuth authentication |
+| `/v1/auth/login/wallet` | POST | Wallet signature authentication |
+| `/v1/auth/refresh` | POST | Refresh access token |
+| `/v1/auth/introspect` | POST | Token introspection |
+| `/.well-known/jwks.json` | GET | Public keys for JWT validation |
 
-### Session Management
+### Identity Management
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/auth/refresh` | POST | Refresh access token |
-| `/v1/auth/introspect` | POST | Validate and inspect token |
-| `/v1/session/revoke` | POST | Revoke current session |
-| `/v1/session/revoke-all` | POST | Revoke all sessions |
-| `/.well-known/jwks.json` | GET | JWT public keys (JWKS) |
+| `/v1/identity` | POST | Create identity (self-sovereign) |
+| `/v1/identity` | GET | Get current identity |
+| `/v1/identity` | DELETE | Disable identity |
+| `/v1/identity/freeze` | POST | Freeze identity |
+| `/v1/identity/unfreeze` | POST | Unfreeze identity |
+
+### Machine Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/identity/machines` | POST | Enroll machine |
+| `/v1/identity/machines` | GET | List machines |
+| `/v1/identity/machines/:id` | GET | Get machine |
+| `/v1/identity/machines/:id` | DELETE | Revoke machine |
+
+### Credentials
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/credentials` | GET | List all credentials |
+| `/v1/credentials/email` | POST | Attach email credential |
+| `/v1/credentials/wallet` | POST | Attach wallet credential |
+| `/v1/credentials/wallet/:address` | DELETE | Revoke wallet credential |
+
+### OAuth
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/oauth/:provider/initiate` | GET | Start OAuth link flow |
+| `/v1/oauth/:provider/login` | GET | Start OAuth login flow |
+| `/v1/oauth/callback` | POST | Complete OAuth flow |
+| `/v1/oauth/:provider` | DELETE | Revoke OAuth link |
 
 ### Multi-Factor Authentication
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/mfa/setup` | POST | Setup TOTP MFA |
-| `/v1/mfa` | DELETE | Disable MFA |
+| `/v1/mfa/setup` | POST | Setup MFA |
+| `/v1/mfa/enable` | POST | Enable MFA (verify code) |
+| `/v1/mfa/disable` | POST | Disable MFA |
+| `/v1/mfa/verify` | POST | Verify MFA code |
+
+### Sessions
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/sessions` | GET | List sessions |
+| `/v1/sessions/:id` | DELETE | Revoke session |
+| `/v1/sessions` | DELETE | Revoke all sessions |
+
+### Namespace Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/namespaces` | GET | List namespaces |
+| `/v1/namespaces` | POST | Create namespace |
+| `/v1/namespaces/:id` | GET | Get namespace |
+| `/v1/namespaces/:id` | PATCH | Update namespace |
+| `/v1/namespaces/:id` | DELETE | Delete namespace |
+| `/v1/namespaces/:id/members` | GET | List members |
+| `/v1/namespaces/:id/members` | POST | Add member |
+| `/v1/namespaces/:id/members/:identity_id` | PATCH | Update member |
+| `/v1/namespaces/:id/members/:identity_id` | DELETE | Remove member |
 
 ### Integrations
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/integrations/register` | POST | Register external service |
-| `/v1/events/stream` | GET | Server-Sent Events stream |
+| `/v1/events/stream` | GET | SSE event stream (mTLS) |
+| `/v1/services` | POST | Register service (Admin) |
+| `/v1/services/:id` | DELETE | Revoke service (Admin) |
 
 ## Cryptographic Standards
 
@@ -922,7 +987,7 @@ This eliminates a network round-trip for each request.
 
 ## Project Status
 
-**Current Version**: 0.1.0 (Alpha)
+**Current Version**: 0.1.1 (Alpha)
 
 The system is feature-complete with all major subsystems implemented:
 

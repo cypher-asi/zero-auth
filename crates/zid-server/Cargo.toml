@@ -46,5 +46,9 @@ base64.workspace = true
 rand.workspace = true
 urlencoding = "2.1"
 
+# Validation
+validator.workspace = true
+zxcvbn.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true

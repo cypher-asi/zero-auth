@@ -11,7 +11,7 @@ use crate::{
     errors::*,
     oauth::types::OAuthUserInfo,
     types::*,
-    wallet::{normalize_wallet_address, verify_wallet_signature_typed},
+    wallet::{canonicalize_wallet_challenge, normalize_wallet_address, verify_wallet_signature_typed},
 };
 use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 use rand::rngs::OsRng;
@@ -281,9 +281,8 @@ where
             .put(CF_CHALLENGES, &challenge_id, &challenge)
             .await?;
 
-        // Build message to sign
-        let message = serde_json::to_string(&challenge)
-            .map_err(|e| AuthMethodsError::Other(format!("Challenge serialization failed: {}", e)))?;
+        // Build canonical message to sign (must match verification in complete_wallet_identity_creation)
+        let message = canonicalize_wallet_challenge(&challenge);
 
         Ok((challenge_id, message))
     }
@@ -320,11 +319,11 @@ where
         // Delete challenge (one-time use)
         self.storage.delete(CF_CHALLENGES, &challenge_id).await?;
 
-        // Verify signature
-        let message = serde_json::to_string(&challenge)
-            .map_err(|e| AuthMethodsError::Other(format!("Challenge serialization failed: {}", e)))?;
+        // Verify signature using deterministic text canonicalization
+        // This ensures consistent message format regardless of JSON serialization order
+        let canonical_message = canonicalize_wallet_challenge(&challenge);
 
-        verify_wallet_signature_typed(wallet_type, &normalized_address, message.as_bytes(), &signature)?;
+        verify_wallet_signature_typed(wallet_type, &normalized_address, canonical_message.as_bytes(), &signature)?;
 
         // Create managed identity
         let method_type = format!("wallet:{}", wallet_type.as_str());

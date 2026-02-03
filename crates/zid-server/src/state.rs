@@ -51,8 +51,13 @@ impl AppState {
         // Initialize storage
         let storage = Arc::new(RocksDbStorage::open(&config.database_path)?);
 
-        // Initialize policy engine with storage for persistent reputation
+        // Initialize policy engine with storage for persistent reputation and rate limits
         let policy_engine = Arc::new(PolicyEngineImpl::new(Arc::clone(&storage)));
+
+        // Load rate limit state from storage (prevents bypass via restart)
+        if let Err(e) = policy_engine.initialize().await {
+            tracing::warn!(error = %e, "Failed to initialize policy engine, continuing with fresh state");
+        }
 
         // Initialize services
         let identity_service = Arc::new(IdentityCoreService::new(
@@ -111,6 +116,19 @@ impl AppState {
 
         // Initialize session service signing keys
         session_service.initialize().await?;
+
+        // Start background cleanup task for expired nonces, challenges, and OAuth states
+        // This prevents unbounded growth of replay-prevention data
+        let cleanup_service = auth_service.clone();
+        let _cleanup_handle = zid_methods::start_cleanup_task(
+            cleanup_service,
+            zid_methods::DEFAULT_CLEANUP_INTERVAL_SECS,
+        );
+
+        tracing::info!(
+            interval_secs = zid_methods::DEFAULT_CLEANUP_INTERVAL_SECS,
+            "Started background cleanup task"
+        );
 
         Ok(AppState {
             config,

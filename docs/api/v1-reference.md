@@ -9,6 +9,7 @@ Complete endpoint reference for the zid REST API.
 - [Machine Keys](#machine-keys)
 - [Namespaces](#namespaces)
 - [Authentication](#authentication)
+- [OAuth](#oauth)
 - [Sessions](#sessions)
 - [Multi-Factor Authentication](#multi-factor-authentication)
 - [Credentials](#credentials)
@@ -32,7 +33,7 @@ Liveness probe. Returns 200 if the server process is running.
 ```json
 {
   "status": "ok",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "timestamp": 1705838400
 }
 ```
@@ -45,7 +46,7 @@ Liveness probe. Returns 200 if the server process is running.
 
 ---
 
-### GET /ready
+### GET /health/ready
 
 Readiness probe. Returns 200 if the server is ready to accept traffic, including database connectivity.
 
@@ -83,9 +84,24 @@ Readiness probe. Returns 200 if the server is ready to accept traffic, including
 
 Endpoints for creating and managing cryptographic identities.
 
+### Identity Tiers
+
+zid supports two identity tiers:
+
+| Tier | ISK Source | Shamir Backup | Creation Method |
+|------|-----------|---------------|-----------------|
+| **Managed** | Server (from service master key) | No | Email, OAuth, or Wallet login |
+| **Self-Sovereign** | Client (from Neural Key) | Yes (3-of-5) | `POST /v1/identity` with client-generated keys |
+
+Managed identities are automatically created when users sign up via email/password, OAuth, or wallet authentication. Self-sovereign identities require client-side Neural Key generation and provide full ceremony support.
+
+Managed identities can be upgraded to self-sovereign through an upgrade ceremony.
+
+---
+
 ### POST /v1/identity
 
-Create a new identity with an initial machine key.
+Create a new self-sovereign identity with an initial machine key.
 
 **Authentication:** None (public endpoint)
 
@@ -770,54 +786,6 @@ Update namespace details.
 
 ---
 
-### POST /v1/namespaces/:namespace_id/deactivate
-
-Deactivate a namespace.
-
-**Authentication:** Bearer token required (owner only)
-
-**Path Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `namespace_id` | UUID | Namespace to deactivate |
-
-**Response:** `204 No Content`
-
-**Errors:**
-
-| Code | Description |
-|------|-------------|
-| `UNAUTHORIZED` | Missing or invalid token |
-| `FORBIDDEN` | Not the namespace owner |
-| `NOT_FOUND` | Namespace does not exist |
-
----
-
-### POST /v1/namespaces/:namespace_id/reactivate
-
-Reactivate a previously deactivated namespace.
-
-**Authentication:** Bearer token required (owner only)
-
-**Path Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `namespace_id` | UUID | Namespace to reactivate |
-
-**Response:** `204 No Content`
-
-**Errors:**
-
-| Code | Description |
-|------|-------------|
-| `UNAUTHORIZED` | Missing or invalid token |
-| `FORBIDDEN` | Not the namespace owner |
-| `NOT_FOUND` | Namespace does not exist |
-
----
-
 ### DELETE /v1/namespaces/:namespace_id
 
 Delete a namespace. The namespace must be empty (no members except owner).
@@ -1154,24 +1122,37 @@ Same as [POST /v1/auth/login/machine](#post-v1authloginmachine).
 
 ### POST /v1/auth/login/wallet
 
-Authenticate using an EVM wallet signature (EIP-191).
+Authenticate using a wallet signature. Supports EVM (SECP256k1) and Solana (Ed25519) wallets.
 
 **Authentication:** None
 
-**Request Body:**
+**Request Body (EVM):**
 
 ```json
 {
+  "wallet_type": "evm",
   "wallet_address": "0x1234567890abcdef1234567890abcdef12345678",
   "signature": "a1b2c3d4...",
   "message": "Sign in to zid\nTimestamp: 1705838400\nWallet: 0x1234..."
 }
 ```
 
+**Request Body (Solana):**
+
+```json
+{
+  "wallet_type": "solana",
+  "wallet_address": "DRpbCBMxVnDK7maPMqKqetK8dBBqMM5SFvAJVMKBzzuz",
+  "signature": "a1b2c3d4...",
+  "message": "Sign in to zid\nTimestamp: 1705838400\nWallet: DRpb..."
+}
+```
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `wallet_address` | string | Yes | Ethereum address (0x-prefixed, 42 chars) |
-| `signature` | string | Yes | EIP-191 signature (hex, 130 chars for 65 bytes) |
+| `wallet_type` | string | No | Wallet type: `evm` (default) or `solana` |
+| `wallet_address` | string | Yes | Wallet address (EVM: 0x-prefixed 42 chars, Solana: base58) |
+| `signature` | string | Yes | Signature (hex-encoded) |
 | `message` | string | Yes | Signed message (must match expected format) |
 
 **Message Format:**
@@ -1198,9 +1179,13 @@ Same as [POST /v1/auth/login/machine](#post-v1authloginmachine).
 
 ---
 
-### GET /v1/auth/oauth/:provider
+## OAuth
 
-Initiate an OAuth authentication flow.
+OAuth endpoints for authentication and credential linking.
+
+### GET /v1/oauth/:provider/login
+
+Initiate an OAuth login flow. Creates a managed identity if the OAuth account is not yet registered.
 
 **Authentication:** None
 
@@ -1232,17 +1217,41 @@ Initiate an OAuth authentication flow.
 
 ---
 
-### POST /v1/auth/oauth/:provider/callback
+### GET /v1/oauth/:provider/initiate
 
-Complete an OAuth authentication flow.
+Initiate an OAuth link flow to add OAuth credentials to an existing identity.
 
-**Authentication:** None
+**Authentication:** Bearer token required
 
 **Path Parameters:**
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `provider` | string | OAuth provider: `google`, `x`, `epic` |
+
+**Response (200 OK):**
+
+```json
+{
+  "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?...",
+  "state": "random_state_string"
+}
+```
+
+**Errors:**
+
+| Code | Description |
+|------|-------------|
+| `UNAUTHORIZED` | Missing or invalid token |
+| `INVALID_REQUEST` | Unknown OAuth provider |
+
+---
+
+### POST /v1/oauth/callback
+
+Complete an OAuth authentication or link flow.
+
+**Authentication:** None (state parameter identifies the flow)
 
 **Request Body:**
 
@@ -1260,14 +1269,47 @@ Complete an OAuth authentication flow.
 
 **Response (200 OK):**
 
-Same as [POST /v1/auth/login/machine](#post-v1authloginmachine).
+For login flows, returns the same response as [POST /v1/auth/login/machine](#post-v1authloginmachine).
+
+For link flows:
+
+```json
+{
+  "message": "OAuth credential linked successfully"
+}
+```
 
 **Errors:**
 
 | Code | Description |
 |------|-------------|
 | `INVALID_REQUEST` | Invalid state or code |
-| `UNAUTHORIZED` | OAuth account not linked to any identity |
+| `UNAUTHORIZED` | OAuth account not linked to any identity (for login flows) |
+| `CONFLICT` | OAuth account already linked to another identity (for link flows) |
+
+---
+
+### DELETE /v1/oauth/:provider
+
+Revoke an OAuth credential from the authenticated identity.
+
+**Authentication:** Bearer token required
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `provider` | string | OAuth provider: `google`, `x`, `epic` |
+
+**Response:** `204 No Content`
+
+**Errors:**
+
+| Code | Description |
+|------|-------------|
+| `UNAUTHORIZED` | Missing or invalid token |
+| `NOT_FOUND` | OAuth credential not found |
+| `FORBIDDEN` | Cannot remove last credential |
 
 ---
 
@@ -1322,23 +1364,60 @@ Refresh an access token using a refresh token.
 
 ---
 
-### POST /v1/session/revoke
+### GET /v1/sessions
+
+List all sessions for the authenticated identity.
+
+**Authentication:** Bearer token required
+
+**Response (200 OK):**
+
+```json
+{
+  "sessions": [
+    {
+      "session_id": "bb0e8400-e29b-41d4-a716-446655440006",
+      "machine_id": "660e8400-e29b-41d4-a716-446655440001",
+      "namespace_id": "550e8400-e29b-41d4-a716-446655440000",
+      "created_at": "2025-01-21T12:00:00Z",
+      "last_used_at": "2025-01-21T14:30:00Z",
+      "expires_at": "2025-02-20T12:00:00Z",
+      "current": true
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sessions` | array | List of session objects |
+| `sessions[].session_id` | UUID | Session identifier |
+| `sessions[].machine_id` | UUID | Machine used for this session |
+| `sessions[].namespace_id` | UUID | Namespace context |
+| `sessions[].created_at` | string | RFC 3339 timestamp |
+| `sessions[].last_used_at` | string | RFC 3339 timestamp |
+| `sessions[].expires_at` | string | RFC 3339 timestamp |
+| `sessions[].current` | boolean | Whether this is the current session |
+
+**Errors:**
+
+| Code | Description |
+|------|-------------|
+| `UNAUTHORIZED` | Missing or invalid token |
+
+---
+
+### DELETE /v1/sessions/:session_id
 
 Revoke a specific session.
 
 **Authentication:** Bearer token required
 
-**Request Body:**
+**Path Parameters:**
 
-```json
-{
-  "session_id": "bb0e8400-e29b-41d4-a716-446655440006"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `session_id` | UUID | Yes | Session to revoke |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `session_id` | UUID | Session to revoke |
 
 **Response:** `204 No Content`
 
@@ -1352,7 +1431,7 @@ Revoke a specific session.
 
 ---
 
-### POST /v1/session/revoke-all
+### DELETE /v1/sessions
 
 Revoke all sessions for the authenticated identity. This is a high-risk operation requiring MFA verification.
 
@@ -1595,7 +1674,60 @@ Disable MFA for an identity.
 
 ## Credentials
 
-Endpoints for managing authentication credentials (email, OAuth links).
+Endpoints for managing authentication credentials (email, wallet, OAuth links).
+
+### GET /v1/credentials
+
+List all credentials attached to the authenticated identity.
+
+**Authentication:** Bearer token required
+
+**Response (200 OK):**
+
+```json
+{
+  "credentials": [
+    {
+      "type": "email",
+      "identifier": "user@example.com",
+      "created_at": "2025-01-21T12:00:00Z",
+      "primary": true
+    },
+    {
+      "type": "wallet",
+      "identifier": "0x1234567890abcdef1234567890abcdef12345678",
+      "wallet_type": "evm",
+      "created_at": "2025-01-22T10:00:00Z",
+      "primary": false
+    },
+    {
+      "type": "oauth",
+      "identifier": "google:123456789",
+      "provider": "google",
+      "created_at": "2025-01-23T08:00:00Z",
+      "primary": false
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `credentials` | array | List of credential objects |
+| `credentials[].type` | string | Credential type: `email`, `wallet`, `oauth` |
+| `credentials[].identifier` | string | Unique identifier for the credential |
+| `credentials[].created_at` | string | RFC 3339 timestamp |
+| `credentials[].primary` | boolean | Whether this is the primary auth method |
+| `credentials[].wallet_type` | string | Wallet type (only for wallet credentials): `evm`, `solana` |
+| `credentials[].provider` | string | OAuth provider (only for OAuth credentials) |
+
+**Errors:**
+
+| Code | Description |
+|------|-------------|
+| `UNAUTHORIZED` | Missing or invalid token |
+
+---
 
 ### POST /v1/credentials/email
 
@@ -1632,6 +1764,72 @@ Add an email/password credential to an existing identity.
 | `UNAUTHORIZED` | Missing or invalid token |
 | `INVALID_REQUEST` | Invalid email format or weak password |
 | `CONFLICT` | Email already registered |
+
+---
+
+### POST /v1/credentials/wallet
+
+Add a wallet credential to an existing identity.
+
+**Authentication:** Bearer token required
+
+**Request Body:**
+
+```json
+{
+  "wallet_type": "evm",
+  "wallet_address": "0x1234567890abcdef1234567890abcdef12345678",
+  "signature": "a1b2c3d4...",
+  "message": "Link wallet to zid\nTimestamp: 1705838400\nWallet: 0x1234..."
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `wallet_type` | string | No | Wallet type: `evm` (default) or `solana` |
+| `wallet_address` | string | Yes | Wallet address |
+| `signature` | string | Yes | Signature proving ownership (hex-encoded) |
+| `message` | string | Yes | Signed message (must match expected format) |
+
+**Response (200 OK):**
+
+```json
+{
+  "message": "Wallet credential added successfully"
+}
+```
+
+**Errors:**
+
+| Code | Description |
+|------|-------------|
+| `UNAUTHORIZED` | Missing or invalid token |
+| `INVALID_REQUEST` | Invalid signature or message format |
+| `CONFLICT` | Wallet already registered |
+
+---
+
+### DELETE /v1/credentials/wallet/:address
+
+Remove a wallet credential from the identity.
+
+**Authentication:** Bearer token required
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `address` | string | Wallet address to remove |
+
+**Response:** `204 No Content`
+
+**Errors:**
+
+| Code | Description |
+|------|-------------|
+| `UNAUTHORIZED` | Missing or invalid token |
+| `NOT_FOUND` | Wallet not found |
+| `FORBIDDEN` | Cannot remove last credential |
 
 ---
 

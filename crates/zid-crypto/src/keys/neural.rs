@@ -47,7 +47,16 @@ impl NeuralKey {
 
     /// Validate that the Neural Key has sufficient entropy
     ///
-    /// This is a basic check to ensure the key isn't obviously weak.
+    /// Uses multiple statistical tests to ensure the key has adequate randomness:
+    /// - Shannon entropy estimation (minimum 3.5 bits/byte for 32-byte sample)
+    /// - Unique byte count (minimum 16 unique values)
+    /// - Run length test for sequential patterns
+    /// - Two-byte pattern detection
+    ///
+    /// Note: For a 32-byte sample, the maximum theoretical Shannon entropy is ~5 bits/byte
+    /// (log2(32) when all bytes are unique). Random data typically achieves 4.5-5.0 bits/byte.
+    ///
+    /// These tests are inspired by NIST SP 800-90B entropy estimation guidelines.
     pub fn validate_entropy(&self) -> Result<()> {
         // Check for all zeros
         if self.0.iter().all(|&b| b == 0) {
@@ -56,15 +65,152 @@ impl NeuralKey {
             ));
         }
 
-        // Check for simple repeated patterns
+        // Check for simple repeated patterns (all same byte)
         let first_byte = self.0[0];
         if self.0.iter().all(|&b| b == first_byte) {
             return Err(CryptoError::InvalidInput(
-                "Neural Key has insufficient entropy".to_string(),
+                "Neural Key has insufficient entropy: repeated pattern".to_string(),
+            ));
+        }
+
+        // Shannon entropy estimation
+        // For a 32-byte sample, theoretical max is ~5 bits/byte (when all 32 are unique)
+        // Random data typically achieves 4.5-5.0 bits/byte
+        // Minimum acceptable: 3.5 bits/byte (catches low-diversity patterns)
+        let shannon_entropy = self.calculate_shannon_entropy();
+        if shannon_entropy < 3.5 {
+            return Err(CryptoError::InvalidInput(format!(
+                "Neural Key has insufficient Shannon entropy: {:.2} bits/byte (minimum 3.5)",
+                shannon_entropy
+            )));
+        }
+
+        // Unique byte count check
+        // For 32 random bytes from uniform distribution, expected unique count is ~28-30
+        // Minimum 16 catches pathological cases while avoiding false positives
+        let unique_bytes = self.count_unique_bytes();
+        if unique_bytes < 16 {
+            return Err(CryptoError::InvalidInput(format!(
+                "Neural Key has too few unique bytes: {} (minimum 16)",
+                unique_bytes
+            )));
+        }
+
+        // Run length test - detect sequential/arithmetic patterns
+        // For 32 random bytes, max run of same direction is typically 3-5
+        // Runs > 10 are highly suspicious
+        let max_run = self.calculate_max_run_length();
+        if max_run > 10 {
+            return Err(CryptoError::InvalidInput(format!(
+                "Neural Key contains suspicious sequential pattern (run length: {})",
+                max_run
+            )));
+        }
+
+        // Check for two-byte repeating patterns (e.g., 0xAB, 0xCD, 0xAB, 0xCD, ...)
+        if self.has_repeating_pattern() {
+            return Err(CryptoError::InvalidInput(
+                "Neural Key contains repeating pattern".to_string(),
             ));
         }
 
         Ok(())
+    }
+
+    /// Calculate Shannon entropy in bits per byte
+    fn calculate_shannon_entropy(&self) -> f64 {
+        let mut frequency = [0u32; 256];
+        for &byte in &self.0 {
+            frequency[byte as usize] += 1;
+        }
+
+        let len = self.0.len() as f64;
+        let mut entropy = 0.0f64;
+
+        for &count in &frequency {
+            if count > 0 {
+                let p = count as f64 / len;
+                entropy -= p * p.log2();
+            }
+        }
+
+        entropy
+    }
+
+    /// Calculate maximum run length of consecutive increasing/decreasing bytes
+    fn calculate_max_run_length(&self) -> usize {
+        if self.0.len() < 2 {
+            return 0;
+        }
+
+        let mut max_run = 1;
+        let mut current_run = 1;
+        let mut last_direction: Option<i16> = None;
+
+        for i in 1..self.0.len() {
+            let diff = self.0[i] as i16 - self.0[i - 1] as i16;
+            let direction = if diff > 0 {
+                Some(1)
+            } else if diff < 0 {
+                Some(-1)
+            } else {
+                Some(0) // Same value counts as a run
+            };
+
+            if direction == last_direction || last_direction.is_none() {
+                current_run += 1;
+            } else {
+                max_run = max_run.max(current_run);
+                current_run = 1;
+            }
+            last_direction = direction;
+        }
+
+        max_run.max(current_run)
+    }
+
+    /// Count unique bytes in the key
+    fn count_unique_bytes(&self) -> usize {
+        let mut seen = [false; 256];
+        for &byte in &self.0 {
+            seen[byte as usize] = true;
+        }
+        seen.iter().filter(|&&b| b).count()
+    }
+
+    /// Check for short repeating patterns (2-4 bytes)
+    fn has_repeating_pattern(&self) -> bool {
+        // Check for 2-byte patterns
+        if self.0.len() >= 4 {
+            let pattern = &self.0[0..2];
+            let mut all_match = true;
+            for chunk in self.0.chunks(2) {
+                if chunk.len() == 2 && chunk != pattern {
+                    all_match = false;
+                    break;
+                }
+            }
+            if all_match {
+                return true;
+            }
+        }
+
+        // Check for 4-byte patterns
+        if self.0.len() >= 8 {
+            let pattern = &self.0[0..4];
+            let mut all_match = true;
+            for chunk in self.0.chunks(4) {
+                if chunk.len() == 4 && chunk != pattern {
+                    all_match = false;
+                    break;
+                }
+            }
+            if all_match {
+                return true;
+            }
+        }
+
+        false
     }
 
     /// Compute a commitment (BLAKE3 hash) of the Neural Key.
@@ -227,5 +373,103 @@ mod tests {
 
         let repeated_key = NeuralKey::from_bytes([42u8; 32]);
         assert!(repeated_key.validate_entropy().is_err());
+    }
+
+    #[test]
+    fn test_neural_key_entropy_rejects_sequential_pattern() {
+        // Sequential bytes (0, 1, 2, 3, ...)
+        let mut sequential = [0u8; 32];
+        for i in 0..32 {
+            sequential[i] = i as u8;
+        }
+        let key = NeuralKey::from_bytes(sequential);
+        // This should be rejected due to sequential pattern
+        assert!(
+            key.validate_entropy().is_err(),
+            "Sequential pattern should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_neural_key_entropy_rejects_low_unique_bytes() {
+        // Only uses a few unique byte values (low entropy)
+        let mut low_diversity = [0u8; 32];
+        for i in 0..32 {
+            low_diversity[i] = (i % 4) as u8; // Only uses 0, 1, 2, 3
+        }
+        let key = NeuralKey::from_bytes(low_diversity);
+        assert!(
+            key.validate_entropy().is_err(),
+            "Low diversity key should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_neural_key_entropy_accepts_random_keys() {
+        // Generate many keys and ensure they all pass validation
+        for _ in 0..100 {
+            let key = NeuralKey::generate().unwrap();
+            assert!(
+                key.validate_entropy().is_ok(),
+                "Randomly generated key should pass entropy validation"
+            );
+        }
+    }
+
+    #[test]
+    fn test_neural_key_shannon_entropy_calculation() {
+        // A key with all different bytes should have maximum entropy for 32-byte sample
+        let mut all_different = [0u8; 32];
+        for i in 0..32 {
+            all_different[i] = (i * 8) as u8; // Spread across byte range
+        }
+        let key = NeuralKey::from_bytes(all_different);
+        let entropy = key.calculate_shannon_entropy();
+        // 32 unique values in 32 bytes = 5 bits/byte (log2(32))
+        assert!(
+            entropy >= 4.9,
+            "Key with 32 unique bytes should have entropy >= 4.9 (theoretical max = 5), got {}",
+            entropy
+        );
+    }
+
+    #[test]
+    fn test_neural_key_low_entropy_rejected() {
+        // A key with only 2 unique values repeated
+        let mut two_values = [0u8; 32];
+        for i in 0..32 {
+            two_values[i] = if i % 2 == 0 { 0xAA } else { 0xBB };
+        }
+        let key = NeuralKey::from_bytes(two_values);
+        // Shannon entropy = 1.0 bit/byte (log2(2)), should be rejected
+        assert!(
+            key.validate_entropy().is_err(),
+            "Key with only 2 unique values should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_neural_key_repeating_pattern_rejected() {
+        // 2-byte repeating pattern: [0xAB, 0xCD] repeated
+        let mut pattern_key = [0u8; 32];
+        for i in 0..32 {
+            pattern_key[i] = if i % 2 == 0 { 0xAB } else { 0xCD };
+        }
+        let key = NeuralKey::from_bytes(pattern_key);
+        assert!(
+            key.validate_entropy().is_err(),
+            "2-byte repeating pattern should be rejected"
+        );
+
+        // 4-byte repeating pattern
+        let mut pattern_key_4 = [0u8; 32];
+        for i in 0..32 {
+            pattern_key_4[i] = [0xDE, 0xAD, 0xBE, 0xEF][i % 4];
+        }
+        let key_4 = NeuralKey::from_bytes(pattern_key_4);
+        assert!(
+            key_4.validate_entropy().is_err(),
+            "4-byte repeating pattern should be rejected"
+        );
     }
 }
