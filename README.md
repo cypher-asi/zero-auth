@@ -31,6 +31,7 @@ A cryptographic identity and authentication service with client-controlled roots
   - [Testing](#testing)
   - [Test Coverage](#test-coverage)
 - [API Reference](#api-reference)
+- [Decentralized Identifiers (DIDs)](#decentralized-identifiers-dids)
 - [Cryptographic Standards](#cryptographic-standards)
 - [Security Properties](#security-properties)
 - [Security Auditing](#security-auditing)
@@ -91,7 +92,7 @@ See [Quantum Considerations](docs/encryption/quantum.md) for threat analysis and
 
 | Document | Description |
 |----------|-------------|
-| [Specification v0.1](docs/spec/v0.1/README.md) | Comprehensive system specification with architecture diagrams |
+| [Specification v0.1.0](docs/spec/v0.1.0/README.md) | Comprehensive system specification with architecture diagrams |
 | [API Documentation](docs/api/README.md) | REST API overview, authentication, and quick start |
 | [API v1 Reference](docs/api/v1-reference.md) | Complete endpoint documentation |
 | [API Errors](docs/api/errors.md) | Error codes and troubleshooting |
@@ -105,17 +106,17 @@ For detailed technical specifications of each component:
 
 | Spec | Crate | Description |
 |------|-------|-------------|
-| [Crypto Primitives](docs/spec/v0.1/01-crypto.md) | `zid-crypto` | Key derivation, encryption, signatures, Shamir |
-| [Storage](docs/spec/v0.1/02-storage.md) | `zid-storage` | Storage abstraction and column families |
-| [Policy Engine](docs/spec/v0.1/03-policy.md) | `zid-policy` | Rate limiting, reputation, authorization |
-| [Identity Core](docs/spec/v0.1/04-identity-core.md) | `zid-identity-core` | Identities, machines, namespaces |
-| [Integrations](docs/spec/v0.1/05-integrations.md) | `zid-integrations` | mTLS auth, SSE streaming, webhooks |
-| [Sessions](docs/spec/v0.1/06-sessions.md) | `zid-sessions` | JWT issuance, refresh tokens |
-| [Auth Methods](docs/spec/v0.1/07-methods.md) | `zid-methods` | Machine, email, OAuth, wallet, MFA |
-| [Server](docs/spec/v0.1/08-server.md) | `zid-server` | HTTP API endpoints and middleware |
-| [Client](docs/spec/v0.1/09-client.md) | `zid-client` | CLI commands and workflows |
-| [System Overview](docs/spec/v0.1/10-system-overview.md) | — | Architecture and data flows |
-| [Crypto Primitives Deep Dive](docs/spec/v0.1/11-crypto-primitives.md) | — | Algorithms and binary formats |
+| [Crypto Primitives](docs/spec/v0.1.0/01-crypto.md) | `zid-crypto` | Key derivation, encryption, signatures, Shamir, DIDs |
+| [Storage](docs/spec/v0.1.0/02-storage.md) | `zid-storage` | Storage abstraction and column families |
+| [Policy Engine](docs/spec/v0.1.0/03-policy.md) | `zid-policy` | Rate limiting, reputation, authorization |
+| [Identity Core](docs/spec/v0.1.0/04-identity-core.md) | `zid-identity-core` | Identities, machines, namespaces |
+| [Integrations](docs/spec/v0.1.0/05-integrations.md) | `zid-integrations` | mTLS auth, SSE streaming, webhooks |
+| [Sessions](docs/spec/v0.1.0/06-sessions.md) | `zid-sessions` | JWT issuance, refresh tokens |
+| [Auth Methods](docs/spec/v0.1.0/07-methods.md) | `zid-methods` | Machine, email, OAuth, wallet, MFA |
+| [Server](docs/spec/v0.1.0/08-server.md) | `zid-server` | HTTP API endpoints and middleware |
+| [Client](docs/spec/v0.1.0/09-client.md) | `zid-client` | CLI commands and workflows |
+| [System Overview](docs/spec/v0.1.0/10-system-overview.md) | — | Architecture and data flows |
+| [Crypto Primitives Deep Dive](docs/spec/v0.1.0/11-crypto-primitives.md) | — | Algorithms and binary formats |
 
 ## Overview
 
@@ -487,7 +488,7 @@ The system is composed of modular crates:
 
 | Crate | Purpose |
 |-------|---------|
-| `zid-crypto` | Cryptographic primitives (Ed25519, X25519, XChaCha20-Poly1305, HKDF, Argon2id) |
+| `zid-crypto` | Cryptographic primitives (Ed25519, X25519, XChaCha20-Poly1305, HKDF, Argon2id, DIDs) |
 | `zid-storage` | RocksDB abstraction layer with column families on server |
 | `zid-policy` | Policy engine for authorization and rate limiting |
 | `zid-identity-core` | Identity and Machine Key management |
@@ -770,6 +771,54 @@ if let Some(pq_enc_pk) = keypair.pq_encryption_public_key() {
 ```
 
 See [Quantum Considerations](docs/encryption/quantum.md) for migration strategy and threat analysis.
+
+## Decentralized Identifiers (DIDs)
+
+zid supports the W3C `did:key` method for representing Ed25519 public keys as Decentralized Identifiers. This provides interoperability with the broader decentralized identity ecosystem.
+
+### DID Format
+
+Identity and Machine public keys can be represented as `did:key` identifiers:
+
+```
+did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK
+       │    └── Base58btc-encoded (multicodec prefix + public key)
+       └── Multibase prefix (z = base58btc)
+```
+
+The encoding follows the [did:key specification](https://w3c-ccg.github.io/did-method-key/):
+
+1. Prepend multicodec prefix `0xed01` (Ed25519 public key)
+2. Encode with base58btc
+3. Prepend multibase prefix `z`
+4. Prepend `did:key:`
+
+### Usage
+
+```rust
+use zid_crypto::{ed25519_to_did_key, did_key_to_ed25519, is_valid_ed25519_did_key};
+
+// Convert public key to DID
+let public_key: [u8; 32] = /* ... */;
+let did = ed25519_to_did_key(&public_key);
+// => "did:key:z6Mk..."
+
+// Parse DID back to public key
+let recovered_key = did_key_to_ed25519(&did)?;
+assert_eq!(public_key, recovered_key);
+
+// Validate a DID string
+if is_valid_ed25519_did_key(&did) {
+    // Valid Ed25519 did:key
+}
+```
+
+### Use Cases
+
+- **Interoperability**: Share identity public keys with external systems using standard DID format
+- **Verifiable Credentials**: Issue and verify credentials using `did:key` as the issuer/subject
+- **Cross-system Identity**: Reference zid identities in systems that support DIDs
+- **Key Discovery**: Derive the public key directly from the DID without network lookups
 
 ## Security Properties
 

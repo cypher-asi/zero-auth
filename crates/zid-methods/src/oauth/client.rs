@@ -5,7 +5,13 @@ use crate::oauth::config::OAuthConfig;
 use crate::oauth::types::{OAuthTokenResponse, OAuthUserInfo};
 use reqwest::Client;
 use std::collections::HashMap;
+use std::time::Duration;
 use url::Url;
+
+/// Default timeout for HTTP requests (30 seconds)
+const DEFAULT_TIMEOUT_SECS: u64 = 30;
+/// Default connection timeout (10 seconds)
+const CONNECT_TIMEOUT_SECS: u64 = 10;
 
 /// OAuth client for provider interactions
 pub struct OAuthClient {
@@ -13,11 +19,15 @@ pub struct OAuthClient {
 }
 
 impl OAuthClient {
-    /// Create a new OAuth client
+    /// Create a new OAuth client with default timeouts
     pub fn new() -> Self {
-        Self {
-            http_client: Client::new(),
-        }
+        let http_client = Client::builder()
+            .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
+            .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
+            .build()
+            .unwrap_or_else(|_| Client::new()); // Fallback to default if builder fails
+
+        Self { http_client }
     }
 
     /// Build authorization URL

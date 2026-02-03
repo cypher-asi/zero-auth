@@ -5,7 +5,7 @@ use uuid::Uuid;
 use zid_sessions::SessionManager;
 
 use crate::{
-    error::{map_service_error, ApiError},
+    error::{ApiError, MapServiceErr},
     extractors::AuthenticatedUser,
     state::AppState,
 };
@@ -85,7 +85,7 @@ pub async fn refresh_session(
         .session_service
         .refresh_session(req.refresh_token, req.session_id, req.machine_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     let expires_at_ts = chrono::Utc::now().timestamp() as u64 + result.expires_in;
 
@@ -108,7 +108,7 @@ pub async fn revoke_session(
         .session_service
         .get_session(req.session_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     if session.identity_id != identity_id {
         return Err(ApiError::Forbidden(
@@ -121,7 +121,7 @@ pub async fn revoke_session(
         .session_service
         .revoke_session(req.session_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -141,7 +141,7 @@ pub async fn revoke_all_sessions(
         .session_service
         .revoke_all_sessions(identity_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -239,7 +239,7 @@ pub async fn jwks_endpoint(
         .session_service
         .get_jwks()
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     // Convert to response format
     let keys = jwks

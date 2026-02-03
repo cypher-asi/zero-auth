@@ -13,7 +13,7 @@ use uuid::Uuid;
 use zid_identity_core::{IdentityCore, NamespaceRole};
 
 use crate::{
-    error::{map_service_error, ApiError},
+    error::{ApiError, MapServiceErr},
     extractors::AuthenticatedUser,
     state::AppState,
 };
@@ -114,7 +114,7 @@ pub async fn create_namespace(
         .identity_service
         .create_namespace(namespace_id, req.name, owner_identity_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     let created_at = format_timestamp_rfc3339(namespace.created_at)?;
 
@@ -141,7 +141,7 @@ pub async fn list_namespaces(
         .identity_service
         .list_namespaces(identity_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     let namespace_responses: Result<Vec<_>, ApiError> = namespaces
         .into_iter()
@@ -174,7 +174,7 @@ pub async fn get_namespace(
         .identity_service
         .get_namespace_membership(requester_id, namespace_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     if membership.is_none() {
         return Err(ApiError::Forbidden(
@@ -186,7 +186,7 @@ pub async fn get_namespace(
         .identity_service
         .get_namespace(namespace_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     let created_at = format_timestamp_rfc3339(namespace.created_at)?;
 
@@ -212,7 +212,7 @@ pub async fn update_namespace(
         .identity_service
         .update_namespace(namespace_id, req.name, requester_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     let created_at = format_timestamp_rfc3339(namespace.created_at)?;
 
@@ -237,7 +237,7 @@ pub async fn deactivate_namespace(
         .identity_service
         .deactivate_namespace(namespace_id, requester_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -254,7 +254,7 @@ pub async fn reactivate_namespace(
         .identity_service
         .reactivate_namespace(namespace_id, requester_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -271,7 +271,7 @@ pub async fn delete_namespace(
         .identity_service
         .delete_namespace(namespace_id, requester_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -292,7 +292,7 @@ pub async fn list_members(
         .identity_service
         .list_namespace_members(namespace_id, requester_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     let member_responses: Result<Vec<_>, ApiError> = members
         .into_iter()
@@ -325,7 +325,7 @@ pub async fn add_member(
         .identity_service
         .add_namespace_member(namespace_id, req.identity_id, role, requester_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     let joined_at = format_timestamp_rfc3339(membership.joined_at)?;
 
@@ -361,7 +361,7 @@ pub async fn update_member(
         .identity_service
         .update_namespace_member(params.namespace_id, params.identity_id, role, requester_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     let joined_at = format_timestamp_rfc3339(membership.joined_at)?;
 
@@ -385,7 +385,7 @@ pub async fn remove_member(
         .identity_service
         .remove_namespace_member(params.namespace_id, params.identity_id, requester_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(StatusCode::NO_CONTENT)
 }

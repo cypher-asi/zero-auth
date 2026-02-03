@@ -18,6 +18,7 @@
 
 pub mod constants;
 pub mod derivation;
+pub mod did;
 pub mod encryption;
 pub mod errors;
 pub mod hashing;
@@ -28,6 +29,7 @@ pub mod utils;
 
 pub use constants::*;
 pub use derivation::*;
+pub use did::{did_key_to_ed25519, ed25519_to_did_key, is_valid_ed25519_did_key};
 pub use encryption::*;
 pub use errors::CryptoError;
 pub use hashing::*;

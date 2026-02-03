@@ -5,6 +5,9 @@
 /// Identity records: identity_id → Identity
 pub const CF_IDENTITIES: &str = "identities";
 
+/// Identities by DID index: did_string → identity_id
+pub const CF_IDENTITIES_BY_DID: &str = "identities_by_did";
+
 /// Machine keys: machine_id → MachineKey
 pub const CF_MACHINE_KEYS: &str = "machine_keys";
 
@@ -106,6 +109,7 @@ pub const CF_REPUTATION: &str = "reputation";
 pub fn all_column_families() -> Vec<&'static str> {
     vec![
         CF_IDENTITIES,
+        CF_IDENTITIES_BY_DID,
         CF_MACHINE_KEYS,
         CF_MACHINE_KEYS_BY_IDENTITY,
         CF_MACHINE_KEYS_BY_NAMESPACE,

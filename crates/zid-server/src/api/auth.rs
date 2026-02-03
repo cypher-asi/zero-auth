@@ -6,17 +6,14 @@ use base64::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
-use zid_identity_core::IdentityCore;
 use zid_methods::{
     AuthMethods, ChallengeRequest, ChallengeResponse as AuthChallengeResponse, EmailAuthRequest,
     OAuthCompleteRequest as AuthOAuthCompleteRequest,
 };
-use zid_sessions::SessionManager;
 
-use super::helpers::format_timestamp_rfc3339;
+use super::helpers::{create_login_session, format_timestamp_rfc3339, hash_for_log, parse_oauth_provider};
 use crate::{
-    api::helpers::{hash_for_log, parse_oauth_provider},
-    error::{map_service_error, ApiError},
+    error::{map_service_error, ApiError, MapServiceErr},
     state::AppState,
 };
 
@@ -100,7 +97,7 @@ pub async fn get_challenge(
         .auth_service
         .create_challenge(request)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     // Serialize the challenge to canonical form
     let challenge_bytes =
@@ -157,38 +154,7 @@ pub async fn login_machine(
             map_service_error(anyhow::anyhow!(e))
         })?;
 
-    // Get machine key to extract capabilities
-    let machine = state
-        .identity_service
-        .get_machine_key(req.machine_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Failed to get machine key");
-            map_service_error(anyhow::anyhow!(e))
-        })?;
-
-    // Create session with machine capabilities
-    let session = state
-        .session_service
-        .create_session(
-            auth_result.identity_id,
-            req.machine_id,
-            auth_result.namespace_id,
-            auth_result.mfa_verified,
-            machine.capabilities.to_string_vec(),
-            vec!["default".to_string()], // Default scope
-        )
-        .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
-
-    Ok(Json(LoginResponse {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        session_id: session.session_id,
-        machine_id: req.machine_id,
-        expires_at: format_expires_at(session.expires_in)?,
-        warning: None,
-    }))
+    Ok(Json(create_login_session(&state, &auth_result).await?))
 }
 
 /// POST /v1/auth/login/email
@@ -231,41 +197,7 @@ pub async fn login_email(
             map_service_error(anyhow::anyhow!(e))
         })?;
 
-    let machine_id = auth_result.machine_id;
-    let warning = auth_result.warning.clone();
-
-    // Get machine key to extract capabilities
-    let machine = state
-        .identity_service
-        .get_machine_key(machine_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Failed to get machine key");
-            map_service_error(anyhow::anyhow!(e))
-        })?;
-
-    // Create session with machine capabilities
-    let session = state
-        .session_service
-        .create_session(
-            auth_result.identity_id,
-            machine_id,
-            auth_result.namespace_id,
-            auth_result.mfa_verified,
-            machine.capabilities.to_string_vec(),
-            vec!["default".to_string()], // Default scope
-        )
-        .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
-
-    Ok(Json(LoginResponse {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        session_id: session.session_id,
-        machine_id,
-        expires_at: format_expires_at(session.expires_in)?,
-        warning,
-    }))
+    Ok(Json(create_login_session(&state, &auth_result).await?))
 }
 
 /// GET /v1/auth/oauth/:provider
@@ -281,7 +213,7 @@ pub async fn oauth_initiate(
         .auth_service
         .oauth_initiate_login(provider)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(Json(OAuthInitiateResponse {
         authorization_url: response.auth_url,
@@ -314,52 +246,7 @@ pub async fn oauth_complete(
             ctx.user_agent.clone(),
         )
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
-    let machine_id = auth_result.machine_id;
-    let warning = auth_result.warning.clone();
-
-    // Get machine key to extract capabilities
-    let machine = state
-        .identity_service
-        .get_machine_key(machine_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Failed to get machine key");
-            map_service_error(anyhow::anyhow!(e))
-        })?;
-
-    // Create session with machine capabilities
-    let session = state
-        .session_service
-        .create_session(
-            auth_result.identity_id,
-            machine_id,
-            auth_result.namespace_id,
-            auth_result.mfa_verified,
-            machine.capabilities.to_string_vec(),
-            vec!["default".to_string()], // Default scope
-        )
-        .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
-
-    Ok(Json(LoginResponse {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        session_id: session.session_id,
-        machine_id,
-        expires_at: format_expires_at(session.expires_in)?,
-        warning,
-    }))
-}
-
-/// Format expires_at timestamp from expires_in seconds
-fn format_expires_at(expires_in: u64) -> Result<String, ApiError> {
-    let now = chrono::Utc::now().timestamp();
-    let expires_in = expires_in as i64;
-    let expires_at = now
-        .checked_add(expires_in)
-        .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("Timestamp overflow")))?;
-
-    format_timestamp_rfc3339(expires_at as u64)
+    Ok(Json(create_login_session(&state, &auth_result).await?))
 }

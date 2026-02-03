@@ -5,6 +5,7 @@
 use anyhow::{Context, Result};
 use colored::*;
 
+use super::create_http_client;
 use crate::storage::{load_credentials, load_session, save_session};
 use crate::types::{IntrospectResponse, RefreshResponse, SessionData};
 
@@ -49,7 +50,7 @@ async fn introspect_token(server: &str, token: &str) -> Result<IntrospectRespons
         "Validating token via introspection endpoint...".yellow()
     );
 
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let request = serde_json::json!({
         "token": token,
         "operation_type": "protected"
@@ -105,7 +106,7 @@ async fn send_refresh_request(
 ) -> Result<RefreshResponse> {
     println!("\n{}", "Refreshing access token...".yellow());
 
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let request = serde_json::json!({
         "refresh_token": session.refresh_token,
         "session_id": session.session_id,

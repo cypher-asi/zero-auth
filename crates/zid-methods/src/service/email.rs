@@ -167,16 +167,19 @@ where
         };
 
         // Check authentication result
-        if !password_valid || credential.is_none() {
-            // Record failed attempt if we have a credential (email exists)
-            if let Some(ref cred) = credential {
+        match (password_valid, credential) {
+            (true, Some(cred)) => Ok(cred),
+            (_, Some(cred)) => {
+                // Password invalid but email exists - record failed attempt
                 self.record_failed_attempt(cred.identity_id).await?;
+                // Return generic error (don't reveal if email exists)
+                Err(AuthMethodsError::InvalidCredentials)
             }
-            // Return generic error (don't reveal if email exists)
-            return Err(AuthMethodsError::InvalidCredentials);
+            (_, None) => {
+                // Email doesn't exist - return generic error
+                Err(AuthMethodsError::InvalidCredentials)
+            }
         }
-
-        Ok(credential.unwrap())
     }
 
     /// Check identity status and MFA requirement (helper for authenticate_email).

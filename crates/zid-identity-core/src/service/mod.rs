@@ -7,6 +7,9 @@ mod managed;
 mod namespace;
 mod upgrade;
 
+#[cfg(test)]
+mod namespace_tests;
+
 // Re-export managed identity types
 pub use managed::{CreateManagedIdentityRequest, CreateManagedIdentityResponse};
 
@@ -159,6 +162,10 @@ where
 
     async fn get_identity(&self, identity_id: Uuid) -> Result<Identity> {
         self.get_identity_internal(identity_id).await
+    }
+
+    async fn get_identity_by_did(&self, did: &str) -> Result<Identity> {
+        self.get_identity_by_did_internal(did).await
     }
 
     async fn disable_identity(&self, identity_id: Uuid) -> Result<()> {

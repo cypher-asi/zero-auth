@@ -5,6 +5,7 @@
 use anyhow::{Context, Result};
 use colored::*;
 
+use super::create_http_client;
 use crate::storage::{load_credentials, load_session};
 use crate::types::AddCredentialResponse;
 
@@ -65,7 +66,7 @@ async fn send_add_email_request(
 ) -> Result<AddCredentialResponse> {
     println!("\n{}", "Step 2: Sending request to server...".yellow());
 
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let request = serde_json::json!({
         "email": email,
         "password": password

@@ -10,6 +10,7 @@ use zid_crypto::{
     sign_message, KeyScheme, MachineKeyCapabilities, NeuralKey,
 };
 
+use super::create_http_client;
 use crate::storage::{
     load_and_reconstruct_neural_key, load_credentials, load_session, prompt_neural_shard,
     prompt_passphrase,
@@ -196,7 +197,7 @@ async fn send_enrollment_request(
         request_body["pq_encryption_public_key"] = serde_json::json!(hex::encode(pq_enc_pk));
     }
 
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let response = client
         .post(format!("{}/v1/machines/enroll", server))
         .header("Authorization", format!("Bearer {}", access_token))
@@ -247,7 +248,7 @@ async fn fetch_machines(
 ) -> Result<ListMachinesResponse> {
     println!("\n{}", "Fetching machines...".yellow());
 
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let response = client
         .get(format!(
             "{}/v1/machines?namespace_id={}",
@@ -322,7 +323,7 @@ async fn send_revocation_request(
     println!("  Machine ID: {}", machine_id);
     println!("  Reason: {}", reason);
 
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let response = client
         .delete(format!("{}/v1/machines/{}", server, machine_id))
         .header("Authorization", format!("Bearer {}", access_token))

@@ -7,12 +7,23 @@ use crate::oauth::types::OAuthProvider;
 use reqwest::Client;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use zid_crypto::current_timestamp;
 
+/// Default timeout for JWKS requests (30 seconds)
+const DEFAULT_TIMEOUT_SECS: u64 = 30;
+/// Default connection timeout (10 seconds)
+const CONNECT_TIMEOUT_SECS: u64 = 10;
+
 /// Fetch JWKS from provider
 pub async fn fetch_jwks(jwks_uri: &str) -> Result<JwksKeySet> {
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
+        .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| AuthMethodsError::OAuthProviderError(format!("HTTP client error: {}", e)))?;
+
     let jwks: JwksKeySet = client
         .get(jwks_uri)
         .send()

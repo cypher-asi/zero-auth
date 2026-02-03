@@ -9,13 +9,15 @@ use uuid::Uuid;
 use zid_identity_core::{IdentityCore, MachineKey};
 
 use crate::{
-    error::{map_service_error, ApiError},
+    error::{ApiError, MapServiceErr},
     extractors::AuthenticatedUser,
     state::AppState,
 };
 
-use super::helpers::{format_timestamp_rfc3339, parse_capabilities, parse_hex_32, parse_hex_64, parse_key_scheme, parse_pq_signing_key, parse_pq_encryption_key};
-use zid_crypto::KeyScheme;
+use super::helpers::{
+    format_timestamp_rfc3339, parse_capabilities, parse_hex_32, parse_hex_64, parse_key_scheme,
+    parse_pq_keys,
+};
 
 // ============================================================================
 // Request/Response Types
@@ -99,23 +101,12 @@ pub async fn enroll_machine(
     // Parse key scheme (default to classical)
     let key_scheme = parse_key_scheme(req.key_scheme.as_deref())?;
 
-    // Parse PQ keys if scheme is pq_hybrid
-    let (pq_signing_public_key, pq_encryption_public_key) = match key_scheme {
-        KeyScheme::Classical => (None, None),
-        KeyScheme::PqHybrid => {
-            let pq_sign = req.pq_signing_public_key.as_ref()
-                .ok_or_else(|| crate::error::ApiError::InvalidRequest(
-                    "pq_signing_public_key required for pq_hybrid scheme".to_string()
-                ))
-                .and_then(|s| parse_pq_signing_key(s))?;
-            let pq_enc = req.pq_encryption_public_key.as_ref()
-                .ok_or_else(|| crate::error::ApiError::InvalidRequest(
-                    "pq_encryption_public_key required for pq_hybrid scheme".to_string()
-                ))
-                .and_then(|s| parse_pq_encryption_key(s))?;
-            (Some(pq_sign), Some(pq_enc))
-        }
-    };
+    // Parse PQ keys based on key scheme
+    let (pq_signing_public_key, pq_encryption_public_key) = parse_pq_keys(
+        key_scheme,
+        req.pq_signing_public_key.as_ref(),
+        req.pq_encryption_public_key.as_ref(),
+    )?;
 
     // Default namespace to personal namespace if not provided
     let namespace_id = req.namespace_id.unwrap_or(identity_id);
@@ -153,17 +144,12 @@ pub async fn enroll_machine(
             ctx.user_agent,
         )
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
-
-    let key_scheme_str = match key_scheme {
-        KeyScheme::Classical => "classical",
-        KeyScheme::PqHybrid => "pq_hybrid",
-    };
+        .map_svc_err()?;
 
     Ok(Json(EnrollMachineResponse {
         machine_id,
         namespace_id,
-        key_scheme: key_scheme_str.to_string(),
+        key_scheme: key_scheme.as_str().to_string(),
         enrolled_at: chrono::Utc::now().to_rfc3339(),
     }))
 }
@@ -182,19 +168,13 @@ pub async fn list_machines(
         .identity_service
         .list_machines(identity_id, namespace_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     let machine_infos: Result<Vec<_>, ApiError> = machines
         .into_iter()
         .map(|m| {
             let created_at = format_timestamp_rfc3339(m.created_at)?;
-
             let last_used_at = m.last_used_at.map(format_timestamp_rfc3339).transpose()?;
-
-            let key_scheme_str = match m.key_scheme {
-                KeyScheme::Classical => "classical",
-                KeyScheme::PqHybrid => "pq_hybrid",
-            };
             let has_pq_keys = m.pq_signing_public_key.is_some() && m.pq_encryption_public_key.is_some();
 
             Ok(MachineInfo {
@@ -204,7 +184,7 @@ pub async fn list_machines(
                 created_at,
                 last_used_at,
                 revoked: m.revoked,
-                key_scheme: key_scheme_str.to_string(),
+                key_scheme: m.key_scheme.as_str().to_string(),
                 has_pq_keys,
             })
         })
@@ -239,7 +219,7 @@ pub async fn revoke_machine(
             ctx.user_agent,
         )
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(StatusCode::NO_CONTENT)
 }

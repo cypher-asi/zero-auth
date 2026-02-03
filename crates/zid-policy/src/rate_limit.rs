@@ -1,12 +1,24 @@
 //! Rate limiting implementation.
 
-use crate::types::RateLimit;
+use crate::{errors::PolicyError, types::RateLimit};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 /// Rate limiter for tracking attempts per identity/IP
 pub struct RateLimiter {
     limits: Arc<Mutex<HashMap<String, LimitState>>>,
+}
+
+/// Helper to handle mutex lock with poison recovery
+fn lock_limits(
+    mutex: &Mutex<HashMap<String, LimitState>>,
+) -> Result<MutexGuard<'_, HashMap<String, LimitState>>, PolicyError> {
+    mutex.lock().or_else(|poisoned| {
+        // Recover the guard from the poisoned mutex - the data is still accessible
+        // Log this in production but continue operating
+        tracing::warn!("Rate limiter mutex was poisoned, recovering");
+        Ok(poisoned.into_inner())
+    })
 }
 
 const MAX_ENTRIES: usize = 10_000;
@@ -38,7 +50,10 @@ impl RateLimiter {
         max_attempts: u32,
         current_time: u64,
     ) -> Option<RateLimit> {
-        let mut limits = self.limits.lock().unwrap();
+        let mut limits = match lock_limits(&self.limits) {
+            Ok(guard) => guard,
+            Err(_) => return None, // If lock is poisoned, deny requests as a safety measure
+        };
 
         let rate_limit = {
             let state = limits.entry(key.to_string()).or_insert(LimitState {
@@ -86,7 +101,10 @@ impl RateLimiter {
         max_attempts: u32,
         current_time: u64,
     ) {
-        let mut limits = self.limits.lock().unwrap();
+        let mut limits = match lock_limits(&self.limits) {
+            Ok(guard) => guard,
+            Err(_) => return, // If lock is poisoned, skip recording but don't panic
+        };
 
         {
             let state = limits.entry(key.to_string()).or_insert(LimitState {
@@ -113,15 +131,17 @@ impl RateLimiter {
 
     /// Reset rate limit for a key
     pub fn reset(&self, key: &str) {
-        let mut limits = self.limits.lock().unwrap();
-        limits.remove(key);
+        if let Ok(mut limits) = lock_limits(&self.limits) {
+            limits.remove(key);
+        }
     }
 
     /// Clear all rate limits (for testing)
     #[cfg(test)]
     pub fn clear(&self) {
-        let mut limits = self.limits.lock().unwrap();
-        limits.clear();
+        if let Ok(mut limits) = lock_limits(&self.limits) {
+            limits.clear();
+        }
     }
 }
 

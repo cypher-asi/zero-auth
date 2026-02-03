@@ -174,33 +174,16 @@ pub enum RevocationEventType {
     IdentityFrozen,
 }
 
-// Re-export current_timestamp from zid-crypto
-pub use zid_crypto::current_timestamp;
+// Re-export utilities from zid-crypto
+pub use zid_crypto::{base64_url_decode, base64_url_encode, current_timestamp, generate_random_bytes};
 
-/// Helper function to compute SHA256 hash
+/// Helper function to compute SHA256 hash.
+///
+/// Note: This uses SHA256 rather than BLAKE3 because JWT tokens require SHA256
+/// for compatibility with standard JWT libraries and validators.
 pub fn sha256(data: &[u8]) -> [u8; 32] {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(data);
     hasher.finalize().into()
-}
-
-/// Helper function to generate random bytes
-pub fn generate_random_bytes<const N: usize>() -> [u8; N] {
-    use rand::RngCore;
-    let mut bytes = [0u8; N];
-    rand::thread_rng().fill_bytes(&mut bytes);
-    bytes
-}
-
-/// Helper function to base64url encode (no padding)
-pub fn base64_url_encode(data: &[u8]) -> String {
-    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-    URL_SAFE_NO_PAD.encode(data)
-}
-
-/// Helper function to base64url decode
-pub fn base64_url_decode(data: &str) -> Result<Vec<u8>, String> {
-    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-    URL_SAFE_NO_PAD.decode(data).map_err(|e| e.to_string())
 }

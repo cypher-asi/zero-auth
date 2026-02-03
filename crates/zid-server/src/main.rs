@@ -162,6 +162,11 @@ fn create_router(state: Arc<AppState>) -> Router {
         .route("/ready", get(api::health::readiness_check))
         // Identity management (self-sovereign creation)
         .route("/v1/identity", post(api::identity::create_identity))
+        // DID lookup (must come before :identity_id to avoid matching)
+        .route(
+            "/v1/identity/did/*did",
+            get(api::identity::get_identity_by_did),
+        )
         .route(
             "/v1/identity/:identity_id",
             get(api::identity::get_identity),

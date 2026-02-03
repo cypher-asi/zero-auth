@@ -14,6 +14,7 @@ use zid_crypto::{
     MachineKeyCapabilities, NeuralKey, NeuralShard,
 };
 
+use super::create_http_client;
 use crate::storage::{prompt_new_passphrase, save_credentials_with_shards};
 
 /// Recover Neural Key from Neural Shards.
@@ -174,7 +175,7 @@ async fn create_new_identity(
         "created_at": created_at
     });
 
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let response = client
         .post(format!("{}/v1/identity", server))
         .json(&request)
@@ -257,26 +258,34 @@ async fn recover_existing_identity(
     println!();
     println!("{}", "Step 6: Verifying identity...".yellow());
 
-    let client = reqwest::Client::new();
-    let response = client
-        .get(format!("{}/v1/identity/{}", server, identity_id))
-        .send()
-        .await;
-
-    match response {
-        Ok(resp) if resp.status().is_success() => {
-            println!("{}", "✓ Identity verified on server".green());
-        }
-        Ok(resp) => {
-            println!(
-                "{}",
-                format!("⚠ Could not verify identity: {}", resp.status()).yellow()
-            );
+    match create_http_client() {
+        Ok(client) => {
+            match client
+                .get(format!("{}/v1/identity/{}", server, identity_id))
+                .send()
+                .await
+            {
+                Ok(resp) if resp.status().is_success() => {
+                    println!("{}", "✓ Identity verified on server".green());
+                }
+                Ok(resp) => {
+                    println!(
+                        "{}",
+                        format!("⚠ Could not verify identity: {}", resp.status()).yellow()
+                    );
+                }
+                Err(e) => {
+                    println!(
+                        "{}",
+                        format!("⚠ Could not connect to server: {}", e).yellow()
+                    );
+                }
+            }
         }
         Err(e) => {
             println!(
                 "{}",
-                format!("⚠ Could not connect to server: {}", e).yellow()
+                format!("⚠ Could not create HTTP client: {}", e).yellow()
             );
         }
     }

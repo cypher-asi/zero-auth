@@ -3,11 +3,12 @@
 use crate::{errors::*, traits::EventPublisher, types::*};
 use tracing::info;
 use uuid::Uuid;
-use zid_crypto::{canonicalize_identity_creation_message, verify_signature};
+use zid_crypto::{canonicalize_identity_creation_message, ed25519_to_did_key, verify_signature};
 use zid_policy::PolicyEngine;
 use zid_storage::{
-    traits::BatchExt, Storage, CF_IDENTITIES, CF_IDENTITY_NAMESPACE_MEMBERSHIPS, CF_MACHINE_KEYS,
-    CF_MACHINE_KEYS_BY_IDENTITY, CF_NAMESPACES, CF_NAMESPACES_BY_IDENTITY,
+    traits::BatchExt, Storage, CF_IDENTITIES, CF_IDENTITIES_BY_DID,
+    CF_IDENTITY_NAMESPACE_MEMBERSHIPS, CF_MACHINE_KEYS, CF_MACHINE_KEYS_BY_IDENTITY, CF_NAMESPACES,
+    CF_NAMESPACES_BY_IDENTITY,
 };
 
 use super::IdentityCoreService;
@@ -40,6 +41,21 @@ where
             .get(CF_IDENTITIES, &identity_id)
             .await?
             .ok_or(IdentityCoreError::NotFound(identity_id))
+    }
+
+    /// Get an identity by its DID (did:key:...)
+    pub(crate) async fn get_identity_by_did_internal(&self, did: &str) -> Result<Identity> {
+        // Look up identity_id from DID index
+        let identity_id: Uuid = self
+            .storage
+            .get(CF_IDENTITIES_BY_DID, &did.to_string())
+            .await?
+            .ok_or_else(|| {
+                IdentityCoreError::Other(format!("Identity not found for DID: {}", did))
+            })?;
+
+        // Fetch the full identity record
+        self.get_identity_internal(identity_id).await
     }
 
     /// Disable an identity
@@ -205,8 +221,12 @@ where
     fn build_identity_entities(
         request: &CreateIdentityRequest,
     ) -> (Identity, Namespace, IdentityNamespaceMembership) {
+        // Compute DID from identity signing public key
+        let did = ed25519_to_did_key(&request.identity_signing_public_key);
+
         let identity = Identity {
             identity_id: request.identity_id,
+            did,
             identity_signing_public_key: request.identity_signing_public_key,
             status: IdentityStatus::Active,
             tier: IdentityTier::SelfSovereign, // Traditional creation is self-sovereign
@@ -248,6 +268,11 @@ where
         let mut batch = self.storage.batch();
 
         batch.put(CF_IDENTITIES, &identity.identity_id, identity)?;
+
+        // Add DID index for lookup by DID
+        if !identity.did.is_empty() {
+            batch.put(CF_IDENTITIES_BY_DID, &identity.did, &identity.identity_id)?;
+        }
         batch.put(CF_NAMESPACES, &namespace.namespace_id, namespace)?;
 
         let membership_key = (identity.identity_id, namespace.namespace_id);

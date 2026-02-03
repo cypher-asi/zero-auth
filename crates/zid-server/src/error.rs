@@ -140,6 +140,20 @@ impl IntoResponse for ApiError {
     }
 }
 
+/// Trait extension for concise error mapping in API handlers.
+///
+/// Instead of `.map_err(|e| map_service_error(anyhow::anyhow!(e)))?`
+/// you can use `.map_svc_err()?`
+pub trait MapServiceErr<T> {
+    fn map_svc_err(self) -> Result<T, ApiError>;
+}
+
+impl<T, E: std::error::Error + Send + Sync + 'static> MapServiceErr<T> for Result<T, E> {
+    fn map_svc_err(self) -> Result<T, ApiError> {
+        self.map_err(|e| map_service_error(anyhow::anyhow!(e)))
+    }
+}
+
 /// Helper to convert service errors to API errors
 pub fn map_service_error(error: anyhow::Error) -> ApiError {
     // Try to downcast to specific error types first

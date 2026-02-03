@@ -214,6 +214,7 @@ mod tests {
     fn create_test_managed_identity(identity_id: Uuid, isk_public: [u8; 32]) -> Identity {
         Identity {
             identity_id,
+            did: String::new(), // Empty for test
             identity_signing_public_key: isk_public,
             status: IdentityStatus::Active,
             tier: IdentityTier::Managed,

@@ -2,17 +2,12 @@
 
 use axum::{extract::State, response::Json};
 use std::sync::Arc;
-use uuid::Uuid;
-use zid_identity_core::IdentityCore;
-use zid_sessions::SessionManager;
 
-use crate::{
-    error::{map_service_error, ApiError},
-    state::AppState,
-};
+use crate::error::{ApiError, MapServiceErr};
+use crate::state::AppState;
 
 use super::auth::{LoginResponse, WalletLoginRequest};
-use super::helpers::format_timestamp_rfc3339;
+use super::helpers::create_login_session;
 
 /// POST /v1/auth/login/wallet
 pub async fn login_wallet(
@@ -135,22 +130,14 @@ fn verify_evm_signature(
     Ok(())
 }
 
-/// Wallet authentication result
-struct WalletAuthResult {
-    identity_id: Uuid,
-    machine_id: Uuid,
-    namespace_id: Uuid,
-    mfa_verified: bool,
-}
-
 /// Authenticate with wallet service
 async fn authenticate_wallet(
     state: &Arc<AppState>,
     req: &WalletLoginRequest,
     ctx: &crate::request_context::RequestContext,
-) -> Result<WalletAuthResult, ApiError> {
+) -> Result<zid_methods::AuthResult, ApiError> {
     // Use message-based authentication - signature already verified by caller
-    let auth_result = state
+    state
         .auth_service
         .authenticate_wallet_by_address(
             req.wallet_address.clone(),
@@ -159,58 +146,13 @@ async fn authenticate_wallet(
             ctx.user_agent.clone(),
         )
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
-
-    Ok(WalletAuthResult {
-        identity_id: auth_result.identity_id,
-        machine_id: auth_result.machine_id,
-        namespace_id: auth_result.namespace_id,
-        mfa_verified: auth_result.mfa_verified,
-    })
+        .map_svc_err()
 }
 
 /// Create session for authenticated wallet user
 async fn create_wallet_session(
     state: &Arc<AppState>,
-    auth_result: &WalletAuthResult,
+    auth_result: &zid_methods::AuthResult,
 ) -> Result<Json<LoginResponse>, ApiError> {
-    // Get machine key to extract capabilities
-    let machine = state
-        .identity_service
-        .get_machine_key(auth_result.machine_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Failed to get machine key");
-            map_service_error(anyhow::anyhow!(e))
-        })?;
-
-    // Create session with machine capabilities
-    let session = state
-        .session_service
-        .create_session(
-            auth_result.identity_id,
-            auth_result.machine_id,
-            auth_result.namespace_id,
-            auth_result.mfa_verified,
-            machine.capabilities.to_string_vec(),
-            vec!["default".to_string()], // Default scope
-        )
-        .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
-
-    Ok(Json(LoginResponse {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        session_id: session.session_id,
-        machine_id: auth_result.machine_id,
-        expires_at: {
-            let now = chrono::Utc::now().timestamp();
-            let expires_in = session.expires_in as i64;
-            let expires_at = now
-                .checked_add(expires_in)
-                .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("Timestamp overflow")))?;
-            format_timestamp_rfc3339(expires_at as u64)?
-        },
-        warning: None,
-    }))
+    Ok(Json(create_login_session(state, auth_result).await?))
 }

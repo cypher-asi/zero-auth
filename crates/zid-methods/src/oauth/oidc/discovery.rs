@@ -4,6 +4,12 @@ use crate::errors::*;
 use crate::oauth::oidc::types::OidcConfiguration;
 use crate::oauth::types::OAuthProvider;
 use reqwest::Client;
+use std::time::Duration;
+
+/// Default timeout for OIDC discovery requests (30 seconds)
+const DEFAULT_TIMEOUT_SECS: u64 = 30;
+/// Default connection timeout (10 seconds)
+const CONNECT_TIMEOUT_SECS: u64 = 10;
 
 /// Discover OIDC configuration from provider
 pub async fn discover_oidc_config(provider: OAuthProvider) -> Result<OidcConfiguration> {
@@ -21,7 +27,12 @@ pub async fn discover_oidc_config(provider: OAuthProvider) -> Result<OidcConfigu
         }
     };
 
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
+        .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| AuthMethodsError::OidcDiscoveryFailed(format!("HTTP client error: {}", e)))?;
+
     let config: OidcConfiguration = client
         .get(discovery_url)
         .send()

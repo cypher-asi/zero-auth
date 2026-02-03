@@ -15,11 +15,15 @@
 use crate::{errors::*, traits::EventPublisher, types::*};
 use tracing::info;
 use uuid::Uuid;
-use zid_crypto::{current_timestamp, derive_managed_identity_signing_keypair, MachineKeyCapabilities};
+use zid_crypto::{
+    current_timestamp, derive_managed_identity_signing_keypair, ed25519_to_did_key,
+    MachineKeyCapabilities,
+};
 use zid_policy::PolicyEngine;
 use zid_storage::{
-    traits::BatchExt, Storage, CF_IDENTITIES, CF_IDENTITY_NAMESPACE_MEMBERSHIPS, CF_MACHINE_KEYS,
-    CF_MACHINE_KEYS_BY_IDENTITY, CF_NAMESPACES, CF_NAMESPACES_BY_IDENTITY,
+    traits::BatchExt, Storage, CF_IDENTITIES, CF_IDENTITIES_BY_DID,
+    CF_IDENTITY_NAMESPACE_MEMBERSHIPS, CF_MACHINE_KEYS, CF_MACHINE_KEYS_BY_IDENTITY, CF_NAMESPACES,
+    CF_NAMESPACES_BY_IDENTITY,
 };
 
 use super::IdentityCoreService;
@@ -104,9 +108,13 @@ where
 
         // Create the identity, namespace, and virtual machine
         let timestamp = current_timestamp();
-        
+
+        // Compute DID from identity signing public key
+        let did = ed25519_to_did_key(&identity_signing_public_key);
+
         let identity = Identity {
             identity_id,
+            did,
             identity_signing_public_key,
             status: IdentityStatus::Active,
             tier: IdentityTier::Managed,
@@ -168,7 +176,10 @@ where
         ikm.extend_from_slice(method_id.as_bytes());
 
         let hash = hkdf_derive_32(&ikm, b"cypher:managed:identity-id:v1")
-            .expect("HKDF derivation should not fail");
+            .unwrap_or_else(|_| {
+                // Deterministic fallback using BLAKE3 if HKDF fails
+                zid_crypto::blake3_hash(&ikm)
+            });
 
         // Use first 16 bytes as UUID
         let mut uuid_bytes = [0u8; 16];
@@ -181,7 +192,10 @@ where
         use zid_crypto::hkdf_derive_32;
 
         let hash = hkdf_derive_32(identity_id.as_bytes(), b"cypher:managed:virtual-machine-id:v1")
-            .expect("HKDF derivation should not fail");
+            .unwrap_or_else(|_| {
+                // Deterministic fallback using BLAKE3 if HKDF fails
+                zid_crypto::blake3_hash(identity_id.as_bytes())
+            });
 
         let mut uuid_bytes = [0u8; 16];
         uuid_bytes.copy_from_slice(&hash[..16]);
@@ -240,6 +254,12 @@ where
         let mut batch = self.storage.batch();
 
         batch.put(CF_IDENTITIES, &identity.identity_id, identity)?;
+
+        // Add DID index for lookup by DID
+        if !identity.did.is_empty() {
+            batch.put(CF_IDENTITIES_BY_DID, &identity.did, &identity.identity_id)?;
+        }
+
         batch.put(CF_NAMESPACES, &namespace.namespace_id, namespace)?;
 
         let membership_key = (identity.identity_id, namespace.namespace_id);
@@ -327,6 +347,7 @@ mod tests {
     fn test_check_ceremony_allowed_managed() {
         let identity = Identity {
             identity_id: Uuid::new_v4(),
+            did: String::new(), // Empty for test
             identity_signing_public_key: [0u8; 32],
             status: IdentityStatus::Active,
             tier: IdentityTier::Managed,
@@ -350,6 +371,7 @@ mod tests {
     fn test_check_ceremony_allowed_self_sovereign() {
         let identity = Identity {
             identity_id: Uuid::new_v4(),
+            did: String::new(), // Empty for test
             identity_signing_public_key: [0u8; 32],
             status: IdentityStatus::Active,
             tier: IdentityTier::SelfSovereign,

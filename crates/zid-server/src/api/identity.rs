@@ -7,18 +7,20 @@ use std::sync::Arc;
 use uuid::Uuid;
 use zid_crypto::MachineKeyCapabilities;
 use zid_identity_core::{
-    Approval, CreateIdentityRequest as CoreCreateIdentityRequest, FreezeReason, IdentityCore,
+    CreateIdentityRequest as CoreCreateIdentityRequest, FreezeReason, IdentityCore,
     IdentityStatus, MachineKey, RotationRequest,
 };
 
 use crate::{
-    error::{map_service_error, ApiError},
+    error::{ApiError, MapServiceErr},
     extractors::{AuthenticatedUser, JsonWithErrors},
     state::AppState,
 };
 
-use super::helpers::{format_timestamp_rfc3339, parse_capabilities, parse_hex_32, parse_hex_64, parse_key_scheme, parse_pq_signing_key, parse_pq_encryption_key};
-use zid_crypto::KeyScheme;
+use super::helpers::{
+    format_timestamp_rfc3339, parse_approvals, parse_capabilities, parse_hex_32, parse_hex_64,
+    parse_key_scheme, parse_pq_keys, require_self_sovereign,
+};
 
 // ============================================================================
 // Request/Response Types
@@ -53,6 +55,7 @@ pub struct MachineKeyRequest {
 #[derive(Debug, Serialize)]
 pub struct CreateIdentityResponse {
     pub identity_id: Uuid,
+    pub did: String,
     pub machine_id: Uuid,
     pub namespace_id: Uuid,
     pub key_scheme: String,
@@ -62,6 +65,7 @@ pub struct CreateIdentityResponse {
 #[derive(Debug, Serialize)]
 pub struct GetIdentityResponse {
     pub identity_id: Uuid,
+    pub did: String,
     pub identity_signing_public_key: String,
     pub status: String,
     pub created_at: String,
@@ -125,23 +129,12 @@ pub async fn create_identity(
     // Parse key scheme (default to classical)
     let key_scheme = parse_key_scheme(req.machine_key.key_scheme.as_deref())?;
 
-    // Parse PQ keys if scheme is pq_hybrid
-    let (pq_signing_public_key, pq_encryption_public_key) = match key_scheme {
-        KeyScheme::Classical => (None, None),
-        KeyScheme::PqHybrid => {
-            let pq_sign = req.machine_key.pq_signing_public_key.as_ref()
-                .ok_or_else(|| ApiError::InvalidRequest(
-                    "pq_signing_public_key required for pq_hybrid scheme".to_string()
-                ))
-                .and_then(|s| parse_pq_signing_key(s))?;
-            let pq_enc = req.machine_key.pq_encryption_public_key.as_ref()
-                .ok_or_else(|| ApiError::InvalidRequest(
-                    "pq_encryption_public_key required for pq_hybrid scheme".to_string()
-                ))
-                .and_then(|s| parse_pq_encryption_key(s))?;
-            (Some(pq_sign), Some(pq_enc))
-        }
-    };
+    // Parse PQ keys based on key scheme
+    let (pq_signing_public_key, pq_encryption_public_key) = parse_pq_keys(
+        key_scheme,
+        req.machine_key.pq_signing_public_key.as_ref(),
+        req.machine_key.pq_encryption_public_key.as_ref(),
+    )?;
 
     // Create machine key
     let machine_key = MachineKey {
@@ -179,21 +172,17 @@ pub async fn create_identity(
         .identity_service
         .create_identity(create_request)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     // Personal namespace has same ID as identity
     let namespace_id = req.identity_id;
 
-    let key_scheme_str = match key_scheme {
-        KeyScheme::Classical => "classical",
-        KeyScheme::PqHybrid => "pq_hybrid",
-    };
-
     Ok(Json(CreateIdentityResponse {
         identity_id: identity.identity_id,
+        did: identity.did,
         machine_id: req.machine_key.machine_id,
         namespace_id,
-        key_scheme: key_scheme_str.to_string(),
+        key_scheme: key_scheme.as_str().to_string(),
         created_at: format_timestamp_rfc3339(identity.created_at)?,
     }))
 }
@@ -208,7 +197,7 @@ pub async fn get_identity(
         .identity_service
         .get_identity(identity_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     let status_str = match identity.status {
         IdentityStatus::Active => "active",
@@ -219,6 +208,49 @@ pub async fn get_identity(
 
     Ok(Json(GetIdentityResponse {
         identity_id: identity.identity_id,
+        did: identity.did,
+        identity_signing_public_key: hex::encode(identity.identity_signing_public_key),
+        status: status_str.to_string(),
+        created_at: format_timestamp_rfc3339(identity.created_at)?,
+    }))
+}
+
+/// GET /v1/identity/did/:did
+///
+/// Retrieve an identity by its DID (Decentralized Identifier).
+/// The DID must be URL-encoded when passed in the path.
+pub async fn get_identity_by_did(
+    State(state): State<Arc<AppState>>,
+    Path(did): Path<String>,
+) -> Result<Json<GetIdentityResponse>, ApiError> {
+    // URL decode the DID (colons are often encoded)
+    let did = urlencoding::decode(&did)
+        .map_err(|_| ApiError::InvalidRequest("Invalid DID encoding".to_string()))?
+        .into_owned();
+
+    // Validate DID format
+    if !did.starts_with("did:key:") {
+        return Err(ApiError::InvalidRequest(
+            "Invalid DID format: must start with 'did:key:'".to_string(),
+        ));
+    }
+
+    let identity = state
+        .identity_service
+        .get_identity_by_did(&did)
+        .await
+        .map_svc_err()?;
+
+    let status_str = match identity.status {
+        IdentityStatus::Active => "active",
+        IdentityStatus::Disabled => "disabled",
+        IdentityStatus::Frozen => "frozen",
+        IdentityStatus::Deleted => "deleted",
+    };
+
+    Ok(Json(GetIdentityResponse {
+        identity_id: identity.identity_id,
+        did: identity.did,
         identity_signing_public_key: hex::encode(identity.identity_signing_public_key),
         status: status_str.to_string(),
         created_at: format_timestamp_rfc3339(identity.created_at)?,
@@ -238,13 +270,9 @@ pub async fn freeze_identity(
         .identity_service
         .get_identity(identity_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
     
-    if identity.tier == zid_identity_core::IdentityTier::Managed {
-        return Err(ApiError::InvalidRequest(
-            "Freeze ceremony requires self-sovereign identity. Please upgrade your identity first.".to_string()
-        ));
-    }
+    require_self_sovereign(&identity, "Freeze ceremony")?;
 
     // Parse freeze reason
     let freeze_reason = match req.reason.as_str() {
@@ -255,11 +283,8 @@ pub async fn freeze_identity(
         _ => FreezeReason::Administrative,
     };
 
-    // Parse approvals for freeze ceremony
-    let mut approvals = Vec::new();
-
-    // Check if multi-party approval is provided for high-risk freeze
-    if matches!(
+    // Parse approvals for freeze ceremony (only for high-risk freezes)
+    let approvals = if matches!(
         freeze_reason,
         FreezeReason::SecurityIncident | FreezeReason::SuspiciousActivity
     ) {
@@ -269,33 +294,17 @@ pub async fn freeze_identity(
                 "Multi-party approval required for security-related freeze".to_string(),
             ));
         }
-
-        // Verify approval count matches
-        if req.approver_machine_ids.len() != req.approval_signatures.len() {
-            return Err(ApiError::InvalidRequest(
-                "Number of approvers must match number of signatures".to_string(),
-            ));
-        }
-
-        // Parse signatures into Approvals
-        for (i, sig_hex) in req.approval_signatures.iter().enumerate() {
-            let signature_bytes = hex::decode(sig_hex)
-                .map_err(|_| ApiError::InvalidRequest("Invalid hex encoding".to_string()))?;
-
-            approvals.push(Approval {
-                machine_id: req.approver_machine_ids[i],
-                signature: signature_bytes,
-                timestamp: chrono::Utc::now().timestamp() as u64,
-            });
-        }
-    }
+        parse_approvals(&req.approver_machine_ids, &req.approval_signatures)?
+    } else {
+        Vec::new()
+    };
 
     // Execute freeze ceremony with cryptographic verification of approvals
     state
         .identity_service
         .freeze_identity(identity_id, freeze_reason, approvals)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(Json(CeremonyResponse {
         success: true,
@@ -316,33 +325,19 @@ pub async fn unfreeze_identity(
         .identity_service
         .get_identity(identity_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
     
-    if identity.tier == zid_identity_core::IdentityTier::Managed {
-        return Err(ApiError::InvalidRequest(
-            "Unfreeze ceremony requires self-sovereign identity. Please upgrade your identity first.".to_string()
-        ));
-    }
+    require_self_sovereign(&identity, "Unfreeze ceremony")?;
 
-    // Parse signatures into Approvals
-    let mut approvals = Vec::new();
-    for (i, sig_hex) in req.approval_signatures.iter().enumerate() {
-        let signature_bytes = hex::decode(sig_hex)
-            .map_err(|_| ApiError::InvalidRequest("Invalid hex encoding".to_string()))?;
-
-        approvals.push(Approval {
-            machine_id: req.approver_machine_ids[i],
-            signature: signature_bytes,
-            timestamp: chrono::Utc::now().timestamp() as u64,
-        });
-    }
+    // Parse approvals
+    let approvals = parse_approvals(&req.approver_machine_ids, &req.approval_signatures)?;
 
     // Execute unfreeze ceremony
     state
         .identity_service
         .unfreeze_identity(identity_id, approvals)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(Json(CeremonyResponse {
         success: true,
@@ -363,9 +358,9 @@ pub async fn recovery_ceremony(
         .identity_service
         .get_identity(identity_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
     
-    if identity.tier == zid_identity_core::IdentityTier::Managed {
+    if identity.tier.is_managed() {
         return Err(ApiError::InvalidRequest(
             "Recovery ceremony requires self-sovereign identity. Managed identities use multi-method recovery via /v1/identity/recover endpoint.".to_string()
         ));
@@ -373,18 +368,8 @@ pub async fn recovery_ceremony(
 
     let new_identity_signing_public_key = parse_hex_32(&req.new_identity_signing_public_key)?;
 
-    // Parse signatures into Approvals
-    let mut approvals = Vec::new();
-    for (i, sig_hex) in req.approval_signatures.iter().enumerate() {
-        let signature_bytes = hex::decode(sig_hex)
-            .map_err(|_| ApiError::InvalidRequest("Invalid hex encoding".to_string()))?;
-
-        approvals.push(Approval {
-            machine_id: req.approver_machine_ids[i],
-            signature: signature_bytes,
-            timestamp: chrono::Utc::now().timestamp() as u64,
-        });
-    }
+    // Parse approvals
+    let approvals = parse_approvals(&req.approver_machine_ids, &req.approval_signatures)?;
 
     // Create a recovery machine key (placeholder - should come from request)
     let recovery_machine_key = MachineKey {
@@ -400,11 +385,11 @@ pub async fn recovery_ceremony(
         last_used_at: None,
         device_name: "Recovery Device".to_string(),
         device_platform: "unknown".to_string(),
-        revoked: false,
-        revoked_at: None,
         key_scheme: Default::default(),
         pq_signing_public_key: None,
         pq_encryption_public_key: None,
+        revoked: false,
+        revoked_at: None,
     };
 
     // Execute recovery ceremony
@@ -412,7 +397,7 @@ pub async fn recovery_ceremony(
         .identity_service
         .initiate_recovery(identity_id, recovery_machine_key, approvals)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(Json(CeremonyResponse {
         success: true,
@@ -436,13 +421,9 @@ pub async fn rotation_ceremony(
         .identity_service
         .get_identity(identity_id)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
     
-    if identity.tier == zid_identity_core::IdentityTier::Managed {
-        return Err(ApiError::InvalidRequest(
-            "Rotation ceremony requires self-sovereign identity. Please upgrade your identity first.".to_string()
-        ));
-    }
+    require_self_sovereign(&identity, "Rotation ceremony")?;
 
     let new_identity_signing_public_key = parse_hex_32(&req.new_identity_signing_public_key)?;
 
@@ -450,20 +431,15 @@ pub async fn rotation_ceremony(
     let rotation_signature_bytes = hex::decode(&req.rotation_signature)
         .map_err(|_| ApiError::InvalidRequest("Invalid rotation signature encoding".to_string()))?;
 
-    // Get current identity to verify signature
-    let identity = state
-        .identity_service
-        .get_identity(identity_id)
-        .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
-
     verify_rotation_signature(
         identity_id,
         &identity.identity_signing_public_key,
         &new_identity_signing_public_key,
         &rotation_signature_bytes,
     )?;
-    let approvals = parse_rotation_approvals(&req.approver_machine_ids, &req.approval_signatures)?;
+    
+    // Parse approvals
+    let approvals = parse_approvals(&req.approver_machine_ids, &req.approval_signatures)?;
 
     // Create rotation request
     let rotation_request = RotationRequest {
@@ -478,7 +454,7 @@ pub async fn rotation_ceremony(
         .identity_service
         .rotate_neural_key(rotation_request)
         .await
-        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        .map_svc_err()?;
 
     Ok(Json(CeremonyResponse {
         success: true,
@@ -508,30 +484,4 @@ fn verify_rotation_signature(
 
     zid_crypto::verify_signature(identity_signing_public_key, &message, &signature_array)
         .map_err(|_| ApiError::InvalidSignature)
-}
-
-fn parse_rotation_approvals(
-    approver_machine_ids: &[Uuid],
-    approval_signatures: &[String],
-) -> Result<Vec<Approval>, ApiError> {
-    if approver_machine_ids.len() != approval_signatures.len() {
-        return Err(ApiError::InvalidRequest(
-            "Number of approvers must match number of signatures".to_string(),
-        ));
-    }
-
-    approval_signatures
-        .iter()
-        .enumerate()
-        .map(|(i, sig_hex)| {
-            let signature_bytes = hex::decode(sig_hex)
-                .map_err(|_| ApiError::InvalidRequest("Invalid hex encoding".to_string()))?;
-
-            Ok(Approval {
-                machine_id: approver_machine_ids[i],
-                signature: signature_bytes,
-                timestamp: chrono::Utc::now().timestamp() as u64,
-            })
-        })
-        .collect()
 }

@@ -12,6 +12,7 @@ use zid_crypto::{
     NeuralKey, NeuralShard,
 };
 
+use super::create_http_client;
 use crate::storage::{prompt_new_passphrase, save_credentials_with_shards};
 use crate::types::CreateIdentityResponse;
 
@@ -226,7 +227,7 @@ async fn send_creation_request(
         key_scheme,
     );
 
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let response = client
         .post(format!("{}/v1/identity", server))
         .json(&request)

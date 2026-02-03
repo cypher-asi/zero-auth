@@ -52,6 +52,10 @@ impl IdentityTier {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Identity {
     pub identity_id: Uuid,
+    /// Decentralized Identifier in did:key format (e.g., "did:key:z6Mk...")
+    /// Derived from identity_signing_public_key for external verification
+    #[serde(default)]
+    pub did: String,
     pub identity_signing_public_key: [u8; 32],
     pub status: IdentityStatus,
     /// Identity tier: Managed or SelfSovereign

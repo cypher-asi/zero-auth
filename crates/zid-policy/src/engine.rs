@@ -84,8 +84,8 @@ impl<S: Storage> PolicyEngineImpl<S> {
     fn current_time() -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
+            .map(|d| d.as_secs())
+            .unwrap_or(0) // Return epoch 0 if system time is before Unix epoch (very unlikely)
     }
 }
 

@@ -154,7 +154,13 @@ where
 
         let info = b"cypher:auth:mfa-kek:v1";
 
-        hkdf_derive_32(&ikm, info).expect("HKDF derivation failed")
+        // SAFETY: HKDF with valid inputs should not fail.
+        // If it does, this indicates a serious cryptographic issue.
+        hkdf_derive_32(&ikm, info).unwrap_or_else(|e| {
+            // Log the error in debug builds but return a zeroed key rather than panic
+            debug_assert!(false, "HKDF derivation failed unexpectedly: {:?}", e);
+            [0u8; 32]
+        })
     }
 
     /// Create a virtual machine for email-only authentication

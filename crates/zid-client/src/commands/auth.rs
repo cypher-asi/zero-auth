@@ -12,6 +12,8 @@ use zid_crypto::{
     NeuralShard,
 };
 
+use super::create_http_client;
+
 use crate::storage::{
     has_stored_machine_key, is_legacy_credentials, load_and_reconstruct_neural_key,
     load_credentials, load_machine_signing_key, migrate_legacy_credentials, prompt_neural_shard,
@@ -246,7 +248,7 @@ async fn request_challenge(server: &str, machine_id: &Uuid) -> Result<ChallengeR
         "Step 2: Requesting authentication challenge...".yellow()
     );
 
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let challenge_url = format!("{}/v1/auth/challenge?machine_id={}", server, machine_id);
     let response = client
         .get(&challenge_url)
@@ -333,7 +335,7 @@ async fn submit_login(
         "signature": hex::encode(signature)
     });
 
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let response = client
         .post(format!("{}/v1/auth/login/machine", server))
         .json(&login_request)
@@ -378,7 +380,7 @@ async fn attempt_email_login(
 ) -> Result<LoginResponse> {
     println!("\n{}", "Step 2: Authenticating with email...".yellow());
 
-    let client = reqwest::Client::new();
+    let client = create_http_client()?;
     let request = serde_json::json!({
         "email": email,
         "password": password,

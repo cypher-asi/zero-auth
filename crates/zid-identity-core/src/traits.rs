@@ -56,6 +56,9 @@ pub trait IdentityCore: Send + Sync {
     /// Get identity by ID
     async fn get_identity(&self, identity_id: Uuid) -> Result<Identity>;
 
+    /// Get identity by DID (did:key:...)
+    async fn get_identity_by_did(&self, did: &str) -> Result<Identity>;
+
     /// Disable an identity (soft delete)
     async fn disable_identity(&self, identity_id: Uuid) -> Result<()>;
 
