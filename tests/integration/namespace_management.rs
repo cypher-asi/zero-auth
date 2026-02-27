@@ -41,8 +41,9 @@ async fn create_identity_and_login() -> Result<(Uuid, String), Box<dyn std::erro
             | MachineKeyCapabilities::ENCRYPT,
     )?;
 
-    let machine_signing_pk = machine_keypair.signing_public_key();
-    let machine_encryption_pk = machine_keypair.encryption_public_key();
+    let pk = machine_keypair.public_key();
+    let machine_signing_pk = pk.ed25519_bytes();
+    let machine_encryption_pk = pk.x25519_bytes();
 
     // 5. Create authorization message and sign
     let created_at = chrono::Utc::now().timestamp() as u64;
@@ -64,11 +65,13 @@ async fn create_identity_and_login() -> Result<(Uuid, String), Box<dyn std::erro
         "authorization_signature": hex::encode(signature),
         "machine_key": {
             "machine_id": machine_id,
-            "signing_public_key": hex::encode(machine_signing_pk),
-            "encryption_public_key": hex::encode(machine_encryption_pk),
+            "signing_public_key": hex::encode(&machine_signing_pk),
+            "encryption_public_key": hex::encode(&machine_encryption_pk),
             "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
             "device_name": "Test Device",
-            "device_platform": "TEST"
+            "device_platform": "TEST",
+            "pq_signing_public_key": hex::encode(pk.ml_dsa_bytes()),
+            "pq_encryption_public_key": hex::encode(pk.ml_kem_bytes())
         },
         "namespace_name": "Personal",
         "created_at": created_at
@@ -80,16 +83,17 @@ async fn create_identity_and_login() -> Result<(Uuid, String), Box<dyn std::erro
     let challenge_response = send_request(reqwest::Method::GET, "/v1/auth/challenge", None).await?;
     let challenge = challenge_response["challenge"].as_str().unwrap();
 
-    // 8. Sign challenge
+    // 8. Sign challenge (Ed25519 only for auth protocol)
     let challenge_bytes = hex::decode(challenge)?;
-    let challenge_signature = machine_keypair.sign(&challenge_bytes);
+    use ed25519_dalek::Signer;
+    let challenge_signature = machine_keypair.ed25519_signing_key().sign(&challenge_bytes);
 
     // 9. Login
     let login_request = json!({
         "identity_id": identity_id,
         "machine_id": machine_id,
         "challenge": challenge,
-        "signature": hex::encode(challenge_signature)
+        "signature": hex::encode(challenge_signature.to_bytes())
     });
 
     let login_response =

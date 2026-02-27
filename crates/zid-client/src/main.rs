@@ -20,28 +20,8 @@ mod storage;
 mod types;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use uuid::Uuid;
-use zid_crypto::KeyScheme;
-
-/// Key scheme selection for CLI
-#[derive(Debug, Clone, Copy, ValueEnum, Default)]
-pub enum CliKeyScheme {
-    /// Classical keys only (Ed25519 + X25519)
-    #[default]
-    Classical,
-    /// Post-quantum hybrid (Classical + ML-DSA-65 + ML-KEM-768)
-    PqHybrid,
-}
-
-impl From<CliKeyScheme> for KeyScheme {
-    fn from(cli: CliKeyScheme) -> Self {
-        match cli {
-            CliKeyScheme::Classical => KeyScheme::Classical,
-            CliKeyScheme::PqHybrid => KeyScheme::PqHybrid,
-        }
-    }
-}
 
 // CLI structure
 #[derive(Parser)]
@@ -67,10 +47,6 @@ enum Commands {
         /// Device platform
         #[arg(short, long, default_value = "rust-app")]
         platform: String,
-
-        /// Key scheme for machine keys
-        #[arg(short, long, value_enum, default_value_t = CliKeyScheme::Classical)]
-        key_scheme: CliKeyScheme,
     },
     /// Login with machine key authentication
     Login,
@@ -118,10 +94,6 @@ enum Commands {
         /// Device platform
         #[arg(short, long, default_value = "rust-app")]
         platform: String,
-
-        /// Key scheme for machine keys
-        #[arg(short, long, value_enum, default_value_t = CliKeyScheme::Classical)]
-        key_scheme: CliKeyScheme,
     },
     /// List all enrolled machines
     ListMachines,
@@ -158,8 +130,7 @@ async fn main() -> Result<()> {
         Commands::CreateIdentity {
             device_name,
             platform,
-            key_scheme,
-        } => commands::identity::create_identity(&cli.server, &device_name, &platform, key_scheme.into()).await?,
+        } => commands::identity::create_identity(&cli.server, &device_name, &platform).await?,
 
         Commands::Login => commands::auth::login(&cli.server).await?,
 
@@ -192,8 +163,7 @@ async fn main() -> Result<()> {
         Commands::EnrollMachine {
             device_name,
             platform,
-            key_scheme,
-        } => commands::machines::enroll_machine(&cli.server, &device_name, &platform, key_scheme.into()).await?,
+        } => commands::machines::enroll_machine(&cli.server, &device_name, &platform).await?,
 
         Commands::ListMachines => commands::machines::list_machines(&cli.server).await?,
 

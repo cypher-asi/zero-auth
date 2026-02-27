@@ -174,8 +174,8 @@ where
     /// This provides security against external attackers but not against the service operator.
     /// Users should be encouraged to enroll real device-based machines for full security.
     pub(self) async fn create_virtual_machine(&self, identity_id: Uuid) -> Result<Uuid> {
-        let (machine_id, signing_public_key, encryption_public_key) =
-            self.derive_virtual_machine_keys(identity_id)?;
+        let virtual_machine = self.derive_virtual_machine(identity_id)?;
+        let machine_id = virtual_machine.machine_id;
 
         // Check if virtual machine already exists
         if let Some(existing_vm) = self
@@ -183,7 +183,6 @@ where
             .get::<Uuid, MachineKey>("machine_keys", &machine_id)
             .await?
         {
-            // Update last_used_at timestamp
             let mut updated_vm = existing_vm;
             updated_vm.last_used_at = Some(current_timestamp());
             updated_vm.expires_at = Some(current_timestamp() + 86400);
@@ -200,14 +199,6 @@ where
             return Ok(machine_id);
         }
 
-        let virtual_machine = self.build_virtual_machine(
-            identity_id,
-            machine_id,
-            signing_public_key,
-            encryption_public_key,
-        );
-
-        // Store virtual machine directly
         self.storage
             .put(
                 "machine_keys",
@@ -225,9 +216,7 @@ where
         Ok(virtual_machine.machine_id)
     }
 
-    fn derive_virtual_machine_keys(&self, identity_id: Uuid) -> Result<(Uuid, [u8; 32], [u8; 32])> {
-        use zid_crypto::{hkdf_derive_32, Ed25519KeyPair, X25519KeyPair};
-
+    fn derive_virtual_machine(&self, identity_id: Uuid) -> Result<MachineKey> {
         let machine_id_bytes =
             hkdf_derive_32(identity_id.as_bytes(), b"cypher:auth:virtual-machine-id:v1")?;
         let mut machine_id_array = [0u8; 16];
@@ -238,32 +227,26 @@ where
         ikm.extend_from_slice(&*self.service_master_key);
         ikm.extend_from_slice(identity_id.as_bytes());
 
-        let signing_seed = hkdf_derive_32(&ikm, b"cypher:auth:virtual-machine-signing:v1")?;
-        let signing_keypair = Ed25519KeyPair::from_seed(&signing_seed)?;
+        let vm_seed = hkdf_derive_32(&ikm, b"cypher:auth:virtual-machine-seed:v1")?;
+        let nk = zid::NeuralKey::from_bytes(vm_seed);
+        let keypair = zid::derive_machine_keypair(
+            &nk,
+            zid::IdentityId::from(identity_id),
+            zid::MachineId::from(machine_id),
+            0,
+            MachineKeyCapabilities::AUTHENTICATE,
+        )
+        .map_err(|e| AuthMethodsError::Crypto(
+            zid_crypto::CryptoError::InvalidInput(format!("VM key derivation failed: {e}"))
+        ))?;
 
-        let encryption_seed = hkdf_derive_32(&ikm, b"cypher:auth:virtual-machine-encryption:v1")?;
-        let encryption_keypair = X25519KeyPair::from_seed(&encryption_seed)?;
-
-        Ok((
-            machine_id,
-            signing_keypair.public_key().to_bytes(),
-            *encryption_keypair.public_key().as_bytes(),
-        ))
-    }
-
-    fn build_virtual_machine(
-        &self,
-        identity_id: Uuid,
-        machine_id: Uuid,
-        signing_public_key: [u8; 32],
-        encryption_public_key: [u8; 32],
-    ) -> MachineKey {
-        MachineKey {
+        let pk = keypair.public_key();
+        Ok(MachineKey {
             machine_id,
             identity_id,
             namespace_id: identity_id,
-            signing_public_key,
-            encryption_public_key,
+            signing_public_key: pk.ed25519_bytes(),
+            encryption_public_key: pk.x25519_bytes(),
             capabilities: MachineKeyCapabilities::AUTHENTICATE,
             epoch: 0,
             created_at: current_timestamp(),
@@ -273,10 +256,9 @@ where
             device_platform: "web".to_string(),
             revoked: false,
             revoked_at: None,
-            key_scheme: Default::default(),
-            pq_signing_public_key: None,
-            pq_encryption_public_key: None,
-        }
+            pq_signing_public_key: pk.ml_dsa_bytes(),
+            pq_encryption_public_key: pk.ml_kem_bytes(),
+        })
     }
 }
 

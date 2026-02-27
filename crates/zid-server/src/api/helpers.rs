@@ -6,7 +6,7 @@ use crate::error::{map_service_error, ApiError, MapServiceErr};
 use crate::state::AppState;
 use super::auth::LoginResponse;
 use uuid::Uuid;
-use zid_crypto::{blake3_hash, KeyScheme, MachineKeyCapabilities, ML_DSA_65_PUBLIC_KEY_SIZE, ML_KEM_768_PUBLIC_KEY_SIZE};
+use zid_crypto::{blake3_hash, MachineKeyCapabilities, ML_DSA_65_PUBLIC_KEY_SIZE, ML_KEM_768_PUBLIC_KEY_SIZE};
 use zid_identity_core::{Approval, Identity, IdentityCore, IdentityTier};
 use zid_methods::{AuthResult, OAuthProvider};
 use zid_sessions::SessionManager;
@@ -83,18 +83,6 @@ pub fn hash_for_log(value: &str) -> String {
     hex::encode(&hash[..8])
 }
 
-/// Parse key scheme string into KeyScheme enum
-pub fn parse_key_scheme(scheme: Option<&str>) -> Result<KeyScheme, ApiError> {
-    match scheme {
-        None | Some("classical") => Ok(KeyScheme::Classical),
-        Some("pq_hybrid") => Ok(KeyScheme::PqHybrid),
-        Some(other) => Err(ApiError::InvalidRequest(format!(
-            "Invalid key_scheme: {}. Expected 'classical' or 'pq_hybrid'",
-            other
-        ))),
-    }
-}
-
 /// Parse ML-DSA-65 public key from hex string (1952 bytes)
 pub fn parse_pq_signing_key(hex_str: &str) -> Result<Vec<u8>, ApiError> {
     let bytes = hex::decode(hex_str)
@@ -163,31 +151,14 @@ pub fn require_self_sovereign(identity: &Identity, operation: &str) -> Result<()
     Ok(())
 }
 
-/// Parse PQ keys based on key scheme.
-///
-/// For Classical scheme, returns (None, None).
-/// For PqHybrid scheme, parses and validates both PQ keys.
+/// Parse and validate PQ public keys (always required for PQ-Hybrid).
 pub fn parse_pq_keys(
-    key_scheme: KeyScheme,
-    signing_key: Option<&String>,
-    encryption_key: Option<&String>,
-) -> Result<(Option<Vec<u8>>, Option<Vec<u8>>), ApiError> {
-    match key_scheme {
-        KeyScheme::Classical => Ok((None, None)),
-        KeyScheme::PqHybrid => {
-            let pq_sign = signing_key
-                .ok_or_else(|| ApiError::InvalidRequest(
-                    "pq_signing_public_key required for pq_hybrid scheme".to_string()
-                ))
-                .and_then(|s| parse_pq_signing_key(s))?;
-            let pq_enc = encryption_key
-                .ok_or_else(|| ApiError::InvalidRequest(
-                    "pq_encryption_public_key required for pq_hybrid scheme".to_string()
-                ))
-                .and_then(|s| parse_pq_encryption_key(s))?;
-            Ok((Some(pq_sign), Some(pq_enc)))
-        }
-    }
+    signing_key: &str,
+    encryption_key: &str,
+) -> Result<(Vec<u8>, Vec<u8>), ApiError> {
+    let pq_sign = parse_pq_signing_key(signing_key)?;
+    let pq_enc = parse_pq_encryption_key(encryption_key)?;
+    Ok((pq_sign, pq_enc))
 }
 
 /// Create a login session from an authentication result.

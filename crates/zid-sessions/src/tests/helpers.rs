@@ -95,9 +95,8 @@ pub async fn create_test_identity_with_machine(
         device_platform: "test-platform".to_string(),
         revoked: false,
         revoked_at: None,
-        key_scheme: Default::default(),
-        pq_signing_public_key: None,
-        pq_encryption_public_key: None,
+        pq_signing_public_key: vec![0u8; 1952],
+        pq_encryption_public_key: vec![0u8; 1184],
     };
 
     // Create canonical message

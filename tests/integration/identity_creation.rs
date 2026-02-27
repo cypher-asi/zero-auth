@@ -51,14 +51,15 @@ async fn test_identity_creation_flow() -> Result<(), Box<dyn std::error::Error>>
             | MachineKeyCapabilities::ENCRYPT,
     )?;
 
-    let machine_signing_pk = machine_keypair.signing_public_key();
-    let machine_encryption_pk = machine_keypair.encryption_public_key();
+    let pk = machine_keypair.public_key();
+    let machine_signing_pk = pk.ed25519_bytes();
+    let machine_encryption_pk = pk.x25519_bytes();
 
     println!("✓ Derived Machine Key");
-    println!("  Signing Public Key: {}", hex::encode(machine_signing_pk));
+    println!("  Signing Public Key: {}", hex::encode(&machine_signing_pk));
     println!(
         "  Encryption Public Key: {}\n",
-        hex::encode(machine_encryption_pk)
+        hex::encode(&machine_encryption_pk)
     );
 
     // 5. Create the canonical authorization message
@@ -86,11 +87,13 @@ async fn test_identity_creation_flow() -> Result<(), Box<dyn std::error::Error>>
         "authorization_signature": hex::encode(signature),
         "machine_key": {
             "machine_id": machine_id,
-            "signing_public_key": hex::encode(machine_signing_pk),
-            "encryption_public_key": hex::encode(machine_encryption_pk),
+            "signing_public_key": hex::encode(&machine_signing_pk),
+            "encryption_public_key": hex::encode(&machine_encryption_pk),
             "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
             "device_name": "Integration Test Device",
-            "device_platform": "TEST"
+            "device_platform": "TEST",
+            "pq_signing_public_key": hex::encode(pk.ml_dsa_bytes()),
+            "pq_encryption_public_key": hex::encode(pk.ml_kem_bytes())
         },
         "namespace_name": "Personal",
         "created_at": created_at

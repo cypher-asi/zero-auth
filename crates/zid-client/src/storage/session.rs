@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use std::fs;
-use zid_crypto::NeuralShard;
+use zid_crypto::ShamirShare;
 
 use super::get_session_path;
 use crate::types::SessionData;
@@ -51,7 +51,7 @@ pub fn prompt_new_passphrase() -> Result<String> {
 }
 
 /// Prompt user to enter one of their Neural Shards (hex format)
-pub fn prompt_neural_shard() -> Result<NeuralShard> {
+pub fn prompt_neural_shard() -> Result<ShamirShare> {
     use std::io::{self, Write};
 
     print!("Enter one of your Neural Shards: ");
@@ -61,5 +61,5 @@ pub fn prompt_neural_shard() -> Result<NeuralShard> {
     io::stdin().read_line(&mut input)?;
     let input = input.trim();
 
-    NeuralShard::from_hex(input).map_err(|e| anyhow::anyhow!("Invalid Neural Shard format: {}", e))
+    ShamirShare::from_hex(input).map_err(|e| anyhow::anyhow!("Invalid Neural Shard format: {:?}", e))
 }

@@ -104,7 +104,6 @@ pub struct CreateIdentityResponse {
     pub identity_id: Uuid,
     pub machine_id: Uuid,
     pub namespace_id: Uuid,
-    pub key_scheme: Option<String>,
     pub created_at: String,
 }
 
@@ -153,7 +152,6 @@ pub struct AddCredentialResponse {
 pub struct EnrollMachineResponse {
     pub machine_id: Uuid,
     pub namespace_id: Uuid,
-    pub key_scheme: Option<String>,
     pub enrolled_at: String,
 }
 
@@ -170,6 +168,4 @@ pub struct MachineInfo {
     pub created_at: String,
     pub last_used_at: Option<String>,
     pub revoked: bool,
-    pub key_scheme: Option<String>,
-    pub has_pq_keys: Option<bool>,
 }

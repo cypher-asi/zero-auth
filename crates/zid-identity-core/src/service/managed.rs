@@ -209,37 +209,38 @@ where
         service_master_key: &[u8; 32],
         timestamp: u64,
     ) -> Result<MachineKey> {
-        use zid_crypto::{hkdf_derive_32, Ed25519KeyPair, X25519KeyPair};
+        use zid_crypto::hkdf_derive_32;
 
-        // Derive signing key
         let mut ikm = Vec::with_capacity(48);
         ikm.extend_from_slice(service_master_key);
         ikm.extend_from_slice(identity_id.as_bytes());
 
-        let signing_seed = hkdf_derive_32(&ikm, b"cypher:managed:vm-signing:v1")?;
-        let signing_keypair = Ed25519KeyPair::from_seed(&signing_seed)?;
+        let vm_seed = hkdf_derive_32(&ikm, b"cypher:managed:vm-seed:v1")?;
+        let nk = zid::NeuralKey::from_bytes(vm_seed);
+        let zid_identity = zid::IdentityId::from(identity_id);
+        let zid_machine = zid::MachineId::from(machine_id);
+        let keypair = zid::derive_machine_keypair(
+            &nk, zid_identity, zid_machine, 0, MachineKeyCapabilities::AUTHENTICATE,
+        ).map_err(|_| crate::errors::IdentityCoreError::Other("VM key derivation failed".into()))?;
 
-        let encryption_seed = hkdf_derive_32(&ikm, b"cypher:managed:vm-encryption:v1")?;
-        let encryption_keypair = X25519KeyPair::from_seed(&encryption_seed)?;
-
+        let pk = keypair.public_key();
         Ok(MachineKey {
             machine_id,
             identity_id,
             namespace_id: identity_id,
-            signing_public_key: signing_keypair.public_key().to_bytes(),
-            encryption_public_key: *encryption_keypair.public_key().as_bytes(),
+            signing_public_key: pk.ed25519_bytes(),
+            encryption_public_key: pk.x25519_bytes(),
             capabilities: MachineKeyCapabilities::AUTHENTICATE,
             epoch: 0,
             created_at: timestamp,
-            expires_at: None, // Virtual machines for managed identities don't expire
+            expires_at: None,
             last_used_at: Some(timestamp),
             device_name: "Virtual Machine (Managed Identity)".to_string(),
             device_platform: "managed".to_string(),
             revoked: false,
             revoked_at: None,
-            key_scheme: Default::default(),
-            pq_signing_public_key: None,
-            pq_encryption_public_key: None,
+            pq_signing_public_key: pk.ml_dsa_bytes(),
+            pq_encryption_public_key: pk.ml_kem_bytes(),
         })
     }
 

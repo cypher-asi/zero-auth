@@ -7,18 +7,17 @@ use colored::*;
 use std::io::{self, Write};
 use uuid::Uuid;
 use zid_crypto::{
-    canonicalize_identity_creation_message, derive_identity_signing_keypair, derive_machine_keypair_with_scheme,
-    sign_message, split_neural_key, verify_signature, Ed25519KeyPair, KeyScheme, MachineKeyCapabilities,
-    NeuralKey, NeuralShard,
+    canonicalize_identity_creation_message, derive_identity_signing_keypair, derive_machine_keypair,
+    sign_message, Ed25519KeyPair, MachineKeyCapabilities,
+    NeuralKey, ShamirShare,
 };
 
 use super::create_http_client;
 use crate::storage::{prompt_new_passphrase, save_credentials_with_shards};
 use crate::types::CreateIdentityResponse;
 
-pub async fn create_identity(server: &str, device_name: &str, platform: &str, key_scheme: KeyScheme) -> Result<()> {
+pub async fn create_identity(server: &str, device_name: &str, platform: &str) -> Result<()> {
     println!("{}", "=== Creating New Identity ===".bold().cyan());
-    println!("  Key Scheme: {:?}", key_scheme);
 
     // Generate neural key and derive all keys first
     let neural_key = generate_neural_key()?;
@@ -26,13 +25,14 @@ pub async fn create_identity(server: &str, device_name: &str, platform: &str, ke
     let (identity_signing_public_key, identity_signing_keypair) =
         derive_identity_signing_keypair(&neural_key, &identity_id)?;
 
-    let machine_keypair = create_machine_keypair(&neural_key, &identity_id, &machine_id, key_scheme)?;
+    let machine_keypair = create_machine_keypair(&neural_key, &identity_id, &machine_id)?;
+    let pk = machine_keypair.public_key();
     let signature = create_authorization_signature(
         &identity_id,
         &identity_signing_public_key,
         &machine_id,
-        &machine_keypair.signing_public_key(),
-        &machine_keypair.encryption_public_key(),
+        &pk.ed25519_bytes(),
+        &pk.x25519_bytes(),
         &identity_signing_keypair,
     )?;
 
@@ -46,7 +46,6 @@ pub async fn create_identity(server: &str, device_name: &str, platform: &str, ke
         &signature,
         device_name,
         platform,
-        key_scheme,
     )
     .await?;
 
@@ -63,9 +62,10 @@ pub async fn create_identity(server: &str, device_name: &str, platform: &str, ke
     // Compute commitment before splitting (for verification during reconstruction)
     let neural_key_commitment = neural_key.compute_commitment();
 
-    // Split neural key into 5 shards
-    let shards = split_neural_key(&neural_key)
-        .map_err(|e| anyhow::anyhow!("Failed to split Neural Key: {}", e))?;
+    // Split neural key into 5 shards (threshold=3, total=5)
+    let mut rng = rand::thread_rng();
+    let shards: Vec<ShamirShare> = zid::shamir_split(neural_key.as_bytes(), 5, 3, &mut rng)
+        .map_err(|e| anyhow::anyhow!("Failed to split Neural Key: {:?}", e))?;
 
     // Prompt for passphrase
     println!();
@@ -102,8 +102,6 @@ pub async fn create_identity(server: &str, device_name: &str, platform: &str, ke
 
 fn generate_neural_key() -> Result<NeuralKey> {
     println!("\n{}", "Step 1: Generating Neural Key...".yellow());
-    // Use getrandom for WASM compatibility instead of NeuralKey::generate()
-    // which internally uses thread_rng() (not available in WASM)
     let mut key_bytes = [0u8; 32];
     getrandom::getrandom(&mut key_bytes)
         .map_err(|e| anyhow::anyhow!("Failed to generate random bytes: {}", e))?;
@@ -125,10 +123,9 @@ fn create_machine_keypair(
     neural_key: &NeuralKey,
     identity_id: &Uuid,
     machine_id: &Uuid,
-    key_scheme: KeyScheme,
 ) -> Result<zid_crypto::MachineKeyPair> {
     println!("\n{}", "Step 3: Deriving machine keypair...".yellow());
-    let keypair = derive_machine_keypair_with_scheme(
+    let keypair = derive_machine_keypair(
         neural_key,
         identity_id,
         machine_id,
@@ -136,28 +133,19 @@ fn create_machine_keypair(
         MachineKeyCapabilities::AUTHENTICATE
             | MachineKeyCapabilities::SIGN
             | MachineKeyCapabilities::ENCRYPT,
-        key_scheme,
     )?;
 
+    let pk = keypair.public_key();
     println!(
         "  Machine Signing Key: {}",
-        hex::encode(keypair.signing_public_key())
+        hex::encode(pk.ed25519_bytes())
     );
     println!(
         "  Machine Encryption Key: {}",
-        hex::encode(keypair.encryption_public_key())
+        hex::encode(pk.x25519_bytes())
     );
-    println!("  Key Scheme: {:?}", key_scheme);
-    if keypair.has_post_quantum_keys() {
-        println!(
-            "  PQ Signing Key: {} bytes",
-            keypair.pq_signing_public_key().map(|k| k.len()).unwrap_or(0)
-        );
-        println!(
-            "  PQ Encryption Key: {} bytes",
-            keypair.pq_encryption_public_key().map(|k| k.len()).unwrap_or(0)
-        );
-    }
+    println!("  PQ Signing Key: {} bytes", pk.ml_dsa_bytes().len());
+    println!("  PQ Encryption Key: {} bytes", pk.ml_kem_bytes().len());
     Ok(keypair)
 }
 
@@ -195,8 +183,7 @@ fn create_authorization_signature(
         created_at,
     );
     let signature = sign_message(identity_signing_keypair, &message);
-    verify_signature(&identity_signing_pk, &message, &signature)?;
-    println!("{}", "✓ Signature created and verified".green());
+    println!("{}", "✓ Signature created".green());
     Ok(signature.to_vec())
 }
 
@@ -210,7 +197,6 @@ async fn send_creation_request(
     signature: &[u8],
     device_name: &str,
     platform: &str,
-    key_scheme: KeyScheme,
 ) -> Result<CreateIdentityResponse> {
     println!("\n{}", "Step 5: Sending creation request...".yellow());
 
@@ -224,7 +210,6 @@ async fn send_creation_request(
         device_name,
         platform,
         created_at,
-        key_scheme,
     );
 
     let client = create_http_client()?;
@@ -248,30 +233,19 @@ fn build_creation_request(
     device_name: &str,
     platform: &str,
     created_at: u64,
-    key_scheme: KeyScheme,
 ) -> serde_json::Value {
-    let key_scheme_str = match key_scheme {
-        KeyScheme::Classical => "classical",
-        KeyScheme::PqHybrid => "pq_hybrid",
-    };
+    let pk = machine_keypair.public_key();
 
-    let mut machine_key = serde_json::json!({
+    let machine_key = serde_json::json!({
         "machine_id": machine_id,
-        "signing_public_key": hex::encode(machine_keypair.signing_public_key()),
-        "encryption_public_key": hex::encode(machine_keypair.encryption_public_key()),
+        "signing_public_key": hex::encode(pk.ed25519_bytes()),
+        "encryption_public_key": hex::encode(pk.x25519_bytes()),
         "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
         "device_name": device_name,
         "device_platform": platform,
-        "key_scheme": key_scheme_str
+        "pq_signing_public_key": hex::encode(pk.ml_dsa_bytes()),
+        "pq_encryption_public_key": hex::encode(pk.ml_kem_bytes())
     });
-
-    // Add PQ keys if present
-    if let Some(pq_sign_pk) = machine_keypair.pq_signing_public_key() {
-        machine_key["pq_signing_public_key"] = serde_json::json!(hex::encode(pq_sign_pk));
-    }
-    if let Some(pq_enc_pk) = machine_keypair.pq_encryption_public_key() {
-        machine_key["pq_encryption_public_key"] = serde_json::json!(hex::encode(pq_enc_pk));
-    }
 
     serde_json::json!({
         "identity_id": identity_id,
@@ -298,18 +272,11 @@ fn print_success(result: &CreateIdentityResponse) {
     println!("  Identity ID: {}", result.identity_id);
     println!("  Machine ID: {}", result.machine_id);
     println!("  Namespace ID: {}", result.namespace_id);
-    if let Some(scheme) = &result.key_scheme {
-        let scheme_display = match scheme.as_str() {
-            "classical" => "Classical (Ed25519 + X25519)",
-            "pq_hybrid" => "PQ-Hybrid (Classical + ML-DSA-65 + ML-KEM-768)",
-            _ => scheme,
-        };
-        println!("  Key Scheme: {}", scheme_display);
-    }
+    println!("  Key Scheme: PQ-Hybrid (Ed25519 + ML-DSA-65 + X25519 + ML-KEM-768)");
     println!("  Created At: {}", result.created_at);
 }
 
-fn display_user_shards(shards: &[NeuralShard; 3]) -> Result<()> {
+fn display_user_shards(shards: &[ShamirShare]) -> Result<()> {
     println!();
     println!(
         "{}",

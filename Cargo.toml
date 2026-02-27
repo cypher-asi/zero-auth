@@ -21,6 +21,9 @@ authors = ["Cypher Team"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+# PQ-Hybrid crypto crate
+zid = { path = "../zid", features = ["uuid", "did", "shamir", "server"] }
+
 # Cryptography
 chacha20poly1305 = "0.10"
 hkdf = "0.12"

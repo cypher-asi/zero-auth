@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 use colored::*;
 use uuid::Uuid;
 use zid_crypto::{
-    canonicalize_enrollment_message, derive_identity_signing_keypair, derive_machine_keypair_with_scheme,
-    sign_message, KeyScheme, MachineKeyCapabilities, NeuralKey,
+    canonicalize_enrollment_message, derive_identity_signing_keypair, derive_machine_keypair,
+    sign_message, MachineKeyCapabilities, NeuralKey,
 };
 
 use super::create_http_client;
@@ -17,9 +17,8 @@ use crate::storage::{
 };
 use crate::types::{EnrollMachineResponse, ListMachinesResponse};
 
-pub async fn enroll_machine(server: &str, device_name: &str, device_platform: &str, key_scheme: KeyScheme) -> Result<()> {
+pub async fn enroll_machine(server: &str, device_name: &str, device_platform: &str) -> Result<()> {
     println!("{}", "=== Enrolling New Machine ===".bold().cyan());
-    println!("  Key Scheme: {:?}", key_scheme);
 
     let credentials = load_credentials()?;
     let session = load_session()?;
@@ -37,7 +36,7 @@ pub async fn enroll_machine(server: &str, device_name: &str, device_platform: &s
     println!("{}", "✓ Neural Key reconstructed in memory".green());
 
     let new_keypair =
-        derive_new_machine_keypair(&neural_key, &credentials.identity_id, &new_machine_id, key_scheme)?;
+        derive_new_machine_keypair(&neural_key, &credentials.identity_id, &new_machine_id)?;
     let auth_signature = create_enrollment_signature(
         &neural_key,
         &credentials.identity_id,
@@ -96,11 +95,10 @@ fn derive_new_machine_keypair(
     neural_key: &NeuralKey,
     identity_id: &Uuid,
     machine_id: &Uuid,
-    scheme: KeyScheme,
 ) -> Result<zid_crypto::MachineKeyPair> {
     println!("\n{}", "Step 3: Deriving new machine keys...".yellow());
 
-    let keypair = derive_machine_keypair_with_scheme(
+    let keypair = derive_machine_keypair(
         neural_key,
         identity_id,
         machine_id,
@@ -108,22 +106,13 @@ fn derive_new_machine_keypair(
         MachineKeyCapabilities::AUTHENTICATE
             | MachineKeyCapabilities::SIGN
             | MachineKeyCapabilities::ENCRYPT,
-        scheme,
     )?;
 
-    println!(
-        "  Signing Public Key: {}",
-        hex::encode(keypair.signing_public_key())
-    );
-    println!(
-        "  Encryption Public Key: {}",
-        hex::encode(keypair.encryption_public_key())
-    );
-    println!("  Key Scheme: {:?}", scheme);
-    if keypair.has_post_quantum_keys() {
-        println!("  PQ Signing Public Key: {} bytes", keypair.pq_signing_public_key().map(|k| k.len()).unwrap_or(0));
-        println!("  PQ Encryption Public Key: {} bytes", keypair.pq_encryption_public_key().map(|k| k.len()).unwrap_or(0));
-    }
+    let pk = keypair.public_key();
+    println!("  Signing Public Key: {}", hex::encode(pk.ed25519_bytes()));
+    println!("  Encryption Public Key: {}", hex::encode(pk.x25519_bytes()));
+    println!("  PQ Signing Key: {} bytes", pk.ml_dsa_bytes().len());
+    println!("  PQ Encryption Key: {} bytes", pk.ml_kem_bytes().len());
     Ok(keypair)
 }
 
@@ -141,12 +130,13 @@ fn create_enrollment_signature(
     let (_, identity_signing_keypair) = derive_identity_signing_keypair(neural_key, identity_id)?;
     let created_at = chrono::Utc::now().timestamp() as u64;
     let namespace_id = identity_id;
+    let pk = keypair.public_key();
 
     let message = canonicalize_enrollment_message(
         machine_id,
         namespace_id,
-        &keypair.signing_public_key(),
-        &keypair.encryption_public_key(),
+        &pk.ed25519_bytes(),
+        &pk.x25519_bytes(),
         (MachineKeyCapabilities::AUTHENTICATE
             | MachineKeyCapabilities::SIGN
             | MachineKeyCapabilities::ENCRYPT)
@@ -172,30 +162,19 @@ async fn send_enrollment_request(
 ) -> Result<EnrollMachineResponse> {
     println!("\n{}", "Step 5: Sending enrollment request...".yellow());
 
-    let key_scheme = match keypair.scheme() {
-        KeyScheme::Classical => "classical",
-        KeyScheme::PqHybrid => "pq_hybrid",
-    };
-
-    let mut request_body = serde_json::json!({
+    let pk = keypair.public_key();
+    let request_body = serde_json::json!({
         "machine_id": machine_id,
         "namespace_id": namespace_id,
-        "signing_public_key": hex::encode(keypair.signing_public_key()),
-        "encryption_public_key": hex::encode(keypair.encryption_public_key()),
+        "signing_public_key": hex::encode(pk.ed25519_bytes()),
+        "encryption_public_key": hex::encode(pk.x25519_bytes()),
         "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
         "device_name": device_name,
         "device_platform": device_platform,
         "authorization_signature": hex::encode(auth_signature),
-        "key_scheme": key_scheme
+        "pq_signing_public_key": hex::encode(pk.ml_dsa_bytes()),
+        "pq_encryption_public_key": hex::encode(pk.ml_kem_bytes())
     });
-
-    // Add PQ keys if present
-    if let Some(pq_sign_pk) = keypair.pq_signing_public_key() {
-        request_body["pq_signing_public_key"] = serde_json::json!(hex::encode(pq_sign_pk));
-    }
-    if let Some(pq_enc_pk) = keypair.pq_encryption_public_key() {
-        request_body["pq_encryption_public_key"] = serde_json::json!(hex::encode(pq_enc_pk));
-    }
 
     let client = create_http_client()?;
     let response = client
@@ -224,14 +203,7 @@ fn print_enrollment_success(
     println!("\n{}", "Enrollment Details:".bold());
     println!("  Machine ID: {}", response.machine_id);
     println!("  Namespace ID: {}", response.namespace_id);
-    if let Some(scheme) = &response.key_scheme {
-        let scheme_display = match scheme.as_str() {
-            "classical" => "Classical (Ed25519 + X25519)",
-            "pq_hybrid" => "PQ-Hybrid (Classical + ML-DSA-65 + ML-KEM-768)",
-            _ => scheme,
-        };
-        println!("  Key Scheme: {}", scheme_display);
-    }
+    println!("  Key Scheme: PQ-Hybrid");
     println!("  Enrolled At: {}", response.enrolled_at);
     println!("  Device Name: {}", device_name);
     println!("  Device Platform: {}", device_platform);
@@ -285,20 +257,6 @@ fn print_machines_list(list_response: &ListMachinesResponse) {
         println!("  Created: {}", machine.created_at);
         if let Some(last_used) = &machine.last_used_at {
             println!("  Last Used: {}", last_used);
-        }
-        // Display key scheme
-        if let Some(scheme) = &machine.key_scheme {
-            let scheme_display = match scheme.as_str() {
-                "classical" => "Classical (Ed25519 + X25519)".normal(),
-                "pq_hybrid" => "PQ-Hybrid (Classical + ML-DSA-65 + ML-KEM-768)".cyan(),
-                _ => scheme.normal(),
-            };
-            println!("  Key Scheme: {}", scheme_display);
-        }
-        if let Some(has_pq) = machine.has_pq_keys {
-            if has_pq {
-                println!("  PQ Keys: {}", "Present".cyan().bold());
-            }
         }
         if machine.revoked {
             println!("  Status: {}", "REVOKED".red().bold());

@@ -6,7 +6,9 @@ publish = false
 
 [dev-dependencies]
 # Internal crates
+zid = { path = "../../zid", features = ["uuid", "did", "shamir", "server"] }
 zid-crypto = { path = "../crates/zid-crypto" }
+ed25519-dalek = { version = "2.0", features = ["rand_core"] }
 zid-identity-core = { path = "../crates/zid-identity-core" }
 zid-policy = { path = "../crates/zid-policy" }
 zid-storage = { path = "../crates/zid-storage" }

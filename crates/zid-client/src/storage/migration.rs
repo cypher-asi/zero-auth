@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::fs;
 use zeroize::Zeroize;
-use zid_crypto::{decrypt, split_neural_key, NeuralKey};
+use zid_crypto::{decrypt, NeuralKey, ShamirShare};
 
 use super::credentials::save_credentials_with_shards;
 use super::kek::derive_kek_from_passphrase;
@@ -77,7 +77,7 @@ pub fn is_legacy_credentials() -> bool {
 /// 3. Saves 2 shards encrypted, returns 3 user shards
 ///
 /// The caller MUST display the returned shards to the user, as they are needed for login.
-pub fn migrate_legacy_credentials(passphrase: &str) -> Result<[zid_crypto::NeuralShard; 3]> {
+pub fn migrate_legacy_credentials(passphrase: &str) -> Result<Vec<ShamirShare>> {
     use colored::*;
     use std::io::{self, Write};
 
@@ -186,8 +186,9 @@ pub fn migrate_legacy_credentials(passphrase: &str) -> Result<[zid_crypto::Neura
         "{}",
         "Splitting Neural Key into Neural Shards...".yellow()
     );
-    let shards = split_neural_key(&neural_key)
-        .map_err(|e| anyhow::anyhow!("Failed to split Neural Key: {}", e))?;
+    let mut rng = rand::thread_rng();
+    let shards: Vec<ShamirShare> = zid::shamir_split(neural_key.as_bytes(), 5, 3, &mut rng)
+        .map_err(|e| anyhow::anyhow!("Failed to split Neural Key: {:?}", e))?;
 
     // Prompt for new passphrase (can be same or different)
     println!();

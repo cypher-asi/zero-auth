@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 # Internal dependencies
+zid = { workspace = true }
 zid-crypto = { path = "../zid-crypto" }
 zid-storage = { path = "../zid-storage" }
 zid-policy = { path = "../zid-policy" }

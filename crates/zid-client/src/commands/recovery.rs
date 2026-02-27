@@ -10,8 +10,8 @@ use colored::*;
 use std::io::{self, Write};
 use uuid::Uuid;
 use zid_crypto::{
-    combine_shards, derive_identity_signing_keypair, derive_machine_keypair, split_neural_key,
-    MachineKeyCapabilities, NeuralKey, NeuralShard,
+    derive_identity_signing_keypair, derive_machine_keypair,
+    MachineKeyCapabilities, NeuralKey, ShamirShare,
 };
 
 use super::create_http_client;
@@ -41,8 +41,9 @@ pub async fn recover(
 
     // Step 2: Combine shards
     println!("{}", "Step 2: Combining Neural Shards...".yellow());
-    let neural_key = combine_shards(&shards)
-        .map_err(|e| anyhow::anyhow!("Failed to combine Neural Shards: {}", e))?;
+    let neural_key_bytes = zid::shamir_combine(&shards)
+        .map_err(|e| anyhow::anyhow!("Failed to combine Neural Shards: {:?}", e))?;
+    let neural_key = NeuralKey::from_bytes(neural_key_bytes);
     println!("{}", "✓ Neural Key reconstructed in memory".green());
     println!();
 
@@ -85,7 +86,7 @@ pub async fn recover(
     }
 }
 
-fn parse_shards(shards_hex: &[String]) -> Result<Vec<NeuralShard>> {
+fn parse_shards(shards_hex: &[String]) -> Result<Vec<ShamirShare>> {
     if shards_hex.len() < 3 {
         anyhow::bail!(
             "Need at least 3 Neural Shards for recovery, got {}",
@@ -102,8 +103,8 @@ fn parse_shards(shards_hex: &[String]) -> Result<Vec<NeuralShard>> {
 
     let mut shards = Vec::with_capacity(shards_hex.len());
     for (i, hex_str) in shards_hex.iter().enumerate() {
-        let shard = NeuralShard::from_hex(hex_str)
-            .map_err(|e| anyhow::anyhow!("Invalid Neural Shard {}: {}", i + 1, e))?;
+        let shard = ShamirShare::from_hex(hex_str)
+            .map_err(|e| anyhow::anyhow!("Invalid Neural Shard {}: {:?}", i + 1, e))?;
         shards.push(shard);
     }
 
@@ -145,12 +146,13 @@ async fn create_new_identity(
 
     // Create authorization signature
     let created_at = chrono::Utc::now().timestamp() as u64;
+    let pk = machine_keypair.public_key();
     let message = zid_crypto::canonicalize_identity_creation_message(
         &identity_id,
         &identity_signing_public_key,
         &machine_id,
-        &machine_keypair.signing_public_key(),
-        &machine_keypair.encryption_public_key(),
+        &pk.ed25519_bytes(),
+        &pk.x25519_bytes(),
         created_at,
     );
     let signature = zid_crypto::sign_message(&identity_signing_keypair, &message);
@@ -165,11 +167,13 @@ async fn create_new_identity(
         "authorization_signature": hex::encode(signature),
         "machine_key": {
             "machine_id": machine_id,
-            "signing_public_key": hex::encode(machine_keypair.signing_public_key()),
-            "encryption_public_key": hex::encode(machine_keypair.encryption_public_key()),
+            "signing_public_key": hex::encode(pk.ed25519_bytes()),
+            "encryption_public_key": hex::encode(pk.x25519_bytes()),
             "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
             "device_name": device_name,
-            "device_platform": platform
+            "device_platform": platform,
+            "pq_signing_public_key": hex::encode(pk.ml_dsa_bytes()),
+            "pq_encryption_public_key": hex::encode(pk.ml_kem_bytes())
         },
         "namespace_name": "Personal",
         "created_at": created_at
@@ -336,8 +340,9 @@ fn save_recovered_credentials(
     let neural_key_commitment = neural_key.compute_commitment();
 
     // Split neural key into 5 shards
-    let shards = split_neural_key(neural_key)
-        .map_err(|e| anyhow::anyhow!("Failed to split Neural Key: {}", e))?;
+    let mut rng = rand::thread_rng();
+    let shards: Vec<ShamirShare> = zid::shamir_split(neural_key.as_bytes(), 5, 3, &mut rng)
+        .map_err(|e| anyhow::anyhow!("Failed to split Neural Key: {:?}", e))?;
 
     // Save 2 shards encrypted + machine signing key + commitment, get back 3 user shards
     let user_shards = save_credentials_with_shards(
@@ -368,7 +373,7 @@ fn save_recovered_credentials(
     Ok(())
 }
 
-fn display_user_shards(shards: &[NeuralShard; 3]) -> Result<()> {
+fn display_user_shards(shards: &[ShamirShare]) -> Result<()> {
     println!();
     println!(
         "{}",

@@ -13,12 +13,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ahash"
-version = "0.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0453232ace82dee0dd0b4c87a59bd90f7b53b314f3e0f61fe2ee7c8a16482289"
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -844,30 +838,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8591b0bcc8a98a64310a2fae1bb3e9b8564dd10e381e6e28010fde8e8e8568db"
 
 [[package]]
-name = "fips203"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8bdb6454f692ca2a2b45cd554c6828c639d7f9c968cf83a678899ec4443a280"
-dependencies = [
- "rand_core 0.6.4",
- "sha3",
- "subtle",
- "zeroize",
-]
-
-[[package]]
-name = "fips204"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9fb5a367b9846933e271a3c2a992930743f82ae5e8cb7faa780715a80fa0b15"
-dependencies = [
- "rand_core 0.6.4",
- "sha2",
- "sha3",
- "zeroize",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1079,15 +1049,6 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
-dependencies = [
- "ahash",
-]
-
-[[package]]
-name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
@@ -1188,6 +1149,25 @@ name = "httpdate"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+
+[[package]]
+name = "hybrid-array"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2d35805454dc9f8662a98d6d61886ffe26bd465f5960e0e55345c70d5c0d2a9"
+dependencies = [
+ "typenum",
+]
+
+[[package]]
+name = "hybrid-array"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "891d15931895091dea5c47afa5b3c9a01ba634b311919fd4d41388fa0e3d76af"
+dependencies = [
+ "typenum",
+ "zeroize",
+]
 
 [[package]]
 name = "hyper"
@@ -1456,7 +1436,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7714e70437a7dc3ac8eb7e6f8df75fd8eb422675fc7678aff7364301092b1017"
 dependencies = [
  "equivalent",
- "hashbrown 0.16.1",
+ "hashbrown",
 ]
 
 [[package]]
@@ -1561,6 +1541,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ecc2af9a1119c51f12a14607e783cb977bde58bc069ff0c3da1095e635d70654"
 dependencies = [
  "cpufeatures",
+]
+
+[[package]]
+name = "kem"
+version = "0.3.0-pre.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b8645470337db67b01a7f966decf7d0bafedbae74147d33e641c67a91df239f"
+dependencies = [
+ "rand_core 0.6.4",
+ "zeroize",
 ]
 
 [[package]]
@@ -1685,6 +1675,34 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "ml-dsa"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac4a46643af2001eafebcc37031fc459eb72d45057aac5d7a15b00046a2ad6db"
+dependencies = [
+ "const-oid",
+ "hybrid-array 0.3.1",
+ "num-traits",
+ "pkcs8",
+ "rand_core 0.6.4",
+ "sha3",
+ "signature",
+ "zeroize",
+]
+
+[[package]]
+name = "ml-kem"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8de49b3df74c35498c0232031bb7e85f9389f913e2796169c8ab47a53993a18f"
+dependencies = [
+ "hybrid-array 0.2.3",
+ "kem",
+ "rand_core 0.6.4",
+ "sha3",
 ]
 
 [[package]]
@@ -2425,6 +2443,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_bytes"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
+dependencies = [
+ "serde",
+ "serde_core",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2513,23 +2541,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "shamir-vault"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3ea89f34f73d61bdfb65ba2904f62de24090f08718bd785fba5a7119aa1a5b4"
+dependencies = [
+ "rand 0.8.5",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
-]
-
-[[package]]
-name = "sharks"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "902b1e955f8a2e429fb1bad49f83fb952e6195d3c360ac547ff00fb826388753"
-dependencies = [
- "hashbrown 0.9.1",
- "rand 0.8.5",
- "zeroize",
 ]
 
 [[package]]
@@ -3762,6 +3789,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "zid"
+version = "0.2.0"
+dependencies = [
+ "bitflags 2.10.0",
+ "bs58",
+ "ed25519-dalek",
+ "hex",
+ "hkdf",
+ "ml-dsa",
+ "ml-kem",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "serde",
+ "serde_bytes",
+ "sha2",
+ "shamir-vault",
+ "thiserror 2.0.18",
+ "uuid",
+ "x25519-dalek",
+ "zeroize",
+]
+
+[[package]]
 name = "zid-client"
 version = "0.1.0"
 dependencies = [
@@ -3771,8 +3821,10 @@ dependencies = [
  "chrono",
  "clap",
  "colored",
+ "ed25519-dalek",
  "getrandom 0.2.17",
  "hex",
+ "rand 0.8.5",
  "reqwest 0.11.27",
  "rpassword",
  "serde",
@@ -3780,6 +3832,7 @@ dependencies = [
  "tokio",
  "uuid",
  "zeroize",
+ "zid",
  "zid-crypto",
 ]
 
@@ -3791,11 +3844,8 @@ dependencies = [
  "base64 0.21.7",
  "bitflags 2.10.0",
  "blake3",
- "bs58",
  "chacha20poly1305",
  "ed25519-dalek",
- "fips203",
- "fips204",
  "getrandom 0.2.17",
  "hex",
  "hkdf",
@@ -3803,11 +3853,10 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "sha2",
- "sharks",
  "thiserror 1.0.69",
  "uuid",
- "x25519-dalek",
  "zeroize",
+ "zid",
 ]
 
 [[package]]
@@ -3821,6 +3870,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "zid",
  "zid-crypto",
  "zid-policy",
  "zid-storage",
@@ -3832,11 +3882,13 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "ed25519-dalek",
  "hex",
  "reqwest 0.12.28",
  "serde_json",
  "tokio",
  "uuid",
+ "zid",
  "zid-crypto",
  "zid-identity-core",
  "zid-policy",
@@ -3888,6 +3940,7 @@ dependencies = [
  "url",
  "uuid",
  "zeroize",
+ "zid",
  "zid-crypto",
  "zid-identity-core",
  "zid-policy",

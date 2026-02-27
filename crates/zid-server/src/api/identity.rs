@@ -19,7 +19,7 @@ use crate::{
 
 use super::helpers::{
     format_timestamp_rfc3339, parse_approvals, parse_capabilities, parse_hex_32, parse_hex_64,
-    parse_key_scheme, parse_pq_keys, require_self_sovereign,
+    parse_pq_keys, require_self_sovereign,
 };
 
 // ============================================================================
@@ -44,12 +44,10 @@ pub struct MachineKeyRequest {
     pub capabilities: Vec<String>,
     pub device_name: String,
     pub device_platform: String,
-    /// Key scheme: "classical" (default) or "pq_hybrid"
-    pub key_scheme: Option<String>,
     /// ML-DSA-65 public key (hex, 3904 chars)
-    pub pq_signing_public_key: Option<String>,
+    pub pq_signing_public_key: String,
     /// ML-KEM-768 public key (hex, 2368 chars)
-    pub pq_encryption_public_key: Option<String>,
+    pub pq_encryption_public_key: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,7 +56,6 @@ pub struct CreateIdentityResponse {
     pub did: String,
     pub machine_id: Uuid,
     pub namespace_id: Uuid,
-    pub key_scheme: String,
     pub created_at: String,
 }
 
@@ -126,14 +123,10 @@ pub async fn create_identity(
     // Parse capabilities
     let capabilities = parse_capabilities(&req.machine_key.capabilities)?;
 
-    // Parse key scheme (default to classical)
-    let key_scheme = parse_key_scheme(req.machine_key.key_scheme.as_deref())?;
-
-    // Parse PQ keys based on key scheme
+    // Parse PQ keys (always required)
     let (pq_signing_public_key, pq_encryption_public_key) = parse_pq_keys(
-        key_scheme,
-        req.machine_key.pq_signing_public_key.as_ref(),
-        req.machine_key.pq_encryption_public_key.as_ref(),
+        &req.machine_key.pq_signing_public_key,
+        &req.machine_key.pq_encryption_public_key,
     )?;
 
     // Create machine key
@@ -152,7 +145,6 @@ pub async fn create_identity(
         device_platform: req.machine_key.device_platform.clone(),
         revoked: false,
         revoked_at: None,
-        key_scheme,
         pq_signing_public_key,
         pq_encryption_public_key,
     };
@@ -182,7 +174,6 @@ pub async fn create_identity(
         did: identity.did,
         machine_id: req.machine_key.machine_id,
         namespace_id,
-        key_scheme: key_scheme.as_str().to_string(),
         created_at: format_timestamp_rfc3339(identity.created_at)?,
     }))
 }
@@ -385,9 +376,8 @@ pub async fn recovery_ceremony(
         last_used_at: None,
         device_name: "Recovery Device".to_string(),
         device_platform: "unknown".to_string(),
-        key_scheme: Default::default(),
-        pq_signing_public_key: None,
-        pq_encryption_public_key: None,
+        pq_signing_public_key: vec![],
+        pq_encryption_public_key: vec![],
         revoked: false,
         revoked_at: None,
     };

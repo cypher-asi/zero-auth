@@ -15,8 +15,7 @@ use crate::{
 };
 
 use super::helpers::{
-    format_timestamp_rfc3339, parse_capabilities, parse_hex_32, parse_hex_64, parse_key_scheme,
-    parse_pq_keys,
+    format_timestamp_rfc3339, parse_capabilities, parse_hex_32, parse_hex_64, parse_pq_keys,
 };
 
 // ============================================================================
@@ -33,19 +32,16 @@ pub struct EnrollMachineRequest {
     pub device_name: String,
     pub device_platform: String,
     pub authorization_signature: String, // hex
-    /// Key scheme: "classical" (default) or "pq_hybrid"
-    pub key_scheme: Option<String>,
     /// ML-DSA-65 public key (hex, 3904 chars)
-    pub pq_signing_public_key: Option<String>,
+    pub pq_signing_public_key: String,
     /// ML-KEM-768 public key (hex, 2368 chars)
-    pub pq_encryption_public_key: Option<String>,
+    pub pq_encryption_public_key: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct EnrollMachineResponse {
     pub machine_id: Uuid,
     pub namespace_id: Uuid,
-    pub key_scheme: String,
     pub enrolled_at: String,
 }
 
@@ -62,8 +58,6 @@ pub struct MachineInfo {
     pub created_at: String,
     pub last_used_at: Option<String>,
     pub revoked: bool,
-    pub key_scheme: String,
-    pub has_pq_keys: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -98,14 +92,10 @@ pub async fn enroll_machine(
     // Parse capabilities
     let capabilities = parse_capabilities(&req.capabilities)?;
 
-    // Parse key scheme (default to classical)
-    let key_scheme = parse_key_scheme(req.key_scheme.as_deref())?;
-
-    // Parse PQ keys based on key scheme
+    // Parse PQ keys (always required)
     let (pq_signing_public_key, pq_encryption_public_key) = parse_pq_keys(
-        key_scheme,
-        req.pq_signing_public_key.as_ref(),
-        req.pq_encryption_public_key.as_ref(),
+        &req.pq_signing_public_key,
+        &req.pq_encryption_public_key,
     )?;
 
     // Default namespace to personal namespace if not provided
@@ -127,7 +117,6 @@ pub async fn enroll_machine(
         device_platform: req.device_platform.clone(),
         revoked: false,
         revoked_at: None,
-        key_scheme,
         pq_signing_public_key,
         pq_encryption_public_key,
     };
@@ -149,7 +138,6 @@ pub async fn enroll_machine(
     Ok(Json(EnrollMachineResponse {
         machine_id,
         namespace_id,
-        key_scheme: key_scheme.as_str().to_string(),
         enrolled_at: chrono::Utc::now().to_rfc3339(),
     }))
 }
@@ -175,7 +163,6 @@ pub async fn list_machines(
         .map(|m| {
             let created_at = format_timestamp_rfc3339(m.created_at)?;
             let last_used_at = m.last_used_at.map(format_timestamp_rfc3339).transpose()?;
-            let has_pq_keys = m.pq_signing_public_key.is_some() && m.pq_encryption_public_key.is_some();
 
             Ok(MachineInfo {
                 machine_id: m.machine_id,
@@ -184,8 +171,6 @@ pub async fn list_machines(
                 created_at,
                 last_used_at,
                 revoked: m.revoked,
-                key_scheme: m.key_scheme.as_str().to_string(),
-                has_pq_keys,
             })
         })
         .collect();

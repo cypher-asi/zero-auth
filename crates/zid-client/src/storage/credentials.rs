@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use std::fs;
 use zeroize::Zeroize;
-use zid_crypto::{combine_shards, decrypt, encrypt, Ed25519KeyPair, MachineKeyPair, NeuralShard};
+use zid_crypto::{decrypt, encrypt, Ed25519KeyPair, MachineKeyPair, ShamirShare};
 
 use super::kek::derive_kek_from_passphrase;
 use super::{get_credentials_path, MACHINE_KEY_ENCRYPTION_DOMAIN, SHARD_ENCRYPTION_DOMAIN};
@@ -34,7 +34,7 @@ use crate::types::ClientCredentials;
 /// *some* secret, but not necessarily the correct one.
 #[allow(clippy::too_many_arguments)]
 pub fn save_credentials_with_shards(
-    shards: &[NeuralShard; 5],
+    shards: &[ShamirShare],
     neural_key_commitment: &[u8; 32],
     machine_keypair: &MachineKeyPair,
     identity_id: uuid::Uuid,
@@ -43,7 +43,7 @@ pub fn save_credentials_with_shards(
     device_name: &str,
     device_platform: &str,
     passphrase: &str,
-) -> Result<[NeuralShard; 3]> {
+) -> Result<Vec<ShamirShare>> {
     // Generate random salt (32 bytes)
     let mut salt = [0u8; 32];
     getrandom::getrandom(&mut salt)
@@ -78,7 +78,7 @@ pub fn save_credentials_with_shards(
         .map_err(|e| anyhow::anyhow!("Failed to generate machine key nonce: {}", e))?;
 
     // Encrypt machine signing seed (32 bytes)
-    let signing_seed = machine_keypair.signing_key_pair().seed_bytes();
+    let signing_seed = machine_keypair.ed25519_signing_key().to_bytes();
     let encrypted_machine_signing_seed =
         encrypt(&kek, &signing_seed, &machine_key_nonce, MACHINE_KEY_ENCRYPTION_DOMAIN)
             .map_err(|e| anyhow::anyhow!("Failed to encrypt machine signing seed: {}", e))?;
@@ -98,8 +98,8 @@ pub fn save_credentials_with_shards(
         identity_id,
         machine_id,
         identity_signing_public_key: identity_signing_public_key.to_string(),
-        machine_signing_public_key: hex::encode(machine_keypair.signing_public_key()),
-        machine_encryption_public_key: hex::encode(machine_keypair.encryption_public_key()),
+        machine_signing_public_key: hex::encode(machine_keypair.public_key().ed25519_bytes()),
+        machine_encryption_public_key: hex::encode(machine_keypair.public_key().x25519_bytes()),
         device_name: device_name.to_string(),
         device_platform: device_platform.to_string(),
     };
@@ -114,7 +114,7 @@ pub fn save_credentials_with_shards(
     fs::write(path, json)?;
 
     // Return the 3 user shards (indices 2, 3, 4)
-    Ok([shards[2].clone(), shards[3].clone(), shards[4].clone()])
+    Ok(shards[2..5].to_vec())
 }
 
 /// Load credentials and reconstruct the Neural Key from 2 stored shards + 1 user shard.
@@ -135,7 +135,7 @@ pub fn save_credentials_with_shards(
 /// This prevents attackers from using arbitrary shards to derive wrong keys.
 pub fn load_and_reconstruct_neural_key(
     passphrase: &str,
-    user_shard: &NeuralShard,
+    user_shard: &ShamirShare,
 ) -> Result<(zid_crypto::NeuralKey, ClientCredentials)> {
     let json = fs::read_to_string(get_credentials_path())
         .context("Failed to load credentials. Run 'create-identity' first.")?;
@@ -175,16 +175,17 @@ pub fn load_and_reconstruct_neural_key(
     // Zeroize KEK after use
     kek.zeroize();
 
-    // Parse decrypted bytes back into NeuralShard
-    let shard_1 = NeuralShard::from_bytes(&decrypted_shard_1_bytes)
-        .map_err(|e| anyhow::anyhow!("Invalid Neural Shard 1 format: {}", e))?;
-    let shard_2 = NeuralShard::from_bytes(&decrypted_shard_2_bytes)
-        .map_err(|e| anyhow::anyhow!("Invalid Neural Shard 2 format: {}", e))?;
+    // Parse decrypted bytes back into ShamirShare
+    let shard_1 = ShamirShare::from_bytes(&decrypted_shard_1_bytes)
+        .map_err(|e| anyhow::anyhow!("Invalid Neural Shard 1 format: {:?}", e))?;
+    let shard_2 = ShamirShare::from_bytes(&decrypted_shard_2_bytes)
+        .map_err(|e| anyhow::anyhow!("Invalid Neural Shard 2 format: {:?}", e))?;
 
     // Combine 3 shards to reconstruct Neural Key
-    let shards = [shard_1, shard_2, user_shard.clone()];
-    let neural_key = combine_shards(&shards)
-        .map_err(|e| anyhow::anyhow!("Failed to reconstruct Neural Key: {}", e))?;
+    let shares = vec![shard_1, shard_2, user_shard.clone()];
+    let neural_key_bytes = zid::shamir_combine(&shares)
+        .map_err(|e| anyhow::anyhow!("Failed to reconstruct Neural Key: {:?}", e))?;
+    let neural_key = zid_crypto::NeuralKey::from_bytes(neural_key_bytes);
 
     // Verify the reconstructed key against stored commitment
     // This prevents using fake shards to derive wrong keys

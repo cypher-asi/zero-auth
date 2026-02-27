@@ -75,9 +75,8 @@ async fn create_test_identity(service: &TestService) -> (Uuid, Uuid, NeuralKey) 
         device_platform: "test".to_string(),
         revoked: false,
         revoked_at: None,
-        key_scheme: Default::default(),
-        pq_signing_public_key: None,
-        pq_encryption_public_key: None,
+        pq_signing_public_key: vec![0u8; 1952],
+        pq_encryption_public_key: vec![0u8; 1184],
     };
 
     let message = canonicalize_identity_creation_message(

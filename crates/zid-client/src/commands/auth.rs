@@ -9,7 +9,6 @@ use std::io::{self, Write};
 use uuid::Uuid;
 use zid_crypto::{
     derive_machine_keypair, sign_message, Ed25519KeyPair, MachineKeyCapabilities, NeuralKey,
-    NeuralShard,
 };
 
 use super::create_http_client;
@@ -99,7 +98,7 @@ pub async fn login(server: &str) -> Result<()> {
     Ok(())
 }
 
-fn display_migration_shards(shards: &[NeuralShard; 3]) -> Result<()> {
+fn display_migration_shards(shards: &[zid_crypto::ShamirShare]) -> Result<()> {
     println!();
     println!(
         "{}",
@@ -316,9 +315,10 @@ fn sign_challenge_with_neural_key(
             | MachineKeyCapabilities::ENCRYPT,
     )?;
 
-    let signature = sign_message(machine_keypair.signing_key_pair(), &canonical_challenge);
+    use ed25519_dalek::Signer;
+    let signature = machine_keypair.ed25519_signing_key().sign(&canonical_challenge);
     println!("{}", "✓ Challenge signed".green());
-    Ok(signature.to_vec())
+    Ok(signature.to_bytes().to_vec())
 }
 
 async fn submit_login(
