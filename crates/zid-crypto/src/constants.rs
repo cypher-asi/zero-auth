@@ -5,14 +5,8 @@
 //!
 //! All constants are normative and MUST NOT be changed without updating the spec.
 
-/// Size of Neural Key in bytes (256 bits)
-pub const NEURAL_KEY_SIZE: usize = 32;
-
-/// Size of public keys (Ed25519 and X25519) in bytes
+/// Size of Ed25519 public keys in bytes
 pub const PUBLIC_KEY_SIZE: usize = 32;
-
-/// Size of private keys (Ed25519 and X25519) in bytes
-pub const PRIVATE_KEY_SIZE: usize = 32;
 
 /// Size of Ed25519 signatures in bytes
 pub const SIGNATURE_SIZE: usize = 64;
@@ -22,9 +16,6 @@ pub const NONCE_SIZE: usize = 24;
 
 /// Size of XChaCha20-Poly1305 authentication tags in bytes (128 bits)
 pub const TAG_SIZE: usize = 16;
-
-/// Size of HKDF output (SHA-256) in bytes
-pub const HKDF_OUTPUT_SIZE: usize = 32;
 
 /// Size of salt for Argon2id
 pub const ARGON2_SALT_SIZE: usize = 32;
@@ -54,63 +45,28 @@ pub const SHAMIR_THRESHOLD: usize = 3;
 pub const SHAMIR_TOTAL_SHARES: usize = 5;
 
 // =============================================================================
-// Post-Quantum Cryptography Constants (NIST Level 3)
+// Post-Quantum Public Key Sizes (for server-side validation)
 // =============================================================================
 
 /// ML-DSA-65 public key size in bytes (NIST FIPS 204)
 pub const ML_DSA_65_PUBLIC_KEY_SIZE: usize = 1952;
 
-/// ML-DSA-65 secret key size in bytes
-pub const ML_DSA_65_SECRET_KEY_SIZE: usize = 4032;
-
-/// ML-DSA-65 signature size in bytes
-pub const ML_DSA_65_SIGNATURE_SIZE: usize = 3309;
-
-/// ML-DSA-65 seed size for deterministic key generation
-pub const ML_DSA_65_SEED_SIZE: usize = 32;
-
 /// ML-KEM-768 public key size in bytes (NIST FIPS 203)
 pub const ML_KEM_768_PUBLIC_KEY_SIZE: usize = 1184;
-
-/// ML-KEM-768 secret key size in bytes
-pub const ML_KEM_768_SECRET_KEY_SIZE: usize = 2400;
-
-/// ML-KEM-768 ciphertext size in bytes
-pub const ML_KEM_768_CIPHERTEXT_SIZE: usize = 1088;
-
-/// ML-KEM-768 shared secret size in bytes
-pub const ML_KEM_768_SHARED_SECRET_SIZE: usize = 32;
-
-/// ML-KEM-768 seed size for deterministic key generation (d || z)
-pub const ML_KEM_768_SEED_SIZE: usize = 64;
 
 /// Number of MFA backup codes
 pub const MFA_BACKUP_CODES_COUNT: usize = 10;
 
-/// Domain Separation Strings (as specified in cryptographic-constants.md § 11)
-/// Domain separation for Identity Signing Key derivation
+// =============================================================================
+// Domain Separation Strings (as specified in cryptographic-constants.md § 11)
+//
+// Machine key derivation domains (machine seed, sign, encrypt, pq-sign,
+// pq-encrypt) are handled internally by the `zid` crate.
+// =============================================================================
+
+/// Domain separation for Identity Signing Key derivation (Ed25519 component)
 /// Format: "cypher:id:identity:v1" || identity_id
 pub const DOMAIN_IDENTITY_SIGNING: &str = "cypher:id:identity:v1";
-
-/// Domain separation for Machine seed derivation
-/// Format: "cypher:shared:machine:v1" || identity_id || machine_id || epoch
-pub const DOMAIN_MACHINE_SEED: &str = "cypher:shared:machine:v1";
-
-/// Domain separation for Machine signing key derivation
-/// Format: "cypher:shared:machine:sign:v1" || machine_id
-pub const DOMAIN_MACHINE_SIGN: &str = "cypher:shared:machine:sign:v1";
-
-/// Domain separation for Machine encryption key derivation
-/// Format: "cypher:shared:machine:encrypt:v1" || machine_id
-pub const DOMAIN_MACHINE_ENCRYPT: &str = "cypher:shared:machine:encrypt:v1";
-
-/// Domain separation for Machine post-quantum signing key derivation
-/// Format: "cypher:shared:machine:pq-sign:v1" || machine_id
-pub const DOMAIN_MACHINE_PQ_SIGN: &str = "cypher:shared:machine:pq-sign:v1";
-
-/// Domain separation for Machine post-quantum KEM key derivation
-/// Format: "cypher:shared:machine:pq-kem:v1" || machine_id
-pub const DOMAIN_MACHINE_PQ_KEM: &str = "cypher:shared:machine:pq-kem:v1";
 
 /// Domain separation for JWT signing key seed derivation
 /// Format: "cypher:id:jwt:v1" || key_epoch
@@ -180,7 +136,6 @@ mod tests {
 
     #[test]
     fn test_constants_are_correct_sizes() {
-        assert_eq!(NEURAL_KEY_SIZE, 32);
         assert_eq!(PUBLIC_KEY_SIZE, 32);
         assert_eq!(SIGNATURE_SIZE, 64);
         assert_eq!(NONCE_SIZE, 24);
@@ -188,43 +143,21 @@ mod tests {
     }
 
     #[test]
-    fn test_pq_constants_match_nist_specs() {
-        // ML-DSA-65 (NIST Level 3) sizes per FIPS 204
+    fn test_pq_public_key_sizes() {
         assert_eq!(ML_DSA_65_PUBLIC_KEY_SIZE, 1952);
-        assert_eq!(ML_DSA_65_SECRET_KEY_SIZE, 4032);
-        assert_eq!(ML_DSA_65_SIGNATURE_SIZE, 3309);
-
-        // ML-KEM-768 (NIST Level 3) sizes per FIPS 203
         assert_eq!(ML_KEM_768_PUBLIC_KEY_SIZE, 1184);
-        assert_eq!(ML_KEM_768_SECRET_KEY_SIZE, 2400);
-        assert_eq!(ML_KEM_768_CIPHERTEXT_SIZE, 1088);
-        assert_eq!(ML_KEM_768_SHARED_SECRET_SIZE, 32);
-    }
-
-    #[test]
-    fn test_pq_domain_strings_follow_spec() {
-        assert!(DOMAIN_MACHINE_PQ_SIGN.starts_with("cypher:"));
-        assert!(DOMAIN_MACHINE_PQ_SIGN.contains(":v1"));
-        assert!(DOMAIN_MACHINE_PQ_KEM.starts_with("cypher:"));
-        assert!(DOMAIN_MACHINE_PQ_KEM.contains(":v1"));
     }
 
     #[test]
     fn test_domain_strings_follow_spec() {
-        // All domain strings must follow format: "cypher:{service}:{purpose}:v{version}"
         assert!(DOMAIN_IDENTITY_SIGNING.starts_with("cypher:"));
         assert!(DOMAIN_IDENTITY_SIGNING.contains(":v1"));
-
-        assert!(DOMAIN_MACHINE_SEED.starts_with("cypher:"));
-        assert!(DOMAIN_MACHINE_SEED.contains(":v1"));
-
         assert!(DOMAIN_JWT_SIGNING.starts_with("cypher:"));
         assert!(DOMAIN_JWT_SIGNING.contains(":v1"));
     }
 
     #[test]
     fn test_shamir_threshold_is_valid() {
-        // Use runtime comparison to avoid clippy constant assertion warning
         let threshold = SHAMIR_THRESHOLD;
         let total = SHAMIR_TOTAL_SHARES;
         assert!(threshold <= total, "Threshold must be <= total shares");

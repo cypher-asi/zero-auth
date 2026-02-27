@@ -2,7 +2,7 @@ use serde_json::json;
 use uuid::Uuid;
 use zid_crypto::{
     canonicalize_identity_creation_message, derive_identity_signing_keypair, derive_machine_keypair,
-    sign_message, MachineKeyCapabilities, NeuralKey,
+    generate_neural_key, sign_message, MachineKeyCapabilities,
 };
 
 #[path = "../common/mod.rs"]
@@ -19,7 +19,7 @@ async fn test_identity_creation_flow() -> Result<(), Box<dyn std::error::Error>>
     println!("✓ Test environment configured");
 
     // 1. Generate a Neural Key
-    let neural_key = NeuralKey::generate()?;
+    let neural_key = generate_neural_key();
     println!("✓ Generated Neural Key");
 
     // 2. Generate UUIDs

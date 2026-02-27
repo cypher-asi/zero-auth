@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn test_derive_identity_signing_keypair() {
-        let neural_key = NeuralKey::generate().unwrap();
+        let neural_key = NeuralKey::generate(&mut rand::thread_rng());
         let identity_id = uuid::Uuid::new_v4();
         let (public_key, keypair) =
             derive_identity_signing_keypair(&neural_key, &identity_id).unwrap();

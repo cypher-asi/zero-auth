@@ -364,8 +364,8 @@ mod tests {
     use super::*;
     use crate::traits::mocks::MockEventPublisher;
     use zid_crypto::{
-        canonicalize_identity_creation_message, derive_identity_signing_keypair, sign_message,
-        MachineKeyCapabilities, NeuralKey,
+        canonicalize_identity_creation_message, derive_identity_signing_keypair,
+        generate_neural_key, sign_message, MachineKeyCapabilities,
     };
     use zid_policy::PolicyEngineImpl;
     use zid_storage::RocksDbStorage;
@@ -377,7 +377,7 @@ mod tests {
         let events = Arc::new(MockEventPublisher);
         let service = IdentityCoreService::new(policy, events, storage);
 
-        let neural_key = NeuralKey::generate().unwrap();
+        let neural_key = generate_neural_key();
         let identity_id = Uuid::new_v4();
         let (identity_signing_public_key, identity_keypair) =
             derive_identity_signing_keypair(&neural_key, &identity_id).unwrap();

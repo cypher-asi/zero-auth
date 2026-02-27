@@ -63,10 +63,6 @@ pub enum CryptoError {
     #[error("Ed25519 error: {0}")]
     Ed25519Error(String),
 
-    /// X25519 error
-    #[error("X25519 error: {0}")]
-    X25519Error(String),
-
     /// HKDF error
     #[error("HKDF error: insufficient output length")]
     HkdfError,
@@ -79,59 +75,6 @@ pub enum CryptoError {
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
 
-    /// Shamir split operation failed
-    #[error("Shamir split failed: {0}")]
-    ShamirSplitFailed(String),
-
-    /// Shamir combine operation failed
-    #[error("Shamir combine failed: {0}")]
-    ShamirCombineFailed(String),
-
-    /// Insufficient shards for reconstruction
-    #[error("Insufficient Neural Shards: need {required}, got {provided}")]
-    InsufficientShards {
-        /// Minimum required shards
-        required: usize,
-        /// Number of shards provided
-        provided: usize,
-    },
-
-    /// Too many shards provided
-    #[error("Too many Neural Shards: maximum {maximum}, got {provided}")]
-    TooManyShards {
-        /// Maximum allowed shards
-        maximum: usize,
-        /// Number of shards provided
-        provided: usize,
-    },
-
-    /// Duplicate shard index
-    #[error("Duplicate Neural Shard index: {0}")]
-    DuplicateShardIndex(u8),
-
-    /// Invalid shard format
-    #[error("Invalid Neural Shard format: {0}")]
-    InvalidShardFormat(String),
-
-    /// Post-quantum key generation failed
-    #[error("Post-quantum key generation failed: {0}")]
-    PqKeyGenerationFailed(String),
-
-    /// Post-quantum signature error
-    #[error("Post-quantum signature error: {0}")]
-    PqSignatureError(String),
-
-    /// Post-quantum KEM error
-    #[error("Post-quantum KEM error: {0}")]
-    PqKemError(String),
-
-    /// Neural Key commitment mismatch
-    ///
-    /// The reconstructed Neural Key does not match the stored commitment.
-    /// This indicates invalid shards were provided (either corrupted, wrong identity,
-    /// or an attacker attempting to use fake shards).
-    #[error("Neural Key commitment mismatch: reconstructed key does not match stored commitment")]
-    NeuralKeyCommitmentMismatch,
 }
 
 /// Result type for cryptographic operations

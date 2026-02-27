@@ -2,8 +2,7 @@
 //!
 //! PQ-Hybrid machine key derivation is handled by the `zid` crate.
 //! This module provides server-specific derivation (managed identity, JWT, MFA)
-//! and convenience wrappers around zid's derivation functions that accept
-//! `uuid::Uuid` and zero-auth's `NeuralKey`.
+//! and convenience wrappers around zid's derivation that accept `uuid::Uuid`.
 
 mod identity;
 mod session;
@@ -17,20 +16,23 @@ use sha2::Sha256;
 
 /// Derive a PQ-Hybrid [`zid::MachineKeyPair`] from a NeuralKey.
 ///
-/// Convenience wrapper around `zid::derive_machine_keypair` that accepts
-/// zero-auth's `NeuralKey` and `uuid::Uuid` types.
+/// Convenience wrapper around [`zid::derive_machine_keypair`] that accepts
+/// `uuid::Uuid` instead of `IdentityId`/`MachineId`.
 pub fn derive_machine_keypair(
-    neural_key: &crate::keys::NeuralKey,
+    neural_key: &zid::NeuralKey,
     identity_id: &uuid::Uuid,
     machine_id: &uuid::Uuid,
     epoch: u64,
     capabilities: zid::MachineKeyCapabilities,
 ) -> Result<zid::MachineKeyPair> {
-    let zid_nk = zid::NeuralKey::from_bytes(*neural_key.as_bytes());
-    let zid_identity = zid::IdentityId::from(*identity_id);
-    let zid_machine = zid::MachineId::from(*machine_id);
-    zid::derive_machine_keypair(&zid_nk, zid_identity, zid_machine, epoch, capabilities)
-        .map_err(|_| CryptoError::HkdfError)
+    zid::derive_machine_keypair(
+        neural_key,
+        zid::IdentityId::from(*identity_id),
+        zid::MachineId::from(*machine_id),
+        epoch,
+        capabilities,
+    )
+    .map_err(|_| CryptoError::HkdfError)
 }
 
 /// Derive a key using HKDF-SHA256

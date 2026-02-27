@@ -40,5 +40,5 @@ pub use derivation::derive_managed_identity_signing_keypair;
 // Re-export zid DID functions
 pub use zid::{did_key_to_ed25519, ed25519_to_did_key};
 
-// Re-export zid Shamir types
-pub use zid::ShamirShare;
+// Re-export zid Shamir API
+pub use zid::{ShamirShare, shamir_split, shamir_combine};

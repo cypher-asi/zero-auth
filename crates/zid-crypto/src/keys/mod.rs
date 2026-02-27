@@ -4,19 +4,25 @@
 //! This module provides zero-auth specific key types and re-exports zid types.
 
 mod classical;
-mod neural;
 
 pub use classical::Ed25519KeyPair;
-pub use neural::NeuralKey;
 
-// Re-export zid PQ-hybrid types
+// Re-export zid types
 pub use zid::{
     MachineKeyCapabilities, MachineKeyPair, MachinePublicKey,
     IdentitySigningKey, IdentityVerifyingKey, HybridSignature,
-    IdentityId, MachineId, NeuralKey as ZidNeuralKey,
+    IdentityId, MachineId, NeuralKey,
 };
 
 use crate::{constants::*, errors::*};
+
+/// Generate a new [`NeuralKey`] using the OS CSPRNG.
+///
+/// Convenience wrapper around [`NeuralKey::generate`] that supplies
+/// `rand::thread_rng()` so callers don't need a `rand` import.
+pub fn generate_neural_key() -> NeuralKey {
+    NeuralKey::generate(&mut rand::thread_rng())
+}
 
 /// Generate a cryptographically random nonce for XChaCha20-Poly1305
 pub fn generate_nonce() -> Result<[u8; NONCE_SIZE]> {

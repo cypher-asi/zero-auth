@@ -47,7 +47,7 @@ mod tests {
 
     #[test]
     fn test_derive_mfa_kek() {
-        let neural_key = NeuralKey::generate().unwrap();
+        let neural_key = NeuralKey::generate(&mut rand::thread_rng());
         let identity_id = uuid::Uuid::new_v4();
 
         let kek = derive_mfa_kek(&neural_key, &identity_id).unwrap();

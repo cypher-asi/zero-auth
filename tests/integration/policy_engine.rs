@@ -9,8 +9,8 @@
 use std::sync::Arc;
 use uuid::Uuid;
 use zid_crypto::{
-    canonicalize_identity_creation_message, derive_identity_signing_keypair, sign_message,
-    MachineKeyCapabilities, NeuralKey,
+    canonicalize_identity_creation_message, derive_identity_signing_keypair, generate_neural_key,
+    sign_message, MachineKeyCapabilities, NeuralKey,
 };
 use zid_identity_core::{
     CreateIdentityRequest, IdentityCore, IdentityCoreService, IdentityStatus, MachineKey,
@@ -48,7 +48,7 @@ fn create_test_infrastructure() -> (Arc<RocksDbStorage>, Arc<PolicyEngineImpl<Ro
 
 /// Helper to create a test identity
 async fn create_test_identity(service: &TestService) -> (Uuid, Uuid, NeuralKey) {
-    let neural_key = NeuralKey::generate().unwrap();
+    let neural_key = generate_neural_key();
     let identity_id = Uuid::new_v4();
     let machine_id = Uuid::new_v4();
 
