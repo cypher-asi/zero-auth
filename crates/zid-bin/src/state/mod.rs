@@ -13,10 +13,63 @@ use types::*;
 
 static TOAST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// Maps nav sidebar sections to pages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavSection {
+    Dashboard,
+    Machines,
+    Credentials,
+    Mfa,
+    Sessions,
+    Namespaces,
+    Security,
+    Settings,
+}
+
+impl NavSection {
+    pub const ALL: [NavSection; 8] = [
+        NavSection::Dashboard,
+        NavSection::Machines,
+        NavSection::Credentials,
+        NavSection::Mfa,
+        NavSection::Sessions,
+        NavSection::Namespaces,
+        NavSection::Security,
+        NavSection::Settings,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            NavSection::Dashboard => "Dashboard",
+            NavSection::Machines => "Machines",
+            NavSection::Credentials => "Credentials",
+            NavSection::Mfa => "MFA",
+            NavSection::Sessions => "Sessions",
+            NavSection::Namespaces => "Namespaces",
+            NavSection::Security => "Security",
+            NavSection::Settings => "Settings",
+        }
+    }
+
+    pub fn to_page(self) -> Page {
+        match self {
+            NavSection::Dashboard => Page::Dashboard,
+            NavSection::Machines => Page::Machines,
+            NavSection::Credentials => Page::Credentials,
+            NavSection::Mfa => Page::Mfa,
+            NavSection::Sessions => Page::Sessions,
+            NavSection::Namespaces => Page::Namespaces,
+            NavSection::Security => Page::Security,
+            NavSection::Settings => Page::Settings,
+        }
+    }
+}
+
 pub struct AppState {
     // Navigation
     pub current_page: Page,
     pub navigation_stack: Vec<Page>,
+    pub nav_section: NavSection,
 
     // Identity
     pub identity: Option<IdentityViewModel>,
@@ -158,6 +211,7 @@ impl AppState {
         Self {
             current_page: initial_page,
             navigation_stack: vec![],
+            nav_section: NavSection::Dashboard,
             identity: None,
             identity_status: LoadStatus::Idle,
             machines: vec![],
