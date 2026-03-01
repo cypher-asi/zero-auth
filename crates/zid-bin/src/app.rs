@@ -159,6 +159,7 @@ impl ZeroIdApp {
     ) {
         egui::TopBottomPanel::top(panel_id)
             .frame(comp_layout::title_bar_frame())
+            .show_separator_line(false)
             .show(ctx, |ui| {
                 let title_bar_rect = ui.max_rect();
                 let title_resp = ui.interact(
