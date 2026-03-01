@@ -1,6 +1,6 @@
 use egui::{Color32, RichText, Ui, Vec2};
 
-use super::tokens::{self, colors, font_size, WIDGET_HEIGHT};
+use super::tokens::{self, colors, font_size, ICON_SIZE, WIDGET_HEIGHT};
 
 fn styled_button(ui: &mut Ui, label: &str) -> egui::Response {
     let btn = egui::Button::new(
@@ -115,11 +115,31 @@ pub fn square_icon_button(ui: &mut Ui, icon: &str, size: f32) -> bool {
     ui.add(btn).clicked()
 }
 
-pub fn title_bar_icon(ui: &mut Ui, icon: &str) -> bool {
-    let btn = egui::Button::new(RichText::new(icon).color(colors::TEXT_HEADING).size(12.0))
-        .fill(Color32::TRANSPARENT)
-        .stroke(egui::Stroke::NONE)
-        .corner_radius(0.0)
-        .min_size(Vec2::new(28.0, 28.0));
-    ui.add(btn).clicked()
+pub fn title_bar_icon(ui: &mut Ui, icon: &str, active: bool) -> egui::Response {
+    let font_id = egui::FontId::proportional(ICON_SIZE);
+    let galley =
+        ui.fonts(|f| f.layout_no_wrap(icon.to_string(), font_id, Color32::PLACEHOLDER));
+    let bp = ui.spacing().button_padding;
+    let desired = Vec2::new(galley.size().x + bp.x * 2.0, ui.spacing().interact_size.y);
+    let (rect, resp) = ui.allocate_exact_size(desired, egui::Sense::click());
+    let vis = ui.style().interact_selectable(&resp, active);
+    if !active && resp.hovered() {
+        ui.painter()
+            .rect_filled(rect, vis.corner_radius, vis.bg_fill);
+    }
+    let text_color = if active {
+        Color32::WHITE
+    } else {
+        vis.text_color()
+    };
+    let galley = ui.fonts(|f| {
+        f.layout_no_wrap(
+            icon.to_string(),
+            egui::FontId::proportional(ICON_SIZE),
+            text_color,
+        )
+    });
+    let text_pos = rect.center() - galley.size() / 2.0;
+    ui.painter().galley(text_pos, galley, vis.text_color());
+    resp
 }

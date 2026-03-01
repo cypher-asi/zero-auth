@@ -47,9 +47,19 @@ pub mod font_size {
 pub const WIDGET_HEIGHT: f32 = 24.0;
 pub const NAV_WIDTH: f32 = 168.0;
 pub const TITLE_BAR_HEIGHT: f32 = 32.0;
+pub const ICON_SIZE: f32 = 16.0;
+pub const STROKE_DEFAULT: f32 = 1.0;
 
 pub const TEXT_PRIMARY: Color32 = Color32::WHITE;
 pub const SUCCESS: Color32 = Color32::from_rgb(46, 230, 176);
 pub const DANGER: Color32 = Color32::from_rgb(255, 80, 80);
 pub const WARNING: Color32 = Color32::from_rgb(255, 200, 100);
 pub const INFO: Color32 = Color32::from_rgb(0, 180, 255);
+
+pub fn default_stroke() -> eframe::egui::Stroke {
+    eframe::egui::Stroke::new(STROKE_DEFAULT, colors::BORDER_SUBTLE)
+}
+
+pub fn border_stroke() -> eframe::egui::Stroke {
+    eframe::egui::Stroke::new(STROKE_DEFAULT, colors::BORDER)
+}

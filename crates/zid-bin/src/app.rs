@@ -1,8 +1,9 @@
 use eframe::egui;
 use tokio::sync::mpsc;
 
-use crate::components::tokens::{colors, font_size, spacing};
+use crate::components::buttons::title_bar_icon;
 use crate::components::layout as comp_layout;
+use crate::components::tokens::{colors, font_size, spacing};
 use crate::infra::local_storage::LocalStorage;
 use crate::state::actions::AppMessage;
 use crate::state::types::*;
@@ -96,9 +97,27 @@ impl eframe::App for ZeroIdApp {
             self.refresh_scheduled = false;
         }
 
+        let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+        let on_resize_edge = if !maximized {
+            Self::handle_resize_edges(ctx)
+        } else {
+            false
+        };
+
         let is_onboarding = matches!(self.state.current_page, Page::Onboarding(_));
 
         if is_onboarding {
+            Self::render_title_bar_shell(ctx, "pre_auth_title", maximized, on_resize_edge, |ui| {
+                ui.label(
+                    egui::RichText::new("ZERO-ID")
+                        .strong()
+                        .size(font_size::ACTION)
+                        .color(colors::TEXT_HEADING),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    Self::render_window_buttons(ui, maximized);
+                });
+            });
             egui::CentralPanel::default()
                 .frame(
                     egui::Frame::new()
@@ -109,8 +128,21 @@ impl eframe::App for ZeroIdApp {
                     crate::setup::render(ui, &mut self.state, &self.rt);
                 });
         } else {
+            Self::render_title_bar_shell(ctx, "title_bar", maximized, on_resize_edge, |ui| {
+                ui.label(
+                    egui::RichText::new("ZERO-ID")
+                        .strong()
+                        .size(font_size::ACTION)
+                        .color(colors::TEXT_HEADING),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    Self::render_window_buttons(ui, maximized);
+                });
+            });
             self.render_authenticated(ctx);
         }
+
+        Self::render_window_border(ctx, maximized);
 
         self.state.clear_expired_toasts();
         comp_layout::toast_area(ctx, &self.state.toasts);
@@ -118,6 +150,148 @@ impl eframe::App for ZeroIdApp {
 }
 
 impl ZeroIdApp {
+    fn render_title_bar_shell(
+        ctx: &egui::Context,
+        panel_id: &'static str,
+        maximized: bool,
+        on_resize_edge: bool,
+        content: impl FnOnce(&mut egui::Ui),
+    ) {
+        egui::TopBottomPanel::top(panel_id)
+            .frame(comp_layout::title_bar_frame())
+            .show(ctx, |ui| {
+                let title_bar_rect = ui.max_rect();
+                let title_resp = ui.interact(
+                    title_bar_rect,
+                    egui::Id::new(panel_id),
+                    egui::Sense::click_and_drag(),
+                );
+                if !on_resize_edge && title_resp.drag_started_by(egui::PointerButton::Primary) {
+                    ui.ctx()
+                        .send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                }
+                if title_resp.double_clicked() {
+                    ui.ctx()
+                        .send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
+                }
+
+                ui.visuals_mut().widgets.active = ui.visuals().widgets.hovered;
+                ui.visuals_mut().selection.bg_fill = egui::Color32::TRANSPARENT;
+                ui.visuals_mut().selection.stroke =
+                    egui::Stroke::new(1.0, egui::Color32::WHITE);
+                ui.visuals_mut().widgets.active.fg_stroke =
+                    egui::Stroke::new(1.0, egui::Color32::WHITE);
+
+                ui.horizontal(content);
+
+                Self::handle_title_bar_drag(ui, &title_resp, title_bar_rect, on_resize_edge);
+            });
+    }
+
+    fn render_window_buttons(ui: &mut egui::Ui, maximized: bool) {
+        if title_bar_icon(ui, egui_phosphor::regular::X, false).clicked() {
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        let max_icon = if maximized {
+            egui_phosphor::regular::CORNERS_IN
+        } else {
+            egui_phosphor::regular::CORNERS_OUT
+        };
+        if title_bar_icon(ui, max_icon, false).clicked() {
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
+        }
+        if title_bar_icon(ui, egui_phosphor::regular::MINUS, false).clicked() {
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        }
+    }
+
+    fn handle_title_bar_drag(
+        ui: &egui::Ui,
+        title_resp: &egui::Response,
+        title_bar_rect: egui::Rect,
+        on_resize_edge: bool,
+    ) {
+        if on_resize_edge || title_resp.double_clicked() {
+            return;
+        }
+        let drag = ui.input(
+            |i| match (i.pointer.press_origin(), i.pointer.hover_pos()) {
+                (Some(origin), Some(current)) => Some((origin, current)),
+                _ => None,
+            },
+        );
+        if let Some((press_origin, current)) = drag {
+            if title_bar_rect.contains(press_origin) && press_origin.distance(current) > 4.0 {
+                ui.ctx()
+                    .send_viewport_cmd(egui::ViewportCommand::StartDrag);
+            }
+        }
+    }
+
+    fn handle_resize_edges(ctx: &egui::Context) -> bool {
+        const BORDER: f32 = 6.0;
+        let screen = ctx.screen_rect();
+        let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) else {
+            return false;
+        };
+
+        let left = pos.x - screen.left() < BORDER;
+        let right = screen.right() - pos.x < BORDER;
+        let top = pos.y - screen.top() < BORDER;
+        let bottom = screen.bottom() - pos.y < BORDER;
+
+        use egui::viewport::ResizeDirection;
+        let dir = match (left, right, top, bottom) {
+            (true, _, true, _) => Some(ResizeDirection::NorthWest),
+            (_, true, true, _) => Some(ResizeDirection::NorthEast),
+            (true, _, _, true) => Some(ResizeDirection::SouthWest),
+            (_, true, _, true) => Some(ResizeDirection::SouthEast),
+            (true, _, _, _) => Some(ResizeDirection::West),
+            (_, true, _, _) => Some(ResizeDirection::East),
+            (_, _, true, _) => Some(ResizeDirection::North),
+            (_, _, _, true) => Some(ResizeDirection::South),
+            _ => None,
+        };
+
+        let Some(dir) = dir else { return false };
+
+        let cursor = match dir {
+            ResizeDirection::North | ResizeDirection::South => egui::CursorIcon::ResizeVertical,
+            ResizeDirection::East | ResizeDirection::West => egui::CursorIcon::ResizeHorizontal,
+            ResizeDirection::NorthWest | ResizeDirection::SouthEast => {
+                egui::CursorIcon::ResizeNwSe
+            }
+            ResizeDirection::NorthEast | ResizeDirection::SouthWest => {
+                egui::CursorIcon::ResizeNeSw
+            }
+        };
+        ctx.set_cursor_icon(cursor);
+
+        if ctx.input(|i| i.pointer.button_pressed(egui::PointerButton::Primary)) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(dir));
+        }
+
+        true
+    }
+
+    fn render_window_border(ctx: &egui::Context, maximized: bool) {
+        if !maximized {
+            let fg = ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("window_border"),
+            ));
+            fg.rect_stroke(
+                ctx.screen_rect(),
+                0.0,
+                egui::Stroke::new(1.0, colors::BORDER),
+                egui::StrokeKind::Outside,
+            );
+        }
+    }
+
     fn render_authenticated(&mut self, ctx: &egui::Context) {
         render_nav_panel(ctx, &mut self.state);
 

@@ -155,6 +155,16 @@ pub fn confirm_dialog(
     (confirmed, closed)
 }
 
+pub fn title_bar_frame() -> egui::Frame {
+    egui::Frame::new()
+        .fill(colors::PANEL_BG)
+        .inner_margin(egui::Margin::symmetric(
+            spacing::LG as i8,
+            spacing::MD as i8,
+        ))
+        .stroke(egui::Stroke::NONE)
+}
+
 pub fn toast_area(ctx: &egui::Context, toasts: &[crate::state::types::ToastMessage]) {
     if toasts.is_empty() {
         return;

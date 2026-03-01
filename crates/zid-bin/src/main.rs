@@ -7,6 +7,8 @@ mod service;
 mod setup;
 mod state;
 
+use std::sync::Arc;
+
 use eframe::egui;
 use tokio::sync::mpsc;
 
@@ -37,7 +39,9 @@ fn main() -> eframe::Result<()> {
     let mut viewport = egui::ViewportBuilder::default()
         .with_inner_size([820.0, 832.0])
         .with_min_inner_size([700.0, 500.0])
-        .with_title("Zero-ID");
+        .with_title("Zero-ID")
+        .with_decorations(false)
+        .with_resizable(true);
 
     if let Some(icon) = icon {
         viewport = viewport.with_icon(icon);
@@ -66,7 +70,7 @@ fn configure_fonts(ctx: &egui::Context) {
     let inter_data = include_bytes!("../assets/Inter-Regular.ttf");
     fonts.font_data.insert(
         "Inter".to_owned(),
-        std::sync::Arc::new(egui::FontData::from_static(inter_data)),
+        Arc::new(egui::FontData::from_static(inter_data)),
     );
 
     fonts
@@ -74,6 +78,8 @@ fn configure_fonts(ctx: &egui::Context) {
         .entry(egui::FontFamily::Proportional)
         .or_default()
         .insert(0, "Inter".to_owned());
+
+    egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
 
     ctx.set_fonts(fonts);
 }
@@ -142,14 +148,67 @@ pub(crate) fn configure_theme(ctx: &egui::Context) {
 }
 
 fn load_icon() -> Option<egui::IconData> {
-    let icon_bytes = include_bytes!("../assets/icon.png");
-    let img = image::load_from_memory(icon_bytes).ok()?.into_rgba8();
-    let (w, h) = img.dimensions();
+    let src = image::load_from_memory(include_bytes!("../assets/icon.png"))
+        .ok()?
+        .to_rgba8();
+    let (sw, sh) = (src.width(), src.height());
+
+    let pad = (sw.min(sh) as f64 * 0.10) as u32;
+    let out_w = sw + pad * 2;
+    let out_h = sh + pad * 2;
+    let r = (out_w.min(out_h) as f64) * 0.18;
+
+    let mut rgba = vec![0u8; (out_w * out_h * 4) as usize];
+
+    for y in 0..out_h {
+        for x in 0..out_w {
+            let i = ((y * out_w + x) * 4) as usize;
+            let a = corner_alpha(
+                x as f64 + 0.5,
+                y as f64 + 0.5,
+                out_w as f64,
+                out_h as f64,
+                r,
+            );
+            if a <= 0.0 {
+                continue;
+            }
+
+            let (r_val, g_val, b_val) = if x >= pad && x < pad + sw && y >= pad && y < pad + sh {
+                let px = src.get_pixel(x - pad, y - pad);
+                (px[0], px[1], px[2])
+            } else {
+                (0, 0, 0)
+            };
+
+            rgba[i] = r_val;
+            rgba[i + 1] = g_val;
+            rgba[i + 2] = b_val;
+            rgba[i + 3] = (a * 255.0).round() as u8;
+        }
+    }
+
     Some(egui::IconData {
-        rgba: img.into_raw(),
-        width: w,
-        height: h,
+        width: out_w,
+        height: out_h,
+        rgba,
     })
+}
+
+fn corner_alpha(cx: f64, cy: f64, w: f64, h: f64, r: f64) -> f64 {
+    let (kx, ky) = if cx < r && cy < r {
+        (r, r)
+    } else if cx > w - r && cy < r {
+        (w - r, r)
+    } else if cx < r && cy > h - r {
+        (r, h - r)
+    } else if cx > w - r && cy > h - r {
+        (w - r, h - r)
+    } else {
+        return 1.0;
+    };
+    let dist = ((cx - kx).powi(2) + (cy - ky).powi(2)).sqrt();
+    (r + 0.5 - dist).clamp(0.0, 1.0)
 }
 
 async fn ensure_server_running() {
