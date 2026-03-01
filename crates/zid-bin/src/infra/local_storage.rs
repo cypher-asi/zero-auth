@@ -210,10 +210,16 @@ impl LocalStorage {
 }
 
 fn root_data_dir() -> PathBuf {
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| ".".into());
-    PathBuf::from(home).join(".zid")
+    // Keep app data local to this repository during development.
+    // `CARGO_MANIFEST_DIR` for zid-bin points at `<repo>/crates/zid-bin`,
+    // so parent().parent() resolves to the repo root.
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    repo_root.join(".zid")
 }
 
 fn read_profile_config(root_dir: &PathBuf) -> ProfileConfig {
@@ -262,7 +268,7 @@ fn validate_profile_name(name: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// If `~/.zid/` contains flat credential/session/settings files but no `profiles/` dir,
+/// If `.zid/` contains flat credential/session/settings files but no `profiles/` dir,
 /// migrate them into `profiles/default/`.
 fn migrate_flat_layout(root_dir: &PathBuf) -> Result<(), AppError> {
     let profiles_dir = root_dir.join("profiles");
@@ -302,7 +308,7 @@ fn migrate_flat_layout(root_dir: &PathBuf) -> Result<(), AppError> {
     Ok(())
 }
 
-/// If the old `ProjectDirs` path has data but `~/.zid/profiles/` doesn't,
+/// If the old `ProjectDirs` path has data but `.zid/profiles/` doesn't,
 /// copy it over and migrate.
 fn migrate_old_project_dirs(root_dir: &PathBuf) -> Result<(), AppError> {
     let profiles_dir = root_dir.join("profiles");
@@ -364,7 +370,7 @@ fn migrate_old_project_dirs(root_dir: &PathBuf) -> Result<(), AppError> {
     write_profile_config(root_dir, &config)?;
 
     tracing::info!(
-        "Migrated data from old location ({}) to ~/.zid/",
+        "Migrated data from old location ({}) to .zid/",
         old_dir.display()
     );
     Ok(())

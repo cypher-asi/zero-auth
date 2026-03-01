@@ -90,10 +90,16 @@ impl HttpClient {
         match code {
             401 => Err(AppError::SessionExpired),
             403 => {
-                if msg.to_lowercase().contains("frozen") {
+                let msg_lower = msg.to_lowercase();
+                if msg_lower.contains("frozen") {
                     Err(AppError::IdentityFrozen)
-                } else if msg.to_lowercase().contains("mfa") {
+                } else if msg_lower.contains("mfa") {
                     Err(AppError::MfaRequired)
+                } else if msg_lower.contains("revoked") {
+                    Err(AppError::InvalidInput(
+                        "Machine key has been revoked. Recover identity to re-enroll this device or switch profile."
+                            .into(),
+                    ))
                 } else {
                     Err(AppError::InvalidCredentials)
                 }

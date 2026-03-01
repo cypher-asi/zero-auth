@@ -24,6 +24,9 @@ pub fn render(ui: &mut Ui, state: &mut AppState, step: LoginStep, rt: &tokio::ru
 }
 
 fn render_passphrase_entry(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Handle) {
+    render_profile_switcher(ui, state);
+    ui.add_space(12.0);
+
     ui.label(RichText::new("Enter your passphrase to unlock").color(theme::TEXT_SECONDARY));
     ui.add_space(16.0);
 
@@ -50,6 +53,9 @@ fn render_passphrase_entry(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtim
 
     ui.add_space(20.0);
 
+    render_login_help(ui, state);
+    ui.add_space(16.0);
+
     let can_login = !state.login_passphrase.is_empty()
         && (has_stored_machine_key || !state.login_user_shard_hex.is_empty());
 
@@ -64,6 +70,74 @@ fn render_passphrase_entry(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtim
                 start_login(state, rt, has_stored_machine_key);
             }
         });
+    });
+}
+
+fn render_profile_switcher(ui: &mut Ui, state: &mut AppState) {
+    let profiles: Vec<String> = state.profiles.iter().map(|p| p.name.clone()).collect();
+    if profiles.is_empty() {
+        return;
+    }
+
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new("Profile")
+                .color(theme::TEXT_MUTED)
+                .font(theme::small_font()),
+        );
+
+        let mut selected = state.active_profile.clone();
+        let response = egui::ComboBox::from_id_salt("onboarding_profile_selector")
+            .selected_text(
+                RichText::new(selected.clone())
+                    .color(theme::TEXT_SECONDARY)
+                    .font(theme::small_font()),
+            )
+            .show_ui(ui, |ui| {
+                let mut switched_to: Option<String> = None;
+                for name in &profiles {
+                    if ui.selectable_label(*name == selected, name).clicked() && *name != selected {
+                        switched_to = Some(name.clone());
+                    }
+                }
+                switched_to
+            });
+
+        if let Some(inner) = response.inner {
+            if let Some(name) = inner {
+                selected = name.clone();
+                let _ = state.tx.send(AppMessage::ProfileSwitched(name));
+            }
+        }
+
+        let _ = selected;
+    });
+}
+
+fn render_login_help(ui: &mut Ui, state: &AppState) {
+    let frame = egui::Frame::none()
+        .fill(theme::BG_SECONDARY)
+        .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+        .rounding(egui::Rounding::same(6.0))
+        .stroke(egui::Stroke::new(1.0, theme::BORDER));
+    frame.show(ui, |ui| {
+        ui.label(
+            RichText::new("If this device was revoked, passphrase login will fail.")
+                .color(theme::TEXT_PRIMARY)
+                .font(theme::small_font()),
+        );
+        ui.label(
+            RichText::new("Use Recover Identity to re-enroll this machine, or switch Profile to access another identity.")
+                .color(theme::TEXT_MUTED)
+                .font(theme::small_font()),
+        );
+        if !state.profiles.is_empty() {
+            ui.label(
+                RichText::new(format!("Current profile: {}", state.active_profile))
+                    .color(theme::TEXT_MUTED)
+                    .font(theme::small_font()),
+            );
+        }
     });
 }
 
