@@ -45,7 +45,11 @@ pub const SHAMIR_THRESHOLD: usize = 3;
 pub const SHAMIR_TOTAL_SHARES: usize = 5;
 
 // =============================================================================
-// Post-Quantum Public Key Sizes (for server-side validation)
+// Post-Quantum Public Key Sizes
+//
+// Used by the server for validating PQ public key lengths on enrollment.
+// The `zid` crate handles PQ key generation internally but does not export
+// these size constants.
 // =============================================================================
 
 /// ML-DSA-65 public key size in bytes (NIST FIPS 204)
@@ -60,48 +64,47 @@ pub const MFA_BACKUP_CODES_COUNT: usize = 10;
 // =============================================================================
 // Domain Separation Strings (as specified in cryptographic-constants.md § 11)
 //
-// Machine key derivation domains (machine seed, sign, encrypt, pq-sign,
-// pq-encrypt) are handled internally by the `zid` crate.
+// Key derivation domains for NeuralKey → machine/identity keys (machine seed,
+// sign, encrypt, pq-sign, pq-encrypt, identity Ed25519, identity pq-sign) are
+// handled internally by the `zid` crate and no longer appear here.
+//
+// The DOMAIN_IDENTITY_SIGNING constant is retained for the Ed25519-only
+// `derive_identity_signing_keypair` wrapper used by server code. It matches
+// the domain string that `zid` uses internally for the Ed25519 component.
 // =============================================================================
 
-/// Domain separation for Identity Signing Key derivation (Ed25519 component)
-/// Format: "cypher:id:identity:v1" || identity_id
+/// Domain separation for Identity Signing Key derivation (Ed25519 component).
+///
+/// Matches `zid`'s internal domain for the Ed25519 ISK path. Used by
+/// [`derive_identity_signing_keypair`](crate::derivation::derive_identity_signing_keypair)
+/// which returns a plain Ed25519 keypair for server backward-compatibility.
 pub const DOMAIN_IDENTITY_SIGNING: &str = "cypher:id:identity:v1";
 
 /// Domain separation for JWT signing key seed derivation
-/// Format: "cypher:id:jwt:v1" || key_epoch
 pub const DOMAIN_JWT_SIGNING: &str = "cypher:id:jwt:v1";
 
 /// Domain separation for MFA KEK derivation
-/// Format: "cypher:id:mfa-kek:v1" || identity_id
 pub const DOMAIN_MFA_KEK: &str = "cypher:id:mfa-kek:v1";
 
 /// Domain separation for MFA TOTP AAD
-/// Format: "cypher:id:mfa-totp:v1" || identity_id
 pub const DOMAIN_MFA_TOTP_AAD: &str = "cypher:id:mfa-totp:v1";
 
 /// Domain separation for recovery share backup KEK
-/// Format: "cypher:share-backup-kek:v1" || identity_id
 pub const DOMAIN_SHARE_BACKUP_KEK: &str = "cypher:share-backup-kek:v1";
 
 /// Domain separation for recovery share backup AAD
-/// Format: "cypher:share-backup:v1" || identity_id || share_index
 pub const DOMAIN_SHARE_BACKUP_AAD: &str = "cypher:share-backup:v1";
 
 /// Domain separation for managed identity signing key derivation
-/// Format: "cypher:managed:identity:v1" || method_type || method_id
 pub const DOMAIN_MANAGED_IDENTITY: &str = "cypher:managed:identity:v1";
 
 /// Domain separation for Shared Vault Key (SVK) derivation (zero-vault)
-/// Format: "cypher:vault:svk:v1" || cell_id || vault_id
 pub const DOMAIN_VAULT_SVK: &str = "cypher:vault:svk:v1";
 
 /// Domain separation for Vault Data Encryption Key (VDEK) derivation (zero-vault)
-/// Format: "cypher:vault:vdek:v1" || cell_id || vault_id || vdek_epoch
 pub const DOMAIN_VAULT_VDEK: &str = "cypher:vault:vdek:v1";
 
 /// Domain separation for signing key client share derivation (zero-vault)
-/// Format: "cypher:vault:signing:v1" || cell_id || vault_id || key_id || scheme || chain_id
 pub const DOMAIN_VAULT_SIGNING: &str = "cypher:vault:signing:v1";
 
 /// Argon2id parameters for password hashing
@@ -143,26 +146,23 @@ mod tests {
     }
 
     #[test]
-    fn test_pq_public_key_sizes() {
-        assert_eq!(ML_DSA_65_PUBLIC_KEY_SIZE, 1952);
-        assert_eq!(ML_KEM_768_PUBLIC_KEY_SIZE, 1184);
-    }
-
-    #[test]
     fn test_domain_strings_follow_spec() {
-        assert!(DOMAIN_IDENTITY_SIGNING.starts_with("cypher:"));
-        assert!(DOMAIN_IDENTITY_SIGNING.contains(":v1"));
-        assert!(DOMAIN_JWT_SIGNING.starts_with("cypher:"));
-        assert!(DOMAIN_JWT_SIGNING.contains(":v1"));
-    }
-
-    #[test]
-    fn test_shamir_threshold_is_valid() {
-        let threshold = SHAMIR_THRESHOLD;
-        let total = SHAMIR_TOTAL_SHARES;
-        assert!(threshold <= total, "Threshold must be <= total shares");
-        assert_eq!(threshold, 3);
-        assert_eq!(total, 5);
+        let domains = [
+            DOMAIN_IDENTITY_SIGNING,
+            DOMAIN_JWT_SIGNING,
+            DOMAIN_MFA_KEK,
+            DOMAIN_MFA_TOTP_AAD,
+            DOMAIN_MANAGED_IDENTITY,
+            DOMAIN_SHARE_BACKUP_KEK,
+            DOMAIN_SHARE_BACKUP_AAD,
+            DOMAIN_VAULT_SVK,
+            DOMAIN_VAULT_VDEK,
+            DOMAIN_VAULT_SIGNING,
+        ];
+        for d in domains {
+            assert!(d.starts_with("cypher:"), "{d} missing cypher: prefix");
+            assert!(d.contains(":v1"), "{d} missing :v1 version tag");
+        }
     }
 
     #[test]

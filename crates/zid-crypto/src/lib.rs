@@ -31,14 +31,20 @@ pub use keys::*;
 pub use signatures::*;
 pub use utils::*;
 
-// Re-export Challenge types for client use
-pub use signatures::{canonicalize_challenge, Challenge, EntityType};
-
-// Re-export managed identity derivation
-pub use derivation::derive_managed_identity_signing_keypair;
-
 // Re-export zid DID functions
-pub use zid::{did_key_to_ed25519, ed25519_to_did_key};
+pub use zid::{did_key_to_ed25519, ed25519_to_did_key, verify_did_ed25519};
 
-// Re-export zid Shamir API
-pub use zid::{ShamirShare, shamir_split, shamir_combine};
+// Re-export zid Shamir / identity-generation API
+pub use zid::{
+    ShamirShare, shamir_split, shamir_combine,
+    IdentityBundle, IdentityInfo,
+    generate_identity, verify_shares,
+    sign_with_shares, derive_machine_keypair_from_shares,
+};
+
+// Re-export zid KEM types
+pub use zid::{SharedSecret, EncapBundle};
+
+// Re-export zid's full hybrid identity derivation (complements the
+// Ed25519-only `derive_identity_signing_keypair` wrapper in `derivation`)
+pub use zid::derive_identity_signing_key;
