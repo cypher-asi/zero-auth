@@ -75,19 +75,24 @@ pub async fn login_machine(
     machine_id: &Uuid,
     keypair: &zid_crypto::Ed25519KeyPair,
 ) -> Result<SessionTokens, AppError> {
-    let challenge: ChallengeResponse = client
+    let challenge_resp: ChallengeResponse = client
         .get(&format!("/v1/auth/challenge?machine_id={}", machine_id))
         .await?;
 
     use base64::Engine;
-    let challenge_bytes = base64::engine::general_purpose::STANDARD
-        .decode(&challenge.challenge)
+    let challenge_json = base64::engine::general_purpose::STANDARD
+        .decode(&challenge_resp.challenge)
         .map_err(|e| AppError::CryptoError(format!("Challenge decode failed: {e}")))?;
-    let sig = crypto_adapter::sign_bytes(keypair, &challenge_bytes);
+
+    let challenge: zid_crypto::Challenge = serde_json::from_slice(&challenge_json)
+        .map_err(|e| AppError::CryptoError(format!("Challenge parse failed: {e}")))?;
+
+    let canonical = zid_crypto::canonicalize_challenge(&challenge);
+    let sig = crypto_adapter::sign_bytes(keypair, &canonical);
 
     let body = MachineLoginBody {
         machine_id: *machine_id,
-        challenge_id: challenge.challenge_id,
+        challenge_id: challenge_resp.challenge_id,
         signature: hex::encode(sig),
     };
 
