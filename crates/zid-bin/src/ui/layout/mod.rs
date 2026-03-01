@@ -1,5 +1,6 @@
 use egui::{Align, Color32, Layout, RichText, Ui, Vec2};
 
+use crate::state::actions::AppMessage;
 use crate::state::types::*;
 use crate::state::AppState;
 use crate::ui::theme;
@@ -74,17 +75,46 @@ pub fn render_sidebar(ui: &mut Ui, state: &mut AppState) {
                         ui.label(RichText::new(did_short).font(theme::small_font()).color(theme::TEXT_MUTED));
                         ui.label(RichText::new(&identity.tier).font(theme::small_font()).color(theme::TEXT_SECONDARY));
                     }
-                    ui.label(
-                        RichText::new(format!("Profile: {}", state.active_profile))
-                            .font(theme::small_font())
-                            .color(theme::TEXT_MUTED),
-                    );
+                    render_profile_selector(ui, state);
                 });
             });
             ui.add_space(4.0);
             ui.separator();
         });
     });
+}
+
+fn render_profile_selector(ui: &mut Ui, state: &mut AppState) {
+    let profiles: Vec<String> = state.profiles.iter().map(|p| p.name.clone()).collect();
+    let mut selected = state.active_profile.clone();
+
+    let combo = egui::ComboBox::from_id_salt("profile_selector")
+        .selected_text(RichText::new(format!("Profile: {}", selected)).font(theme::small_font()).color(theme::TEXT_MUTED))
+        .width(ui.available_width() - 4.0);
+
+    let response = combo.show_ui(ui, |ui| {
+        let mut switched_to: Option<String> = None;
+        for name in &profiles {
+            let is_selected = *name == selected;
+            let label = if is_selected {
+                RichText::new(name).color(theme::BRAND_PRIMARY).font(theme::small_font())
+            } else {
+                RichText::new(name).color(theme::TEXT_SECONDARY).font(theme::small_font())
+            };
+            if ui.selectable_label(is_selected, label).clicked() && !is_selected {
+                switched_to = Some(name.clone());
+            }
+        }
+        switched_to
+    });
+
+    if let Some(inner) = response.inner {
+        if let Some(name) = inner {
+            selected = name.clone();
+            let _ = state.tx.send(AppMessage::ProfileSwitched(name));
+        }
+    }
+    let _ = selected;
 }
 
 pub fn render_frozen_banner(ui: &mut Ui, frozen: &FrozenInfo) {
