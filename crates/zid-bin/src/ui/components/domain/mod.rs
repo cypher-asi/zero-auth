@@ -148,6 +148,30 @@ pub fn shard_card(ui: &mut Ui, index: usize, hex_value: &str) {
     });
 }
 
+pub fn copy_all_shards_button(ui: &mut Ui, shards: &[String]) {
+    if shards.is_empty() {
+        return;
+    }
+
+    if core::secondary_button(ui, "Copy All Shards") {
+        let combined = shards
+            .iter()
+            .enumerate()
+            .map(|(i, hex)| {
+                let label = match i {
+                    0 => "Shard A",
+                    1 => "Shard B",
+                    2 => "Shard C",
+                    _ => "Shard",
+                };
+                format!("{label}: {hex}")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let _ = crate::infra::os_integration::copy_to_clipboard(&combined);
+    }
+}
+
 pub fn session_card(ui: &mut Ui, session: &SessionViewModel) -> bool {
     let mut revoked = false;
     core::card_frame().show(ui, |ui| {

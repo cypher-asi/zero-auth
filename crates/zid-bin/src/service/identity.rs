@@ -170,3 +170,137 @@ pub async fn enable(client: &HttpClient) -> Result<(), AppError> {
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verify that CreateIdentityBody serializes with field names matching
+    /// the server's CreateIdentityRequest (POST /v1/identity).
+    ///
+    /// Server struct: zid-server/src/api/identity.rs :: CreateIdentityRequest
+    #[test]
+    fn create_identity_body_matches_server_contract() {
+        let body = CreateIdentityBody {
+            identity_id: Uuid::nil(),
+            identity_signing_public_key: "ab".repeat(32),
+            authorization_signature: "cd".repeat(64),
+            machine_key: MachineKeyBody {
+                machine_id: Uuid::nil(),
+                signing_public_key: "ef".repeat(32),
+                encryption_public_key: "01".repeat(32),
+                capabilities: vec!["FULL_DEVICE".into()],
+                device_name: "Test Device".into(),
+                device_platform: "test-os".into(),
+                pq_signing_public_key: "aa".repeat(1952),
+                pq_encryption_public_key: "bb".repeat(1184),
+            },
+            namespace_name: "test-namespace".into(),
+            created_at: 1700000000,
+        };
+
+        let json: serde_json::Value = serde_json::to_value(&body).unwrap();
+        let obj = json.as_object().expect("CreateIdentityBody should serialize as a JSON object");
+
+        let required_fields = [
+            "identity_id",
+            "identity_signing_public_key",
+            "authorization_signature",
+            "machine_key",
+            "namespace_name",
+            "created_at",
+        ];
+
+        for field in &required_fields {
+            assert!(
+                obj.contains_key(*field),
+                "CreateIdentityBody is missing field '{field}' required by server's CreateIdentityRequest"
+            );
+        }
+
+        let mk = obj["machine_key"]
+            .as_object()
+            .expect("machine_key should be a nested JSON object");
+
+        let mk_required_fields = [
+            "machine_id",
+            "signing_public_key",
+            "encryption_public_key",
+            "capabilities",
+            "device_name",
+            "device_platform",
+            "pq_signing_public_key",
+            "pq_encryption_public_key",
+        ];
+
+        for field in &mk_required_fields {
+            assert!(
+                mk.contains_key(*field),
+                "machine_key is missing field '{field}' required by server's MachineKeyRequest"
+            );
+        }
+    }
+
+    #[test]
+    fn create_identity_body_has_no_extraneous_fields() {
+        let body = CreateIdentityBody {
+            identity_id: Uuid::nil(),
+            identity_signing_public_key: String::new(),
+            authorization_signature: String::new(),
+            machine_key: MachineKeyBody {
+                machine_id: Uuid::nil(),
+                signing_public_key: String::new(),
+                encryption_public_key: String::new(),
+                capabilities: vec![],
+                device_name: String::new(),
+                device_platform: String::new(),
+                pq_signing_public_key: String::new(),
+                pq_encryption_public_key: String::new(),
+            },
+            namespace_name: String::new(),
+            created_at: 0,
+        };
+
+        let json: serde_json::Value = serde_json::to_value(&body).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let known_top_level: std::collections::HashSet<&str> = [
+            "identity_id",
+            "identity_signing_public_key",
+            "authorization_signature",
+            "machine_key",
+            "namespace_name",
+            "created_at",
+        ]
+        .into_iter()
+        .collect();
+
+        for key in obj.keys() {
+            assert!(
+                known_top_level.contains(key.as_str()),
+                "CreateIdentityBody has unexpected field '{key}' — update server and this test."
+            );
+        }
+
+        let mk = obj["machine_key"].as_object().unwrap();
+        let known_mk: std::collections::HashSet<&str> = [
+            "machine_id",
+            "signing_public_key",
+            "encryption_public_key",
+            "capabilities",
+            "device_name",
+            "device_platform",
+            "pq_signing_public_key",
+            "pq_encryption_public_key",
+        ]
+        .into_iter()
+        .collect();
+
+        for key in mk.keys() {
+            assert!(
+                known_mk.contains(key.as_str()),
+                "machine_key has unexpected field '{key}' — update server and this test."
+            );
+        }
+    }
+}

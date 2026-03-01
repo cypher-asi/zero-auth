@@ -10,7 +10,7 @@ use zid_identity_core::{IdentityCore, MachineKey};
 
 use crate::{
     error::{ApiError, MapServiceErr},
-    extractors::AuthenticatedUser,
+    extractors::{AuthenticatedUser, JsonWithErrors},
     state::AppState,
 };
 
@@ -79,7 +79,7 @@ pub async fn enroll_machine(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedUser,
     ctx: crate::request_context::RequestContext,
-    Json(req): Json<EnrollMachineRequest>,
+    JsonWithErrors(req): JsonWithErrors<EnrollMachineRequest>,
 ) -> Result<Json<EnrollMachineResponse>, ApiError> {
     let identity_id = auth.claims.identity_id()?;
     let mfa_verified = auth.claims.mfa_verified;
@@ -186,7 +186,7 @@ pub async fn revoke_machine(
     Path(machine_id): Path<Uuid>,
     auth: AuthenticatedUser,
     ctx: crate::request_context::RequestContext,
-    Json(req): Json<RevokeMachineRequest>,
+    JsonWithErrors(req): JsonWithErrors<RevokeMachineRequest>,
 ) -> Result<StatusCode, ApiError> {
     let _identity_id = auth.claims.identity_id()?;
     let revoker_machine_id = auth.claims.machine_id()?;

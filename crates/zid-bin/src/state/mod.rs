@@ -75,6 +75,7 @@ pub struct AppState {
 
     // Machine enroll dialog
     pub show_enroll_dialog: bool,
+    pub enroll_machine_name: String,
     pub enroll_passphrase: String,
     pub enroll_user_shard_hex: String,
 
@@ -187,6 +188,7 @@ impl AppState {
             recovery_new_shards: vec![],
             recovery_shards_acknowledged: false,
             show_enroll_dialog: false,
+            enroll_machine_name: String::new(),
             enroll_passphrase: String::new(),
             enroll_user_shard_hex: String::new(),
             revoke_confirm_machine: None,
@@ -348,6 +350,7 @@ impl AppState {
             AppMessage::MachineEnrolled(machine) => {
                 self.machines.push(machine);
                 self.show_enroll_dialog = false;
+                self.enroll_machine_name.clear();
                 self.enroll_passphrase.clear();
                 self.enroll_user_shard_hex.clear();
                 self.add_toast(ToastLevel::Success, "Machine enrolled successfully".into());

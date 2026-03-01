@@ -101,3 +101,58 @@ pub async fn rotate_key(client: &HttpClient) -> Result<(), AppError> {
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verify that RecoveryBody serializes with field names matching the server's
+    /// expected request schema at POST /v1/identity/recovery.
+    ///
+    /// NOTE: The server currently defines RecoveryCeremonyRequest with only
+    /// `new_identity_signing_public_key` (+ optional approvals), and the handler
+    /// builds a placeholder MachineKey. This test documents what the client sends
+    /// so the server can be updated to accept it. Until then, this endpoint will
+    /// reject the client's payload.
+    ///
+    /// Server struct: zid-server/src/api/identity.rs :: RecoveryCeremonyRequest
+    #[test]
+    #[ignore = "server's RecoveryCeremonyRequest is a stub — needs updating to accept machine key data"]
+    fn recovery_body_matches_server_contract() {
+        let body = RecoveryBody {
+            identity_id: Uuid::nil(),
+            machine_id: Uuid::nil(),
+            machine_signing_public_key: "ab".repeat(32),
+            machine_encryption_public_key: "cd".repeat(32),
+            authorization_signature: "ef".repeat(64),
+            neural_key_commitment: "01".repeat(32),
+            device_name: "Test Device".into(),
+            device_platform: "test-os".into(),
+            pq_signing_public_key: Some("aa".repeat(1952)),
+            pq_encryption_public_key: Some("bb".repeat(1184)),
+        };
+
+        let json: serde_json::Value = serde_json::to_value(&body).unwrap();
+        let obj = json.as_object().expect("RecoveryBody should serialize as a JSON object");
+
+        // Fields the server should accept once RecoveryCeremonyRequest is updated.
+        // Currently the server only expects: new_identity_signing_public_key
+        let expected_fields = [
+            "identity_id",
+            "machine_id",
+            "machine_signing_public_key",
+            "machine_encryption_public_key",
+            "authorization_signature",
+            "neural_key_commitment",
+            "device_name",
+            "device_platform",
+        ];
+
+        for field in &expected_fields {
+            assert!(
+                obj.contains_key(*field),
+                "RecoveryBody is missing field '{field}'"
+            );
+        }
+    }
+}

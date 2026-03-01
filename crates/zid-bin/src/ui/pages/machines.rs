@@ -98,6 +98,8 @@ fn render_enroll_dialog(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::
                     .color(theme::TEXT_SECONDARY),
             );
             ui.add_space(8.0);
+            core::text_input(ui, &mut state.enroll_machine_name, "Machine name (e.g. Work Laptop)");
+            ui.add_space(8.0);
             core::password_input(ui, &mut state.enroll_passphrase, "Passphrase");
             ui.add_space(8.0);
             ui.label(
@@ -111,11 +113,13 @@ fn render_enroll_dialog(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::
             ui.horizontal(|ui| {
                 if core::secondary_button(ui, "Cancel") {
                     state.show_enroll_dialog = false;
+                    state.enroll_machine_name.clear();
                     state.enroll_passphrase.clear();
                     state.enroll_user_shard_hex.clear();
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let can = !state.enroll_passphrase.is_empty()
+                    let can = !state.enroll_machine_name.is_empty()
+                        && !state.enroll_passphrase.is_empty()
                         && !state.enroll_user_shard_hex.is_empty();
                     if core::primary_button(ui, "Enroll", can) {
                         start_enrollment(state, rt);
@@ -126,12 +130,14 @@ fn render_enroll_dialog(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::
 
     if !open {
         state.show_enroll_dialog = false;
+        state.enroll_machine_name.clear();
         state.enroll_passphrase.clear();
         state.enroll_user_shard_hex.clear();
     }
 }
 
 fn start_enrollment(state: &mut AppState, rt: &tokio::runtime::Handle) {
+    let machine_name = state.enroll_machine_name.clone();
     let passphrase = state.enroll_passphrase.clone();
     let user_shard_hex = state.enroll_user_shard_hex.clone();
     let tx = state.tx.clone();
@@ -147,7 +153,8 @@ fn start_enrollment(state: &mut AppState, rt: &tokio::runtime::Handle) {
     };
 
     rt.spawn(async move {
-        let result = run_enrollment(&passphrase, &user_shard_hex, &creds, &client).await;
+        let result =
+            run_enrollment(&machine_name, &passphrase, &user_shard_hex, &creds, &client).await;
         match result {
             Ok(vm) => {
                 let _ = tx.send(AppMessage::MachineEnrolled(vm));
@@ -160,6 +167,7 @@ fn start_enrollment(state: &mut AppState, rt: &tokio::runtime::Handle) {
 }
 
 async fn run_enrollment(
+    machine_name: &str,
     passphrase: &str,
     user_shard_hex: &str,
     creds: &StoredCredentials,
@@ -193,21 +201,20 @@ async fn run_enrollment(
     let neural_key =
         crate::service::key_shard::combine(&[share_0, share_1, user_share], &commitment)?;
 
-    let device_name = "Desktop App";
     let device_platform = std::env::consts::OS;
 
     let (response, _keypair) = crate::service::machine::enroll(
         client,
         &neural_key,
         &creds.identity_id,
-        device_name,
+        machine_name,
         device_platform,
     )
     .await?;
 
     Ok(MachineViewModel {
         machine_id: response.machine_id,
-        device_name: device_name.into(),
+        device_name: machine_name.into(),
         device_platform: device_platform.into(),
         created_at: response.enrolled_at,
         last_used_at: None,

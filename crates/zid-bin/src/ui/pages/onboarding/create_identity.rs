@@ -178,6 +178,9 @@ fn render_shard_backup(ui: &mut Ui, state: &mut AppState) {
         ui.add_space(4.0);
     }
 
+    ui.add_space(8.0);
+    domain::copy_all_shards_button(ui, &state.create_user_shards);
+
     ui.add_space(12.0);
     core::acknowledge_checkbox(
         ui,
