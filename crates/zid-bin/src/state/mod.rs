@@ -76,6 +76,7 @@ pub struct AppState {
     // Machine enroll dialog
     pub show_enroll_dialog: bool,
     pub enroll_passphrase: String,
+    pub enroll_user_shard_hex: String,
 
     // Revoke confirm dialog
     pub revoke_confirm_machine: Option<uuid::Uuid>,
@@ -176,6 +177,7 @@ impl AppState {
             recovery_shards_acknowledged: false,
             show_enroll_dialog: false,
             enroll_passphrase: String::new(),
+            enroll_user_shard_hex: String::new(),
             revoke_confirm_machine: None,
             show_add_credential_dialog: false,
             add_cred_tab: 0,
@@ -333,6 +335,7 @@ impl AppState {
                 self.machines.push(machine);
                 self.show_enroll_dialog = false;
                 self.enroll_passphrase.clear();
+                self.enroll_user_shard_hex.clear();
                 self.add_toast(ToastLevel::Success, "Machine enrolled successfully".into());
             }
 
