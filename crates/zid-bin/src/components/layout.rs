@@ -1,11 +1,52 @@
 use egui::{RichText, Ui};
 
-use super::tokens::{colors, font_size, spacing};
+use super::tokens::{self, colors, font_size, spacing};
 
 pub fn section(ui: &mut Ui, heading: &str, content: impl FnOnce(&mut Ui)) {
-    super::labels::section_heading(ui, heading);
-    content(ui);
-    ui.add_space(spacing::XXL);
+    let avail = ui.available_rect_before_wrap();
+
+    let prev_clip = ui.clip_rect();
+    ui.set_clip_rect(prev_clip.intersect(egui::Rect::from_x_y_ranges(
+        avail.left()..=avail.right(),
+        prev_clip.top()..=prev_clip.bottom(),
+    )));
+
+    let mut prepared = egui::Frame::new()
+        .fill(colors::SURFACE)
+        .corner_radius(0.0)
+        .inner_margin(spacing::XL)
+        .outer_margin(egui::Margin::symmetric(1, 0))
+        .stroke(tokens::border_stroke())
+        .begin(ui);
+
+    {
+        let ui = &mut prepared.content_ui;
+        ui.set_width(ui.available_width());
+        section_heading(ui, heading);
+        ui.add_space(10.0);
+        content(ui);
+    }
+
+    let resp = prepared.end(ui);
+
+    let border_rect = egui::Rect::from_min_max(
+        egui::pos2(avail.left() + 1.0, resp.rect.top()),
+        egui::pos2(avail.right() - 1.0, resp.rect.bottom()),
+    );
+    ui.painter()
+        .rect_stroke(border_rect, 0.0, tokens::border_stroke(), egui::StrokeKind::Inside);
+
+    ui.set_clip_rect(prev_clip);
+    ui.add_space(spacing::MD);
+}
+
+fn section_heading(ui: &mut Ui, title: &str) {
+    ui.label(
+        RichText::new(title.to_uppercase())
+            .strong()
+            .size(font_size::HEADING)
+            .color(colors::TEXT_HEADING),
+    );
 }
 
 pub fn card_frame() -> egui::Frame {

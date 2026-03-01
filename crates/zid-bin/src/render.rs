@@ -40,20 +40,21 @@ fn render_dashboard(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Hand
     }
 
     if let Some(identity) = &state.identity.clone() {
-        domain::identity_badge(ui, identity);
-        ui.add_space(spacing::XL);
+        layout::section(ui, "Identity", |ui| {
+            domain::identity_badge(ui, identity);
+            ui.add_space(spacing::XL);
 
-        data_display::info_grid(ui, "identity_details", |ui| {
-            data_display::kv_row(ui, "Identity ID", &identity.identity_id.to_string());
-            if !identity.did.is_empty() {
-                data_display::kv_row_mono(ui, "DID", &identity.did);
-            }
-            data_display::kv_row(ui, "Tier", &identity.tier);
-            data_display::kv_row(ui, "Status", &identity.status);
-            data_display::kv_row(ui, "Created", &identity.created_at);
+            data_display::info_grid(ui, "identity_details", |ui| {
+                data_display::kv_row(ui, "Identity ID", &identity.identity_id.to_string());
+                if !identity.did.is_empty() {
+                    data_display::kv_row_mono(ui, "DID", &identity.did);
+                }
+                data_display::kv_row(ui, "Tier", &identity.tier);
+                data_display::kv_row(ui, "Status", &identity.status);
+                data_display::kv_row(ui, "Created", &identity.created_at);
+            });
         });
 
-        ui.add_space(spacing::XXL);
         layout::section(ui, "Quick Actions", |ui| {
             ui.horizontal(|ui| {
                 if buttons::action_button(ui, "View Machines", true) {
@@ -74,7 +75,6 @@ fn render_dashboard(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Hand
     }
 
     if let Some(session) = &state.current_session {
-        ui.add_space(spacing::XXL);
         layout::section(ui, "Current Session", |ui| {
             data_display::info_grid(ui, "session_info", |ui| {
                 data_display::kv_row(ui, "Session ID", &session.session_id.to_string()[..8]);
@@ -106,50 +106,52 @@ fn render_machines(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Handl
         });
     }
 
-    match &state.machines_status {
-        LoadStatus::Loading => feedback::loading_state(ui, "Loading machines..."),
-        LoadStatus::Loaded => {
-            if state.machines.is_empty() {
-                labels::muted_label(ui, "No machines enrolled");
-            } else {
-                let cred_path = state.storage.credentials_path();
-                let current_machine = state
-                    .storage
-                    .read_json::<StoredCredentials>(&cred_path)
-                    .ok()
-                    .map(|c| c.machine_id);
+    layout::section(ui, "Enrolled Machines", |ui| {
+        match &state.machines_status {
+            LoadStatus::Loading => feedback::loading_state(ui, "Loading machines..."),
+            LoadStatus::Loaded => {
+                if state.machines.is_empty() {
+                    labels::muted_label(ui, "No machines enrolled");
+                } else {
+                    let cred_path = state.storage.credentials_path();
+                    let current_machine = state
+                        .storage
+                        .read_json::<StoredCredentials>(&cred_path)
+                        .ok()
+                        .map(|c| c.machine_id);
 
-                let machines = state.machines.clone();
-                for machine in &machines {
-                    if let Some(action) = domain::machine_card(ui, machine, current_machine) {
-                        match action {
-                            domain::MachineCardAction::Revoke(id) => {
-                                let is_current = current_machine == Some(id);
-                                let is_last = state.machines.len() == 1;
-                                let msg = if is_current {
-                                    "You are about to revoke THIS machine. You will be logged out immediately."
-                                } else if is_last {
-                                    "This is your only enrolled machine. Revoking it will require recovery to regain access."
-                                } else {
-                                    "This device will immediately lose access. This cannot be undone."
-                                };
-                                state.confirm_dialog = Some(ConfirmDialogState {
-                                    title: "Revoke Machine?".into(),
-                                    message: msg.into(),
-                                    confirm_label: "Revoke".into(),
-                                    danger: true,
-                                    action: ConfirmAction::RevokeMachine(id),
-                                });
+                    let machines = state.machines.clone();
+                    for machine in &machines {
+                        if let Some(action) = domain::machine_card(ui, machine, current_machine) {
+                            match action {
+                                domain::MachineCardAction::Revoke(id) => {
+                                    let is_current = current_machine == Some(id);
+                                    let is_last = state.machines.len() == 1;
+                                    let msg = if is_current {
+                                        "You are about to revoke THIS machine. You will be logged out immediately."
+                                    } else if is_last {
+                                        "This is your only enrolled machine. Revoking it will require recovery to regain access."
+                                    } else {
+                                        "This device will immediately lose access. This cannot be undone."
+                                    };
+                                    state.confirm_dialog = Some(ConfirmDialogState {
+                                        title: "Revoke Machine?".into(),
+                                        message: msg.into(),
+                                        confirm_label: "Revoke".into(),
+                                        danger: true,
+                                        action: ConfirmAction::RevokeMachine(id),
+                                    });
+                                }
                             }
                         }
+                        ui.add_space(spacing::SM);
                     }
-                    ui.add_space(spacing::SM);
                 }
             }
+            LoadStatus::Error(e) => labels::error_label(ui, e),
+            _ => {}
         }
-        LoadStatus::Error(e) => labels::error_label(ui, e),
-        _ => {}
-    }
+    });
 
     if state.show_enroll_dialog {
         render_enroll_dialog(ui, state, rt);
@@ -320,62 +322,64 @@ fn render_credentials(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Ha
         });
     }
 
-    match &state.credentials_status {
-        LoadStatus::Loading => feedback::loading_state(ui, "Loading credentials..."),
-        LoadStatus::Loaded => {
-            if state.credentials.is_empty() {
-                labels::muted_label(ui, "No linked credentials");
-            } else {
-                let creds = state.credentials.clone();
-                for cred in &creds {
-                    if let Some(action) = domain::credential_card(ui, cred) {
-                        match action {
-                            domain::CredentialCardAction::Revoke(method_type, method_id) => {
-                                state.confirm_dialog = Some(ConfirmDialogState {
-                                    title: "Remove Credential?".into(),
-                                    message: format!(
-                                        "Remove {} credential '{}'? You will no longer be able to log in with this method.",
-                                        method_type, method_id
-                                    ),
-                                    confirm_label: "Remove".into(),
-                                    danger: true,
-                                    action: ConfirmAction::RevokeCredential(
-                                        method_type, method_id,
-                                    ),
-                                });
-                            }
-                            domain::CredentialCardAction::SetPrimary(method_type, method_id) => {
-                                let tx = state.tx.clone();
-                                let client = state.http_client.clone();
-                                let mt = method_type.clone();
-                                let mi = method_id.clone();
-                                rt.spawn(async move {
-                                    match crate::service::credentials::set_primary(
-                                        &client, &mt, &mi,
-                                    )
-                                    .await
-                                    {
-                                        Ok(()) => {
-                                            let _ = tx.send(AppMessage::CredentialPrimarySet {
-                                                method_type: mt,
-                                                method_id: mi,
-                                            });
+    layout::section(ui, "Linked Credentials", |ui| {
+        match &state.credentials_status {
+            LoadStatus::Loading => feedback::loading_state(ui, "Loading credentials..."),
+            LoadStatus::Loaded => {
+                if state.credentials.is_empty() {
+                    labels::muted_label(ui, "No linked credentials");
+                } else {
+                    let creds = state.credentials.clone();
+                    for cred in &creds {
+                        if let Some(action) = domain::credential_card(ui, cred) {
+                            match action {
+                                domain::CredentialCardAction::Revoke(method_type, method_id) => {
+                                    state.confirm_dialog = Some(ConfirmDialogState {
+                                        title: "Remove Credential?".into(),
+                                        message: format!(
+                                            "Remove {} credential '{}'? You will no longer be able to log in with this method.",
+                                            method_type, method_id
+                                        ),
+                                        confirm_label: "Remove".into(),
+                                        danger: true,
+                                        action: ConfirmAction::RevokeCredential(
+                                            method_type, method_id,
+                                        ),
+                                    });
+                                }
+                                domain::CredentialCardAction::SetPrimary(method_type, method_id) => {
+                                    let tx = state.tx.clone();
+                                    let client = state.http_client.clone();
+                                    let mt = method_type.clone();
+                                    let mi = method_id.clone();
+                                    rt.spawn(async move {
+                                        match crate::service::credentials::set_primary(
+                                            &client, &mt, &mi,
+                                        )
+                                        .await
+                                        {
+                                            Ok(()) => {
+                                                let _ = tx.send(AppMessage::CredentialPrimarySet {
+                                                    method_type: mt,
+                                                    method_id: mi,
+                                                });
+                                            }
+                                            Err(e) => {
+                                                let _ = tx.send(AppMessage::Error(e));
+                                            }
                                         }
-                                        Err(e) => {
-                                            let _ = tx.send(AppMessage::Error(e));
-                                        }
-                                    }
-                                });
+                                    });
+                                }
                             }
                         }
+                        ui.add_space(spacing::SM);
                     }
-                    ui.add_space(spacing::SM);
                 }
             }
+            LoadStatus::Error(e) => labels::error_label(ui, e),
+            _ => {}
         }
-        LoadStatus::Error(e) => labels::error_label(ui, e),
-        _ => {}
-    }
+    });
 
     if state.show_add_credential_dialog {
         render_add_credential_dialog(ui, state, rt);
@@ -523,19 +527,26 @@ fn render_mfa(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Handle) {
 }
 
 fn render_mfa_disabled(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Handle) {
-    ui.horizontal(|ui| {
-        labels::field_label(ui, "MFA Status:");
-        labels::badge(ui, "Disabled", colors::TEXT_MUTED);
+    let mut setup_clicked = false;
+    layout::section(ui, "MFA Status", |ui| {
+        ui.horizontal(|ui| {
+            labels::field_label(ui, "Status:");
+            labels::badge(ui, "Disabled", colors::TEXT_MUTED);
+        });
+        ui.add_space(spacing::XL);
+
+        labels::field_label(
+            ui,
+            "Enable MFA to add an extra layer of security to your identity.",
+        );
+        ui.add_space(spacing::XL);
+
+        if buttons::action_button(ui, "Setup MFA", true) {
+            setup_clicked = true;
+        }
     });
-    ui.add_space(spacing::XL);
 
-    labels::field_label(
-        ui,
-        "Enable MFA to add an extra layer of security to your identity.",
-    );
-    ui.add_space(spacing::XL);
-
-    if buttons::action_button(ui, "Setup MFA", true) {
+    if setup_clicked {
         let tx = state.tx.clone();
         let client = state.http_client.clone();
         rt.spawn(async move {
@@ -622,11 +633,12 @@ fn render_mfa_setup(
 }
 
 fn render_mfa_enabled(ui: &mut Ui, state: &mut AppState, _rt: &tokio::runtime::Handle) {
-    ui.horizontal(|ui| {
-        labels::field_label(ui, "MFA Status:");
-        labels::badge(ui, "Enabled", tokens::SUCCESS);
+    layout::section(ui, "MFA Status", |ui| {
+        ui.horizontal(|ui| {
+            labels::field_label(ui, "Status:");
+            labels::badge(ui, "Enabled", tokens::SUCCESS);
+        });
     });
-    ui.add_space(spacing::XXL);
 
     layout::section(ui, "Disable MFA", |ui| {
         labels::field_label(
@@ -651,8 +663,8 @@ fn render_mfa_enabled(ui: &mut Ui, state: &mut AppState, _rt: &tokio::runtime::H
 fn render_sessions(ui: &mut Ui, state: &mut AppState, _rt: &tokio::runtime::Handle) {
     layout::page_header(ui, "Sessions", None);
 
-    if let Some(session) = &state.current_session {
-        layout::section(ui, "Current Session", |ui| {
+    layout::section(ui, "Current Session", |ui| {
+        if let Some(session) = &state.current_session {
             let sess = session.clone();
             if domain::session_card(ui, &sess) {
                 state.confirm_dialog = Some(ConfirmDialogState {
@@ -663,39 +675,41 @@ fn render_sessions(ui: &mut Ui, state: &mut AppState, _rt: &tokio::runtime::Hand
                     action: ConfirmAction::Logout,
                 });
             }
-        });
-    } else {
-        labels::muted_label(ui, "No active session");
-    }
+        } else {
+            labels::muted_label(ui, "No active session");
+        }
+    });
 }
 
 fn render_namespaces(ui: &mut Ui, state: &mut AppState, _rt: &tokio::runtime::Handle) {
     layout::page_header(ui, "Namespaces", None);
 
-    if state.namespaces.is_empty() {
-        labels::muted_label(ui, "No namespace memberships");
-        ui.add_space(spacing::MD);
-        labels::hint_label(ui, "Namespace management is available in the V1 release.");
-    } else {
-        for ns in &state.namespaces.clone() {
-            layout::card_frame().show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(
-                        RichText::new(&ns.name)
-                            .color(tokens::TEXT_PRIMARY)
-                            .size(font_size::BODY)
-                            .strong(),
-                    );
-                    labels::badge(ui, &ns.role, colors::ACCENT);
+    layout::section(ui, "Memberships", |ui| {
+        if state.namespaces.is_empty() {
+            labels::muted_label(ui, "No namespace memberships");
+            ui.add_space(spacing::MD);
+            labels::hint_label(ui, "Namespace management is available in the V1 release.");
+        } else {
+            for ns in &state.namespaces.clone() {
+                layout::card_frame().show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(&ns.name)
+                                .color(tokens::TEXT_PRIMARY)
+                                .size(font_size::BODY)
+                                .strong(),
+                        );
+                        labels::badge(ui, &ns.role, colors::ACCENT);
+                    });
+                    data_display::info_grid(ui, &format!("ns_{}", ns.namespace_id), |ui| {
+                        data_display::kv_row(ui, "ID", &ns.namespace_id.to_string()[..8]);
+                        data_display::kv_row(ui, "Joined", &ns.joined_at);
+                    });
                 });
-                data_display::info_grid(ui, &format!("ns_{}", ns.namespace_id), |ui| {
-                    data_display::kv_row(ui, "ID", &ns.namespace_id.to_string()[..8]);
-                    data_display::kv_row(ui, "Joined", &ns.joined_at);
-                });
-            });
-            ui.add_space(spacing::SM);
+                ui.add_space(spacing::SM);
+            }
         }
-    }
+    });
 }
 
 fn render_security(ui: &mut Ui, state: &mut AppState, _rt: &tokio::runtime::Handle) {
@@ -770,7 +784,6 @@ fn render_security(ui: &mut Ui, state: &mut AppState, _rt: &tokio::runtime::Hand
             });
         });
 
-        ui.add_space(spacing::XXL);
         layout::section(ui, "Advanced Ceremonies", |ui| {
             labels::muted_label(
                 ui,
@@ -785,7 +798,6 @@ fn render_settings(ui: &mut Ui, state: &mut AppState, _rt: &tokio::runtime::Hand
 
     render_profiles_section(ui, state);
 
-    ui.add_space(spacing::XXL);
     layout::section(ui, "Server", |ui| {
         ui.horizontal(|ui| {
             labels::field_label(ui, "Server URL:");
