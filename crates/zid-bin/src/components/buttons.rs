@@ -146,6 +146,38 @@ pub fn copy_button(ui: &mut Ui, id_salt: &str, text_to_copy: &str) {
     }
 }
 
+pub fn section_add_button(ui: &mut Ui, enabled: bool) -> bool {
+    let size = Vec2::new(WIDGET_HEIGHT, WIDGET_HEIGHT);
+
+    let wv = &mut ui.visuals_mut().widgets;
+    let saved = (
+        wv.inactive.weak_bg_fill,
+        wv.hovered.weak_bg_fill,
+        wv.active.weak_bg_fill,
+    );
+    wv.inactive.weak_bg_fill = Color32::BLACK;
+    wv.hovered.weak_bg_fill = colors::SURFACE_INTERACTIVE;
+    wv.active.weak_bg_fill = colors::BORDER;
+
+    let r = ui.add_enabled(
+        enabled,
+        egui::Button::new(
+            RichText::new(egui_phosphor::regular::PLUS)
+                .size(ICON_SIZE)
+                .color(colors::TEXT_HEADING),
+        )
+        .stroke(tokens::default_stroke())
+        .corner_radius(0.0)
+        .min_size(size),
+    );
+
+    let wv = &mut ui.visuals_mut().widgets;
+    wv.inactive.weak_bg_fill = saved.0;
+    wv.hovered.weak_bg_fill = saved.1;
+    wv.active.weak_bg_fill = saved.2;
+    r.clicked()
+}
+
 pub fn square_icon_button(ui: &mut Ui, icon: &str) -> bool {
     let size = Vec2::new(WIDGET_HEIGHT, WIDGET_HEIGHT);
 

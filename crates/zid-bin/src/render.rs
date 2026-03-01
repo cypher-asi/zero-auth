@@ -85,10 +85,7 @@ fn render_dashboard(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Hand
 }
 
 fn render_machines(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Handle) {
-    let enroll_clicked = layout::page_header(ui, "Machines", Some(("Enroll New Machine", true)));
-    if enroll_clicked {
-        state.show_enroll_dialog = true;
-    }
+    layout::page_header(ui, "Machines", None);
 
     if state.machines_status == LoadStatus::Idle {
         state.machines_status = LoadStatus::Loading;
@@ -106,7 +103,7 @@ fn render_machines(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Handl
         });
     }
 
-    layout::section(ui, "Enrolled Machines", |ui| {
+    let enroll_clicked = layout::section_with_action(ui, "Enrolled Machines", true, |ui| {
         match &state.machines_status {
             LoadStatus::Loading => feedback::loading_state(ui, "Loading machines..."),
             LoadStatus::Loaded => {
@@ -152,6 +149,9 @@ fn render_machines(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Handl
             _ => {}
         }
     });
+    if enroll_clicked {
+        state.show_enroll_dialog = true;
+    }
 
     if state.show_enroll_dialog {
         render_enroll_dialog(ui, state, rt);
@@ -300,11 +300,7 @@ async fn run_enrollment(
 }
 
 fn render_credentials(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Handle) {
-    let add_clicked =
-        layout::page_header(ui, "Linked Identities", Some(("Add Credential", true)));
-    if add_clicked {
-        state.show_add_credential_dialog = true;
-    }
+    layout::page_header(ui, "Linked Identities", None);
 
     if state.credentials_status == LoadStatus::Idle {
         state.credentials_status = LoadStatus::Loading;
@@ -322,7 +318,7 @@ fn render_credentials(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Ha
         });
     }
 
-    layout::section(ui, "Linked Credentials", |ui| {
+    let add_clicked = layout::section_with_action(ui, "Linked Credentials", true, |ui| {
         match &state.credentials_status {
             LoadStatus::Loading => feedback::loading_state(ui, "Loading credentials..."),
             LoadStatus::Loaded => {
@@ -380,6 +376,9 @@ fn render_credentials(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Ha
             _ => {}
         }
     });
+    if add_clicked {
+        state.show_add_credential_dialog = true;
+    }
 
     if state.show_add_credential_dialog {
         render_add_credential_dialog(ui, state, rt);
