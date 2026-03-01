@@ -56,9 +56,6 @@ chrono = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
-# Platform paths
-directories = "5"
-
 # Clipboard
 arboard = "3"
 
