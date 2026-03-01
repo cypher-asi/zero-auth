@@ -148,6 +148,41 @@ impl HttpClient {
         self.handle_response(resp).await
     }
 
+    pub async fn post_no_response<B: Serialize>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<(), AppError> {
+        let mut req = self.client.post(self.url(path)).json(body);
+        if let Some(token) = &self.access_token {
+            req = req.bearer_auth(token);
+        }
+        let resp = req.send().await?;
+        let status = resp.status();
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            let retry_after = resp
+                .headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(30);
+            return Err(AppError::RateLimited {
+                retry_after: Duration::from_secs(retry_after),
+            });
+        }
+        if status.is_success() {
+            Ok(())
+        } else {
+            let code = status.as_u16();
+            let msg = extract_error_message(resp, code).await;
+            match code {
+                401 => Err(AppError::SessionExpired),
+                404 => Err(AppError::NotFound(msg)),
+                _ => Err(AppError::ServerError(code, msg)),
+            }
+        }
+    }
+
     pub async fn delete_no_body(&self, path: &str) -> Result<(), AppError> {
         let mut req = self.client.delete(self.url(path));
         if let Some(token) = &self.access_token {

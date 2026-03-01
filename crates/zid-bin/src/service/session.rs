@@ -42,6 +42,8 @@ struct EmailLoginBody {
 #[derive(Serialize)]
 struct RefreshBody {
     refresh_token: String,
+    session_id: Uuid,
+    machine_id: Uuid,
 }
 
 #[derive(Deserialize, Debug)]
@@ -119,21 +121,24 @@ pub async fn login_oauth_initiate(
 ) -> Result<String, AppError> {
     #[derive(Deserialize)]
     struct InitiateResp {
-        auth_url: String,
+        authorization_url: String,
     }
     let resp: InitiateResp = client
-        .get(&format!("/v1/oauth/{provider}/initiate"))
+        .get(&format!("/v1/auth/oauth/{provider}"))
         .await?;
-    Ok(resp.auth_url)
+    Ok(resp.authorization_url)
 }
 
 pub async fn login_oauth_callback(
     client: &HttpClient,
+    provider: &str,
     code: &str,
-    state: &str,
+    oauth_state: &str,
 ) -> Result<SessionTokens, AppError> {
-    let body = serde_json::json!({ "code": code, "state": state });
-    client.post("/v1/oauth/callback", &body).await
+    let body = serde_json::json!({ "code": code, "state": oauth_state });
+    client
+        .post(&format!("/v1/auth/oauth/{provider}/callback"), &body)
+        .await
 }
 
 pub async fn login_wallet(
@@ -150,9 +155,16 @@ pub async fn login_wallet(
     client.post("/v1/auth/login/wallet", &body).await
 }
 
-pub async fn refresh(client: &HttpClient, refresh_token: &str) -> Result<RefreshResponse, AppError> {
+pub async fn refresh(
+    client: &HttpClient,
+    refresh_token: &str,
+    session_id: Uuid,
+    machine_id: Uuid,
+) -> Result<RefreshResponse, AppError> {
     let body = RefreshBody {
         refresh_token: refresh_token.to_string(),
+        session_id,
+        machine_id,
     };
     client.post("/v1/auth/refresh", &body).await
 }
@@ -167,11 +179,10 @@ pub async fn introspect(
     client.post("/v1/auth/introspect", &body).await
 }
 
-pub async fn revoke(client: &HttpClient) -> Result<(), AppError> {
-    let _: serde_json::Value = client
-        .post("/v1/auth/revoke", &serde_json::json!({}))
-        .await?;
-    Ok(())
+pub async fn revoke(client: &HttpClient, session_id: Uuid) -> Result<(), AppError> {
+    client
+        .post_no_response("/v1/session/revoke", &serde_json::json!({ "session_id": session_id }))
+        .await
 }
 
 pub async fn login_machine_after_create(

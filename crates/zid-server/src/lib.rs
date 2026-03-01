@@ -55,7 +55,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/health", get(api::health::health_check))
         .route("/ready", get(api::health::readiness_check))
         // Identity management (self-sovereign creation)
-        .route("/v1/identity", post(api::identity::create_identity))
+        .route("/v1/identity", get(api::identity::get_current_identity).post(api::identity::create_identity))
         // DID lookup (must come before :identity_id to avoid matching)
         .route(
             "/v1/identity/did/*did",
@@ -171,11 +171,21 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         )
         // MFA
         .route("/v1/mfa/setup", post(api::mfa::setup_mfa))
+        .route("/v1/mfa/enable", post(api::mfa::enable_mfa))
+        .route("/v1/mfa/disable", post(api::mfa::disable_mfa_post))
         .route("/v1/mfa", delete(api::mfa::disable_mfa))
         // Credentials
         .route(
+            "/v1/credentials",
+            get(api::credentials::list_credentials),
+        )
+        .route(
             "/v1/credentials/email",
             post(api::credentials::add_email_credential),
+        )
+        .route(
+            "/v1/credentials/wallet",
+            post(api::credentials::add_wallet_credential),
         )
         .route(
             "/v1/credentials/oauth/:provider",
@@ -184,6 +194,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route(
             "/v1/credentials/oauth/:provider/callback",
             post(api::credentials::complete_oauth_link),
+        )
+        .route(
+            "/v1/credentials/:method_type/:method_id",
+            delete(api::credentials::revoke_credential),
+        )
+        .route(
+            "/v1/credentials/:method_type/:method_id/primary",
+            axum::routing::put(api::credentials::set_primary_credential),
         )
         // Sessions
         .route("/v1/auth/refresh", post(api::sessions::refresh_session))

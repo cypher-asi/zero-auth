@@ -37,23 +37,34 @@ pub async fn link_email(
         email: email.to_string(),
         password: password.to_string(),
     };
-    let resp: CredentialRecord = client.post("/v1/credentials/email", &body).await?;
-    Ok(record_to_view_model(resp))
+    let _: serde_json::Value = client.post("/v1/credentials/email", &body).await?;
+    Ok(CredentialViewModel {
+        method_type: "email".into(),
+        method_id: email.to_string(),
+        primary: false,
+        verified: false,
+        created_at: String::new(),
+    })
 }
 
 pub async fn link_wallet(
     client: &HttpClient,
     wallet_address: &str,
-    signature: &str,
-    challenge_id: &Uuid,
+    _signature: &str,
+    _challenge_id: &Uuid,
 ) -> Result<CredentialViewModel, AppError> {
     let body = serde_json::json!({
         "wallet_address": wallet_address,
-        "signature": signature,
-        "challenge_id": challenge_id,
+        "chain": "evm",
     });
-    let resp: CredentialRecord = client.post("/v1/credentials/wallet", &body).await?;
-    Ok(record_to_view_model(resp))
+    let _: serde_json::Value = client.post("/v1/credentials/wallet", &body).await?;
+    Ok(CredentialViewModel {
+        method_type: "wallet".into(),
+        method_id: wallet_address.to_string(),
+        primary: false,
+        verified: true,
+        created_at: String::new(),
+    })
 }
 
 pub async fn initiate_oauth(
@@ -62,27 +73,46 @@ pub async fn initiate_oauth(
 ) -> Result<String, AppError> {
     #[derive(Deserialize)]
     struct Resp {
-        auth_url: String,
+        authorization_url: String,
     }
     let resp: Resp = client
-        .get(&format!("/v1/oauth/{provider}/initiate"))
+        .post(
+            &format!("/v1/credentials/oauth/{provider}"),
+            &serde_json::json!({}),
+        )
         .await?;
-    Ok(resp.auth_url)
+    Ok(resp.authorization_url)
 }
 
 pub async fn complete_oauth(
     client: &HttpClient,
+    provider: &str,
     code: &str,
     state: &str,
 ) -> Result<CredentialViewModel, AppError> {
     let body = serde_json::json!({ "code": code, "state": state });
-    let resp: CredentialRecord = client.post("/v1/oauth/callback", &body).await?;
-    Ok(record_to_view_model(resp))
+    let _: serde_json::Value = client
+        .post(
+            &format!("/v1/credentials/oauth/{provider}/callback"),
+            &body,
+        )
+        .await?;
+    Ok(CredentialViewModel {
+        method_type: "oauth".into(),
+        method_id: provider.to_string(),
+        primary: false,
+        verified: true,
+        created_at: String::new(),
+    })
 }
 
 pub async fn list(client: &HttpClient) -> Result<Vec<CredentialViewModel>, AppError> {
     let resp: CredentialListResponse = client.get("/v1/credentials").await?;
-    Ok(resp.credentials.into_iter().map(record_to_view_model).collect())
+    Ok(resp
+        .credentials
+        .into_iter()
+        .map(record_to_view_model)
+        .collect())
 }
 
 pub async fn revoke(

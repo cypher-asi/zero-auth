@@ -79,12 +79,12 @@ pub async fn enroll(
         pq_encryption_public_key: Some(hex::encode(&pk.pq_encryption)),
     };
 
-    let response: EnrollResponse = client.post("/v1/identity/machines", &body).await?;
+    let response: EnrollResponse = client.post("/v1/machines/enroll", &body).await?;
     Ok((response, keys.machine_keypair))
 }
 
 pub async fn list(client: &HttpClient) -> Result<Vec<MachineViewModel>, AppError> {
-    let resp: MachinesListResponse = client.get("/v1/identity/machines").await?;
+    let resp: MachinesListResponse = client.get("/v1/machines").await?;
     Ok(resp
         .machines
         .into_iter()
@@ -104,6 +104,6 @@ pub async fn list(client: &HttpClient) -> Result<Vec<MachineViewModel>, AppError
 
 pub async fn revoke(client: &HttpClient, machine_id: &Uuid) -> Result<(), AppError> {
     client
-        .delete_no_body(&format!("/v1/identity/machines/{machine_id}"))
+        .delete_no_body(&format!("/v1/machines/{machine_id}"))
         .await
 }

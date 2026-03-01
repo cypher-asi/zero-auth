@@ -55,6 +55,11 @@ impl ZeroIdApp {
             return;
         }
 
+        let (session_id, machine_id) = match &self.state.current_session {
+            Some(s) => (s.session_id, s.machine_id.unwrap_or_default()),
+            None => return,
+        };
+
         self.refresh_scheduled = true;
         let tx = self.state.tx.clone();
         let client = self.state.http_client.clone();
@@ -63,7 +68,9 @@ impl ZeroIdApp {
         self.rt.spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(780)).await;
 
-            match crate::service::session::refresh(&client, &refresh_token).await {
+            match crate::service::session::refresh(&client, &refresh_token, session_id, machine_id)
+                .await
+            {
                 Ok(resp) => {
                     let _ = tx.send(AppMessage::TokenRefreshed {
                         access_token: resp.access_token,
@@ -265,11 +272,11 @@ impl ZeroIdApp {
                     }
                 });
             }
-            ConfirmAction::RevokeSession(_id) => {
+            ConfirmAction::RevokeSession(session_id) => {
                 let tx = self.state.tx.clone();
                 let client = self.state.http_client.clone();
                 self.rt.spawn(async move {
-                    match crate::service::session::revoke(&client).await {
+                    match crate::service::session::revoke(&client, session_id).await {
                         Ok(()) => {
                             let _ = tx.send(AppMessage::SessionRevoked);
                         }
@@ -282,8 +289,11 @@ impl ZeroIdApp {
             ConfirmAction::Logout => {
                 let tx = self.state.tx.clone();
                 let client = self.state.http_client.clone();
+                let session_id = self.state.current_session.as_ref().map(|s| s.session_id);
                 self.rt.spawn(async move {
-                    let _ = crate::service::session::revoke(&client).await;
+                    if let Some(sid) = session_id {
+                        let _ = crate::service::session::revoke(&client, sid).await;
+                    }
                     let _ = tx.send(AppMessage::SessionRevoked);
                 });
             }

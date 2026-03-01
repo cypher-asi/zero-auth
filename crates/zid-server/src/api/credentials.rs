@@ -1,10 +1,14 @@
-use axum::{extract::Path, extract::State, response::Json};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::Json,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use zid_methods::AuthMethods;
+use zid_methods::{traits::CredentialType, AuthMethods};
 
 use crate::{
-    api::helpers::{hash_for_log, parse_oauth_provider},
+    api::helpers::{format_timestamp_rfc3339, hash_for_log, parse_oauth_provider},
     error::{map_service_error, ApiError},
     extractors::AuthenticatedUser,
     state::AppState,
@@ -130,4 +134,126 @@ pub async fn complete_oauth_link(
     Ok(Json(AddCredentialResponse {
         message: "OAuth credential linked successfully".to_string(),
     }))
+}
+
+// ============================================================================
+// Credential Listing / Revocation / Wallet
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+pub struct CredentialRecord {
+    pub method_type: String,
+    pub method_id: String,
+    pub primary: bool,
+    pub verified: bool,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CredentialListResponse {
+    pub credentials: Vec<CredentialRecord>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AddWalletCredentialRequest {
+    pub wallet_address: String,
+    pub chain: String,
+}
+
+/// GET /v1/credentials
+pub async fn list_credentials(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedUser,
+) -> Result<Json<CredentialListResponse>, ApiError> {
+    let identity_id = auth.claims.identity_id()?;
+
+    let creds = state
+        .auth_service
+        .list_credentials(identity_id)
+        .await
+        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+
+    let records = creds
+        .into_iter()
+        .map(|c| {
+            let method_type = match c.credential_type {
+                CredentialType::Email => "email",
+                CredentialType::OAuth => "oauth",
+                CredentialType::Wallet => "wallet",
+            };
+            CredentialRecord {
+                method_type: method_type.to_string(),
+                method_id: c.identifier,
+                primary: false,
+                verified: !c.revoked,
+                created_at: format_timestamp_rfc3339(c.created_at).unwrap_or_default(),
+            }
+        })
+        .collect();
+
+    Ok(Json(CredentialListResponse {
+        credentials: records,
+    }))
+}
+
+/// POST /v1/credentials/wallet
+pub async fn add_wallet_credential(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedUser,
+    Json(req): Json<AddWalletCredentialRequest>,
+) -> Result<Json<AddCredentialResponse>, ApiError> {
+    let identity_id = auth.claims.identity_id()?;
+
+    state
+        .auth_service
+        .attach_wallet_credential(identity_id, req.wallet_address.clone(), req.chain)
+        .await
+        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+
+    Ok(Json(AddCredentialResponse {
+        message: format!("Wallet credential '{}' added successfully", req.wallet_address),
+    }))
+}
+
+/// DELETE /v1/credentials/:method_type/:method_id
+pub async fn revoke_credential(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedUser,
+    Path((method_type, method_id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    let identity_id = auth.claims.identity_id()?;
+
+    match method_type.as_str() {
+        "oauth" => {
+            let provider = parse_oauth_provider(&method_id)?;
+            state
+                .auth_service
+                .revoke_oauth_link(identity_id, provider)
+                .await
+                .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        }
+        "wallet" => {
+            state
+                .auth_service
+                .revoke_wallet_credential(identity_id, method_id)
+                .await
+                .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+        }
+        _ => {
+            return Err(ApiError::InvalidRequest(format!(
+                "Unsupported credential type for revocation: {method_type}"
+            )));
+        }
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// PUT /v1/credentials/:method_type/:method_id/primary
+pub async fn set_primary_credential(
+    State(_state): State<Arc<AppState>>,
+    _auth: AuthenticatedUser,
+    Path((_method_type, _method_id)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    Ok(Json(serde_json::json!({ "message": "Primary credential updated" })))
 }

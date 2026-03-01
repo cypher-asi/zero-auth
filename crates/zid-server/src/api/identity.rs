@@ -70,23 +70,27 @@ pub struct GetIdentityResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct FreezeCeremonyRequest {
-    /// Machine IDs of approvers for multi-party approval
+    #[serde(default)]
     pub approver_machine_ids: Vec<Uuid>,
-    /// Approval signatures from approvers for multi-party approval  
+    #[serde(default)]
     pub approval_signatures: Vec<String>, // hex
     pub reason: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UnfreezeCeremonyRequest {
+    #[serde(default)]
     pub approver_machine_ids: Vec<Uuid>,
+    #[serde(default)]
     pub approval_signatures: Vec<String>, // hex
 }
 
 #[derive(Debug, Deserialize)]
 pub struct RecoveryCeremonyRequest {
     pub new_identity_signing_public_key: String, // hex
+    #[serde(default)]
     pub approver_machine_ids: Vec<Uuid>,
+    #[serde(default)]
     pub approval_signatures: Vec<String>, // hex
 }
 
@@ -95,7 +99,9 @@ pub struct RotationCeremonyRequest {
     pub new_identity_signing_public_key: String, // hex
     /// Signature from current identity signing key proving authorization
     pub rotation_signature: String, // hex from current identity signing key
+    #[serde(default)]
     pub approver_machine_ids: Vec<Uuid>,
+    #[serde(default)]
     pub approval_signatures: Vec<String>, // hex
 }
 
@@ -178,11 +184,27 @@ pub async fn create_identity(
     }))
 }
 
+/// GET /v1/identity — returns the authenticated caller's identity
+pub async fn get_current_identity(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedUser,
+) -> Result<Json<GetIdentityResponse>, ApiError> {
+    let identity_id = auth.claims.identity_id()?;
+    get_identity_inner(&state, identity_id).await
+}
+
 /// GET /v1/identity/:identity_id
 pub async fn get_identity(
     State(state): State<Arc<AppState>>,
     Path(identity_id): Path<Uuid>,
     _auth: AuthenticatedUser,
+) -> Result<Json<GetIdentityResponse>, ApiError> {
+    get_identity_inner(&state, identity_id).await
+}
+
+async fn get_identity_inner(
+    state: &AppState,
+    identity_id: Uuid,
 ) -> Result<Json<GetIdentityResponse>, ApiError> {
     let identity = state
         .identity_service

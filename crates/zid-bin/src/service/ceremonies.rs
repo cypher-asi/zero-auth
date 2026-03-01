@@ -97,7 +97,7 @@ pub async fn recover(
 
 pub async fn rotate_key(client: &HttpClient) -> Result<(), AppError> {
     let _: serde_json::Value = client
-        .post("/v1/identity/rotate", &serde_json::json!({}))
+        .post("/v1/identity/rotation", &serde_json::json!({}))
         .await?;
     Ok(())
 }
