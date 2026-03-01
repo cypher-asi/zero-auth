@@ -77,7 +77,7 @@ pub fn sign_creation_message(
     isk_pub: &[u8; 32],
     machine_signing_pub: &[u8; 32],
     machine_encryption_pub: &[u8; 32],
-) -> ([u8; 64], Vec<u8>) {
+) -> ([u8; 64], u64) {
     let created_at = chrono::Utc::now().timestamp() as u64;
     let message = canonicalize_identity_creation_message(
         identity_id,
@@ -88,7 +88,7 @@ pub fn sign_creation_message(
         created_at,
     );
     let sig = sign_message(keypair, &message);
-    (sig, message.to_vec())
+    (sig, created_at)
 }
 
 pub fn sign_enrollment_message(

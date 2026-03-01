@@ -10,23 +10,29 @@ use crate::state::types::{FreezeReason, IdentityViewModel};
 #[derive(Serialize)]
 struct CreateIdentityBody {
     identity_id: Uuid,
-    machine_id: Uuid,
     identity_signing_public_key: String,
-    machine_signing_public_key: String,
-    machine_encryption_public_key: String,
     authorization_signature: String,
+    machine_key: MachineKeyBody,
+    namespace_name: String,
+    created_at: u64,
+}
+
+#[derive(Serialize)]
+struct MachineKeyBody {
+    machine_id: Uuid,
+    signing_public_key: String,
+    encryption_public_key: String,
+    capabilities: Vec<String>,
     device_name: String,
     device_platform: String,
-    neural_key_commitment: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pq_signing_public_key: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pq_encryption_public_key: Option<String>,
+    pq_signing_public_key: String,
+    pq_encryption_public_key: String,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct CreateIdentityResponse {
     pub identity_id: Uuid,
+    pub did: String,
     pub machine_id: Uuid,
     pub namespace_id: Uuid,
     pub created_at: String,
@@ -79,7 +85,7 @@ pub async fn create_self_sovereign(
     let keys = key_shard::derive_keys(&neural_key, &identity_id, &machine_id, 0)?;
     let pk = crypto_adapter::extract_machine_public_keys(&keys.machine_keypair);
 
-    let (sig, _msg) = crypto_adapter::sign_creation_message(
+    let (sig, created_at) = crypto_adapter::sign_creation_message(
         &keys.isk_keypair,
         &identity_id,
         &machine_id,
@@ -88,20 +94,22 @@ pub async fn create_self_sovereign(
         &pk.encryption,
     );
 
-    let commitment = crypto_adapter::neural_key_commitment(&neural_key);
-
     let body = CreateIdentityBody {
         identity_id,
-        machine_id,
         identity_signing_public_key: hex::encode(keys.isk_public),
-        machine_signing_public_key: hex::encode(pk.signing),
-        machine_encryption_public_key: hex::encode(pk.encryption),
         authorization_signature: hex::encode(sig),
-        device_name: device_name.to_string(),
-        device_platform: device_platform.to_string(),
-        neural_key_commitment: hex::encode(commitment),
-        pq_signing_public_key: Some(hex::encode(&pk.pq_signing)),
-        pq_encryption_public_key: Some(hex::encode(&pk.pq_encryption)),
+        machine_key: MachineKeyBody {
+            machine_id,
+            signing_public_key: hex::encode(pk.signing),
+            encryption_public_key: hex::encode(pk.encryption),
+            capabilities: vec!["FULL_DEVICE".to_string()],
+            device_name: device_name.to_string(),
+            device_platform: device_platform.to_string(),
+            pq_signing_public_key: hex::encode(&pk.pq_signing),
+            pq_encryption_public_key: hex::encode(&pk.pq_encryption),
+        },
+        namespace_name: format!("personal-{}", identity_id),
+        created_at,
     };
 
     let response: CreateIdentityResponse = client.post("/v1/identity", &body).await?;
