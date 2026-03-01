@@ -873,7 +873,16 @@ fn render_profiles_section(ui: &mut Ui, state: &mut AppState) {
 
         ui.add_space(spacing::MD);
         ui.horizontal(|ui| {
-            inputs::text_input(ui, &mut state.new_profile_name, "new-profile-name");
+            let input_width = (ui.available_width() - 80.0).max(120.0);
+            let te = egui::TextEdit::singleline(&mut state.new_profile_name)
+                .hint_text(
+                    egui::RichText::new("new-profile-name")
+                        .color(colors::TEXT_MUTED)
+                        .size(font_size::BODY),
+                )
+                .desired_width(input_width)
+                .font(egui::FontId::proportional(font_size::BODY));
+            ui.add(te);
             let can_create = !state.new_profile_name.trim().is_empty();
             if buttons::action_button(ui, "Create", can_create) {
                 let name = state.new_profile_name.trim().to_string();
