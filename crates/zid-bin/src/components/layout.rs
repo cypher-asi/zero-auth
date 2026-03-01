@@ -88,29 +88,16 @@ pub fn frozen_banner(ui: &mut Ui, reason: &str) {
     });
 }
 
-pub fn page_header(ui: &mut Ui, title: &str, action: Option<(&str, bool)>) -> bool {
+pub fn page_header(ui: &mut Ui, _title: &str, action: Option<(&str, bool)>) -> bool {
     let mut clicked = false;
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(title.to_uppercase())
-                .color(colors::TEXT_HEADING)
-                .size(font_size::SUBTITLE),
-        );
-        if let Some((label, enabled)) = action {
+    if let Some((label, enabled)) = action {
+        ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 clicked = super::buttons::action_button(ui, label, enabled);
             });
-        }
-    });
-    ui.add_space(spacing::SM);
-    let rect = ui.available_rect_before_wrap();
-    let line_rect = egui::Rect::from_min_size(
-        rect.min,
-        egui::vec2(rect.width(), 1.0),
-    );
-    ui.painter()
-        .rect_filled(line_rect, 0.0, colors::BORDER);
-    ui.add_space(spacing::MD);
+        });
+        ui.add_space(spacing::SM);
+    }
     clicked
 }
 
