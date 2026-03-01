@@ -511,7 +511,7 @@ fn render_nav_panel(ctx: &egui::Context, state: &mut AppState) {
                 .rect_filled(indicator_rect, 0.0, egui::Color32::WHITE);
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                ui.add_space(spacing::MD);
+                ui.add_space(spacing::XL);
 
                 if let Some(identity) = &state.identity {
                     let did_short = if identity.did.len() > 20 {
@@ -534,6 +534,7 @@ fn render_nav_panel(ctx: &egui::Context, state: &mut AppState) {
                                     .size(font_size::SMALL)
                                     .color(colors::TEXT_MUTED),
                             );
+                            ui.add_space(spacing::XS);
                             ui.label(
                                 egui::RichText::new(&identity.tier)
                                     .size(font_size::SMALL)
