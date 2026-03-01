@@ -556,7 +556,13 @@ impl AppState {
                         ));
                     }
                     AppError::SessionExpired => {
-                        self.identity_status = LoadStatus::Error(err.to_string());
+                        self.access_token = None;
+                        self.refresh_token = None;
+                        self.http_client.set_access_token(None);
+                        self.current_session = None;
+                        self.current_page = Page::Onboarding(OnboardingStep::Login(
+                            LoginStep::EnterPassphrase,
+                        ));
                     }
                     _ => {}
                 }

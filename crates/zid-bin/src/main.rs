@@ -45,6 +45,9 @@ impl ZeroIdApp {
 
     fn process_messages(&mut self, ctx: &egui::Context) {
         while let Ok(msg) = self.rx.try_recv() {
+            if matches!(&msg, AppMessage::TokenRefreshed { .. }) {
+                self.refresh_scheduled = false;
+            }
             self.state.handle_message(msg);
             ctx.request_repaint();
         }
