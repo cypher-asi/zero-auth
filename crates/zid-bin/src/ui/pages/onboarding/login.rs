@@ -41,7 +41,7 @@ fn render_passphrase_entry(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtim
 
     if !has_stored_machine_key {
         ui.label(
-            RichText::new("Enter one of your recovery shards (hex)")
+            RichText::new("Enter one of your three recovery shards (hex)")
                 .color(theme::TEXT_SECONDARY)
                 .font(theme::small_font()),
         );

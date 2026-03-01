@@ -101,7 +101,7 @@ fn render_enroll_dialog(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::
             core::password_input(ui, &mut state.enroll_passphrase, "Passphrase");
             ui.add_space(8.0);
             ui.label(
-                RichText::new("Enter one of your recovery shards (hex)")
+                RichText::new("Enter one of your three recovery shards (hex)")
                     .color(theme::TEXT_SECONDARY)
                     .font(theme::small_font()),
             );
