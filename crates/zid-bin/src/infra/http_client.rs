@@ -16,9 +16,23 @@ pub struct HttpClient {
 }
 
 #[derive(serde::Deserialize, Debug)]
-struct ServerErrorBody {
-    error: Option<String>,
+#[serde(untagged)]
+enum ServerErrorBody {
+    Nested {
+        error: ServerErrorDetails,
+    },
+    Flat {
+        error: Option<String>,
+        message: Option<String>,
+    },
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct ServerErrorDetails {
+    #[serde(default)]
     message: Option<String>,
+    #[serde(default)]
+    code: Option<String>,
 }
 
 impl HttpClient {
@@ -71,10 +85,7 @@ impl HttpClient {
         }
 
         let code = status.as_u16();
-        let body = response.json::<ServerErrorBody>().await.ok();
-        let msg = body
-            .and_then(|b| b.error.or(b.message))
-            .unwrap_or_else(|| format!("HTTP {code}"));
+        let msg = extract_error_message(response, code).await;
 
         match code {
             401 => Err(AppError::SessionExpired),
@@ -159,11 +170,21 @@ impl HttpClient {
             Ok(())
         } else {
             let code = status.as_u16();
-            let body = resp.json::<ServerErrorBody>().await.ok();
-            let msg = body
-                .and_then(|b| b.error.or(b.message))
-                .unwrap_or_else(|| format!("HTTP {code}"));
+            let msg = extract_error_message(resp, code).await;
             Err(AppError::ServerError(code, msg))
         }
+    }
+}
+
+async fn extract_error_message(response: Response, status_code: u16) -> String {
+    let body = response.json::<ServerErrorBody>().await.ok();
+    match body {
+        Some(ServerErrorBody::Nested { error }) => error
+            .message
+            .unwrap_or_else(|| error.code.unwrap_or_else(|| format!("HTTP {status_code}"))),
+        Some(ServerErrorBody::Flat { error, message }) => error
+            .or(message)
+            .unwrap_or_else(|| format!("HTTP {status_code}")),
+        None => format!("HTTP {status_code}"),
     }
 }
