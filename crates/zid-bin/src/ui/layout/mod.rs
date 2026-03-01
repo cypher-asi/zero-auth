@@ -60,11 +60,23 @@ pub fn render_sidebar(ui: &mut Ui, state: &mut AppState) {
         }
 
         ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
-            ui.add_space(12.0);
+            ui.add_space(8.0);
+
+            // Profile selector (bottom-most, rendered first in bottom-up)
             ui.horizontal(|ui| {
                 ui.add_space(12.0);
-                ui.vertical(|ui| {
-                    if let Some(identity) = &state.identity {
+                render_profile_selector(ui, state);
+            });
+
+            ui.add_space(4.0);
+            ui.separator();
+            ui.add_space(4.0);
+
+            // Identity info above the separator
+            if let Some(identity) = &state.identity {
+                ui.horizontal(|ui| {
+                    ui.add_space(12.0);
+                    ui.vertical(|ui| {
                         let did_short = if identity.did.len() > 20 {
                             format!("{}...{}", &identity.did[..10], &identity.did[identity.did.len()-6..])
                         } else if identity.did.is_empty() {
@@ -74,12 +86,9 @@ pub fn render_sidebar(ui: &mut Ui, state: &mut AppState) {
                         };
                         ui.label(RichText::new(did_short).font(theme::small_font()).color(theme::TEXT_MUTED));
                         ui.label(RichText::new(&identity.tier).font(theme::small_font()).color(theme::TEXT_SECONDARY));
-                    }
-                    render_profile_selector(ui, state);
+                    });
                 });
-            });
-            ui.add_space(4.0);
-            ui.separator();
+            }
         });
     });
 }
