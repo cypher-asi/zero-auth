@@ -24,5 +24,8 @@ Thumbs.db
 # Session data
 .session/
 
+# Local identity data
+.zid/
+
 # Test artifacts
 *.log

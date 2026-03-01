@@ -101,6 +101,13 @@ pub struct AppState {
     // Settings
     pub settings: AppSettings,
 
+    // Profiles
+    pub active_profile: String,
+    pub profiles: Vec<ProfileInfo>,
+
+    // Profile UI transient state
+    pub new_profile_name: String,
+
     // Confirm dialog
     pub confirm_dialog: Option<ConfirmDialogState>,
 }
@@ -121,6 +128,7 @@ pub enum ConfirmAction {
     DisableMfa,
     FreezeIdentity,
     RevokeSession(uuid::Uuid),
+    DeleteProfile(String),
     Logout,
 }
 
@@ -142,6 +150,9 @@ impl AppState {
         let settings = storage
             .read_json::<AppSettings>(&storage.settings_path())
             .unwrap_or_default();
+
+        let active_profile = storage.active_profile_name().to_string();
+        let profiles = load_profile_list(&storage);
 
         Self {
             current_page: initial_page,
@@ -191,6 +202,9 @@ impl AppState {
             show_freeze_dialog: false,
             freeze_reason: FreezeReason::UserRequested,
             settings,
+            active_profile,
+            profiles,
+            new_profile_name: String::new(),
             confirm_dialog: None,
         }
     }
@@ -462,6 +476,59 @@ impl AppState {
                 ));
             }
 
+            AppMessage::ProfileCreated(name) => {
+                self.profiles = load_profile_list(&self.storage);
+                self.new_profile_name.clear();
+                self.add_toast(
+                    ToastLevel::Success,
+                    format!("Profile '{}' created", name),
+                );
+            }
+
+            AppMessage::ProfileSwitched(name) => {
+                if let Err(e) = self.storage.switch_profile(&name) {
+                    self.add_toast(ToastLevel::Error, e.to_string());
+                    return;
+                }
+                self.active_profile = name.clone();
+                self.access_token = None;
+                self.refresh_token = None;
+                self.http_client.set_access_token(None);
+                self.current_session = None;
+                self.identity = None;
+                self.identity_status = LoadStatus::Idle;
+                self.machines.clear();
+                self.credentials.clear();
+                self.frozen_state = None;
+                self.profiles = load_profile_list(&self.storage);
+
+                let settings = self
+                    .storage
+                    .read_json::<AppSettings>(&self.storage.settings_path())
+                    .unwrap_or_default();
+                self.settings = settings;
+
+                if self.storage.has_credentials() {
+                    self.current_page =
+                        Page::Onboarding(OnboardingStep::Login(LoginStep::EnterPassphrase));
+                } else {
+                    self.current_page = Page::Onboarding(OnboardingStep::Welcome);
+                }
+                self.navigation_stack.clear();
+                self.add_toast(
+                    ToastLevel::Success,
+                    format!("Switched to profile: {}", name),
+                );
+            }
+
+            AppMessage::ProfileDeleted(name) => {
+                self.profiles = load_profile_list(&self.storage);
+                self.add_toast(
+                    ToastLevel::Success,
+                    format!("Profile '{}' deleted", name),
+                );
+            }
+
             AppMessage::OAuthUrlReady(url) => {
                 let _ = crate::infra::os_integration::open_browser(&url);
                 self.add_toast(
@@ -502,4 +569,28 @@ impl AppState {
     pub fn is_authenticated(&self) -> bool {
         self.access_token.is_some()
     }
+}
+
+fn load_profile_list(storage: &LocalStorage) -> Vec<ProfileInfo> {
+    let active = storage.active_profile_name().to_string();
+    storage
+        .list_profiles()
+        .unwrap_or_else(|_| vec![active.clone()])
+        .into_iter()
+        .map(|name| {
+            let is_active = name == active;
+            let has_credentials = if is_active {
+                storage.has_credentials()
+            } else {
+                LocalStorage::with_profile(&name)
+                    .map(|s| s.has_credentials())
+                    .unwrap_or(false)
+            };
+            ProfileInfo {
+                name,
+                has_credentials,
+                is_active,
+            }
+        })
+        .collect()
 }

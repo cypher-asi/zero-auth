@@ -75,6 +75,11 @@ pub enum AppMessage {
     // Error
     Error(AppError),
 
+    // Profiles
+    ProfileCreated(String),
+    ProfileSwitched(String),
+    ProfileDeleted(String),
+
     // Toast
     Toast(ToastLevel, String),
 }

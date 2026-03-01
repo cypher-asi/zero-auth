@@ -54,6 +54,13 @@ pub enum LoginStep {
 }
 
 #[derive(Debug, Clone)]
+pub struct ProfileInfo {
+    pub name: String,
+    pub has_credentials: bool,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct IdentityViewModel {
     pub identity_id: Uuid,
     pub did: String,

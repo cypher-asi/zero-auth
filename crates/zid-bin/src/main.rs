@@ -286,6 +286,16 @@ impl ZeroIdApp {
                     }
                 });
             }
+            ConfirmAction::DeleteProfile(name) => {
+                match self.state.storage.delete_profile(&name) {
+                    Ok(()) => {
+                        let _ = self.state.tx.send(AppMessage::ProfileDeleted(name));
+                    }
+                    Err(e) => {
+                        let _ = self.state.tx.send(AppMessage::Error(e));
+                    }
+                }
+            }
             ConfirmAction::Logout => {
                 let tx = self.state.tx.clone();
                 let client = self.state.http_client.clone();
@@ -369,14 +379,7 @@ async fn ensure_server_running() {
 
     let bind_address = parse_bind_address(server_url);
 
-    let data_dir = directories::ProjectDirs::from("com", "cypher", "zid")
-        .map(|p| p.data_dir().join("server"))
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME")
-                .or_else(|_| std::env::var("USERPROFILE"))
-                .unwrap_or_else(|_| ".".into());
-            std::path::PathBuf::from(home).join(".zid").join("server")
-        });
+    let data_dir = storage.server_data_dir();
 
     tokio::spawn(async move {
         if let Err(e) = zid_server::start_embedded(bind_address, data_dir).await {

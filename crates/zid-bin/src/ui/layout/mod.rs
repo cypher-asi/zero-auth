@@ -62,8 +62,8 @@ pub fn render_sidebar(ui: &mut Ui, state: &mut AppState) {
             ui.add_space(12.0);
             ui.horizontal(|ui| {
                 ui.add_space(12.0);
-                if let Some(identity) = &state.identity {
-                    ui.vertical(|ui| {
+                ui.vertical(|ui| {
+                    if let Some(identity) = &state.identity {
                         let did_short = if identity.did.len() > 20 {
                             format!("{}...{}", &identity.did[..10], &identity.did[identity.did.len()-6..])
                         } else if identity.did.is_empty() {
@@ -73,8 +73,13 @@ pub fn render_sidebar(ui: &mut Ui, state: &mut AppState) {
                         };
                         ui.label(RichText::new(did_short).font(theme::small_font()).color(theme::TEXT_MUTED));
                         ui.label(RichText::new(&identity.tier).font(theme::small_font()).color(theme::TEXT_SECONDARY));
-                    });
-                }
+                    }
+                    ui.label(
+                        RichText::new(format!("Profile: {}", state.active_profile))
+                            .font(theme::small_font())
+                            .color(theme::TEXT_MUTED),
+                    );
+                });
             });
             ui.add_space(4.0);
             ui.separator();
