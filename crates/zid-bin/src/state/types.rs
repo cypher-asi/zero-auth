@@ -203,10 +203,18 @@ pub struct StoredSession {
     pub expires_at: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
     #[serde(default = "default_server_url")]
     pub server_url: String,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            server_url: default_server_url(),
+        }
+    }
 }
 
 fn default_server_url() -> String {

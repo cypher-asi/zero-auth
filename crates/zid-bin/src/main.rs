@@ -295,14 +295,17 @@ fn main() -> eframe::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "zid_desktop=info".into()),
+                .unwrap_or_else(|_| "zid_bin=info,zid_server=info".into()),
         )
         .init();
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
+        .thread_stack_size(8 * 1024 * 1024) // 8 MiB — PQ crypto (ML-DSA-65, ML-KEM-768) needs large stack
         .build()
         .expect("Failed to create tokio runtime");
+
+    rt.block_on(ensure_server_running());
 
     let (tx, rx) = mpsc::unbounded_channel();
 
@@ -323,4 +326,84 @@ fn main() -> eframe::Result<()> {
             Ok(Box::new(ZeroIdApp::new(cc, handle, tx, rx)))
         }),
     )
+}
+
+async fn ensure_server_running() {
+    let storage = match LocalStorage::new() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let settings = storage
+        .read_json::<AppSettings>(&storage.settings_path())
+        .unwrap_or_default();
+
+    let server_url = settings.server_url.trim_end_matches('/');
+
+    if !is_local_url(server_url) {
+        return;
+    }
+
+    let health_url = format!("{}/health", server_url);
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(1))
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .unwrap();
+
+    if client.get(&health_url).send().await.is_ok() {
+        tracing::info!("Identity server already running at {}", server_url);
+        return;
+    }
+
+    tracing::info!("Starting embedded identity server...");
+
+    let bind_address = parse_bind_address(server_url);
+
+    let data_dir = directories::ProjectDirs::from("com", "cypher", "zid")
+        .map(|p| p.data_dir().join("server"))
+        .unwrap_or_else(|| {
+            let home = std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .unwrap_or_else(|_| ".".into());
+            std::path::PathBuf::from(home).join(".zid").join("server")
+        });
+
+    tokio::spawn(async move {
+        if let Err(e) = zid_server::start_embedded(bind_address, data_dir).await {
+            tracing::error!("Embedded identity server error: {}", e);
+        }
+    });
+
+    for i in 0..50 {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        if client.get(&health_url).send().await.is_ok() {
+            tracing::info!("Embedded identity server ready");
+            return;
+        }
+        if i == 20 {
+            tracing::debug!("Still waiting for embedded server...");
+        }
+    }
+
+    tracing::warn!("Embedded server did not become ready within 5 seconds, continuing anyway");
+}
+
+fn is_local_url(url: &str) -> bool {
+    let without_scheme = url
+        .strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+        .unwrap_or(url);
+    without_scheme.starts_with("127.0.0.1")
+        || without_scheme.starts_with("localhost")
+        || without_scheme.starts_with("[::1]")
+}
+
+fn parse_bind_address(server_url: &str) -> std::net::SocketAddr {
+    let without_scheme = server_url
+        .strip_prefix("http://")
+        .or_else(|| server_url.strip_prefix("https://"))
+        .unwrap_or(server_url);
+    without_scheme
+        .parse()
+        .unwrap_or_else(|_| "127.0.0.1:9999".parse().unwrap())
 }

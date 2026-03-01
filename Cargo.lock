@@ -6890,6 +6890,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "zid-bin"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "argon2",
+ "base64 0.21.7",
+ "chrono",
+ "directories",
+ "ed25519-dalek",
+ "eframe",
+ "egui",
+ "egui_extras",
+ "hex",
+ "image",
+ "open",
+ "qrcode",
+ "rand 0.8.5",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "zeroize",
+ "zid",
+ "zid-crypto",
+ "zid-server",
+ "zxcvbn",
+]
+
+[[package]]
 name = "zid-client"
 version = "0.1.0"
 dependencies = [
@@ -6935,39 +6969,6 @@ dependencies = [
  "uuid",
  "zeroize",
  "zid",
-]
-
-[[package]]
-name = "zid-desktop"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "arboard",
- "argon2",
- "base64 0.21.7",
- "chrono",
- "directories",
- "ed25519-dalek",
- "eframe",
- "egui",
- "egui_extras",
- "hex",
- "image",
- "open",
- "qrcode",
- "rand 0.8.5",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "zeroize",
- "zid",
- "zid-crypto",
- "zxcvbn",
 ]
 
 [[package]]

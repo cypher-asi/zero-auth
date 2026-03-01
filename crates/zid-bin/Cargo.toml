@@ -1,5 +1,5 @@
 [package]
-name = "zid-desktop"
+name = "zid-bin"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,13 +7,16 @@ authors.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "zid-desktop"
+name = "zid-bin"
 path = "src/main.rs"
 
 [dependencies]
 # PQ-Hybrid crypto
 zid = { workspace = true }
 zid-crypto = { path = "../zid-crypto" }
+
+# Embedded identity server
+zid-server = { path = "../zid-server" }
 
 # UI
 eframe = "0.29"

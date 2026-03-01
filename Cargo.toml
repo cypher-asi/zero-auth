@@ -9,7 +9,7 @@ members = [
     "crates/zid-integrations",
     "crates/zid-server",
     "crates/zid-client",
-    "crates/zid-desktop",
+    "crates/zid-bin",
     "tests",
 ]
 resolver = "2"
