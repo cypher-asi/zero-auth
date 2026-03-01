@@ -171,10 +171,7 @@ pub fn toast_area(ctx: &egui::Context, toasts: &[crate::state::types::ToastMessa
     }
 
     egui::Area::new(egui::Id::new("toast_area"))
-        .fixed_pos(egui::pos2(
-            ctx.screen_rect().max.x - 340.0,
-            ctx.screen_rect().min.y + spacing::LG,
-        ))
+        .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -spacing::XL))
         .show(ctx, |ui| {
             ui.set_max_width(320.0);
             for toast in toasts {
