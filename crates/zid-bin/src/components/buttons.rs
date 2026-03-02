@@ -146,23 +146,36 @@ pub fn copy_button(ui: &mut Ui, id_salt: &str, text_to_copy: &str) {
     }
 }
 
-pub fn section_add_button(ui: &mut Ui, enabled: bool) -> bool {
-    let old_padding = ui.spacing().button_padding;
-    ui.spacing_mut().button_padding = Vec2::new(2.0, 0.0);
-
-    let r = ui.add_enabled(
-        enabled,
-        egui::Button::new(
-            RichText::new(egui_phosphor::regular::PLUS)
-                .size(font_size::HEADING)
-                .color(colors::TEXT_HEADING),
-        )
-        .fill(Color32::TRANSPARENT)
-        .stroke(egui::Stroke::NONE)
-        .corner_radius(0.0),
+pub fn section_add_button(ui: &mut Ui, rect: egui::Rect, enabled: bool) -> bool {
+    let wv = &mut ui.visuals_mut().widgets;
+    let saved = (
+        wv.inactive.weak_bg_fill,
+        wv.hovered.weak_bg_fill,
+        wv.active.weak_bg_fill,
     );
+    wv.inactive.weak_bg_fill = Color32::BLACK;
+    wv.hovered.weak_bg_fill = colors::SURFACE_INTERACTIVE;
+    wv.active.weak_bg_fill = colors::BORDER;
 
-    ui.spacing_mut().button_padding = old_padding;
+    let button = egui::Button::new(
+        RichText::new(egui_phosphor::regular::PLUS)
+            .size(ICON_SIZE)
+            .color(Color32::WHITE),
+    )
+    .stroke(tokens::default_stroke())
+    .corner_radius(0.0);
+
+    let r = if enabled {
+        ui.put(rect, button)
+    } else {
+        ui.disable();
+        ui.put(rect, button)
+    };
+
+    let wv = &mut ui.visuals_mut().widgets;
+    wv.inactive.weak_bg_fill = saved.0;
+    wv.hovered.weak_bg_fill = saved.1;
+    wv.active.weak_bg_fill = saved.2;
     r.clicked()
 }
 

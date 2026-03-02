@@ -54,7 +54,7 @@ pub fn section_with_action(
         prev_clip.top()..=prev_clip.bottom(),
     )));
 
-    let mut clicked = false;
+    let mut clicked;
     let mut prepared = egui::Frame::new()
         .fill(colors::SURFACE)
         .corner_radius(0.0)
@@ -66,12 +66,19 @@ pub fn section_with_action(
     {
         let ui = &mut prepared.content_ui;
         ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            section_heading(ui, heading);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                clicked = super::buttons::section_add_button(ui, enabled);
-            });
-        });
+
+        let heading_resp = section_heading(ui, heading);
+
+        let btn_size = super::tokens::WIDGET_HEIGHT;
+        let btn_rect = egui::Rect::from_min_size(
+            egui::pos2(
+                ui.max_rect().right() - btn_size,
+                heading_resp.rect.center().y - btn_size / 2.0,
+            ),
+            egui::vec2(btn_size, btn_size),
+        );
+        clicked = super::buttons::section_add_button(ui, btn_rect, enabled);
+
         ui.add_space(10.0);
         content(ui);
     }
@@ -90,13 +97,13 @@ pub fn section_with_action(
     clicked
 }
 
-fn section_heading(ui: &mut Ui, title: &str) {
+fn section_heading(ui: &mut Ui, title: &str) -> egui::Response {
     ui.label(
         RichText::new(title.to_uppercase())
             .strong()
             .size(font_size::HEADING)
             .color(colors::TEXT_HEADING),
-    );
+    )
 }
 
 pub fn card_frame() -> egui::Frame {
