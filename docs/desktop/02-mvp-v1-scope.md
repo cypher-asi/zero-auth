@@ -11,7 +11,7 @@ into three delivery milestones: **MVP**, **V1 Parity**, and **Advanced**.
 |-----------|------|---------------|
 | **MVP** | Usable self-sovereign identity app — create, login, machine management, shard backup/recovery, session refresh | User can create an identity, log in on a machine, list/revoke machines, back up shards, recover, and maintain a session |
 | **V1 Parity** | Feature parity with current platform capabilities — linked identities, namespaces, all auth methods | All auth methods work, credential linking/revocation, namespace visibility |
-| **Advanced** | Security ceremonies and operational features — freeze/unfreeze, key rotation, PQ visibility | Multi-approval ceremonies succeed, PQ key details visible, local audit log available |
+| **Advanced** | Security ceremonies and operational features — freeze/unfreeze, key rotation | Multi-approval ceremonies succeed, local audit log available |
 
 ---
 
@@ -80,7 +80,7 @@ into three delivery milestones: **MVP**, **V1 Parity**, and **Advanced**.
 ### Machines
 | Req | Description |
 |-----|-------------|
-| MC-04 | Display classical vs PQ-hybrid key scheme per machine |
+| MC-04 | Display PQ-hybrid key details per machine |
 
 ### Linked Identities
 | Req | Description |
@@ -169,7 +169,7 @@ V1 Phase 1 — Credentials
 
 V1 Phase 2 — Admin
   ID-03, ID-04                  (Disable/freeze)
-  MC-04                         (PQ key visibility)
+  MC-04                         (PQ-Hybrid key details)
 
 V1 Phase 3 — Namespaces
   NS-01..NS-04                  (Namespace management)

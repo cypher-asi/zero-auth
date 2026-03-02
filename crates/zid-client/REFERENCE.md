@@ -308,10 +308,10 @@ cargo run -p client -- test-protected
 The most secure method using cryptographic challenge-response. With the new credential format, login only requires your passphrase - the machine signing key is stored encrypted and decrypted at login time.
 
 ```rust
-use zid_crypto::{sign_message, Ed25519KeyPair};
+use zid_crypto::MachineKeyPair;
 
 async fn login_with_machine_key(
-    signing_keypair: &Ed25519KeyPair,  // Loaded from encrypted storage
+    machine_keypair: &MachineKeyPair,  // Loaded from encrypted storage
     machine_id: Uuid,
 ) -> Result<SessionTokens> {
     let client = reqwest::Client::new();
@@ -332,10 +332,7 @@ async fn login_with_machine_key(
     
     // Step 3: Sign challenge with stored machine signing key
     // (No Neural Key reconstruction needed for regular login)
-    let signature = sign_message(
-        signing_keypair,
-        &challenge_bytes
-    );
+    let signature = machine_keypair.sign(&challenge_bytes);
     
     // Step 4: Submit signature
     let login_response = client
@@ -343,7 +340,7 @@ async fn login_with_machine_key(
         .json(&json!({
             "challenge_id": challenge_response.challenge_id,
             "machine_id": machine_id,
-            "signature": hex::encode(&signature)
+            "signature": hex::encode(&signature.to_bytes())
         }))
         .send()
         .await?
@@ -441,7 +438,6 @@ async fn refresh_access_token(
 use zid_crypto::{
     derive_machine_keypair,
     canonicalize_enrollment_message,
-    sign_message,
     derive_central_public_key,
     MachineKeyCapabilities,
 };
@@ -485,7 +481,7 @@ async fn enroll_new_machine(
     );
     
     // Step 5: Sign with central signing key
-    let authorization_signature = sign_message(&central_signing_keypair, &message);
+    let authorization_signature = central_signing_keypair.sign(&message);
     
     // Step 6: Send enrollment request
     let client = reqwest::Client::new();

@@ -68,20 +68,17 @@ fn parse_shard(hex_str: &str) -> Result<NeuralShard, zid_crypto::CryptoError> {
 
 ## 2. Machine Key Derivation
 
-Machine Keys are deterministically derived from the Neural Key. Two schemes are supported:
-
-- **Classical**: Ed25519 (signing) + X25519 (encryption)
-- **PqHybrid**: Classical + ML-DSA-65 (PQ signing) + ML-KEM-768 (PQ encryption)
+Machine Keys are deterministically derived from the Neural Key. All machine keys use PQ-Hybrid cryptography, combining classical keys (Ed25519 + X25519) with post-quantum keys (ML-DSA-65 + ML-KEM-768).
 
 ```rust
 use zid_crypto::{
-    NeuralKey, KeyScheme, MachineKeyCapabilities, MachineKeyPair,
-    derive_machine_keypair, derive_machine_keypair_with_scheme,
+    NeuralKey, MachineKeyCapabilities, MachineKeyPair,
+    derive_machine_keypair,
 };
 use uuid::Uuid;
 
-// Derive a Classical scheme machine key
-fn derive_classical_machine_key(
+// Derive a PQ-Hybrid machine key
+fn derive_machine_key(
     neural_key: &NeuralKey,
     identity_id: Uuid,
     machine_id: Uuid,
@@ -98,38 +95,16 @@ fn derive_classical_machine_key(
     )
 }
 
-// Derive a PQ-Hybrid scheme machine key (post-quantum protection)
-fn derive_pq_hybrid_machine_key(
-    neural_key: &NeuralKey,
-    identity_id: Uuid,
-    machine_id: Uuid,
-    epoch: u64,
-) -> Result<MachineKeyPair, zid_crypto::CryptoError> {
-    let capabilities = MachineKeyCapabilities::FULL_DEVICE;
-    
-    derive_machine_keypair_with_scheme(
-        neural_key,
-        &identity_id,
-        &machine_id,
-        epoch,
-        capabilities,
-        KeyScheme::PqHybrid,
-    )
-}
-
 // Extract public keys for server enrollment
 fn get_public_keys(keypair: &MachineKeyPair) {
-    // Classical keys (always present)
+    // Classical keys (present for OpenMLS compatibility)
     let signing_pk: [u8; 32] = keypair.signing_public_key();
     let encryption_pk: [u8; 32] = keypair.encryption_public_key();
     
-    // PQ keys (only in PqHybrid mode)
-    if keypair.has_post_quantum_keys() {
-        let pq_signing_pk: [u8; 1952] = keypair.pq_signing_public_key().unwrap();
-        let pq_encryption_pk: [u8; 1184] = keypair.pq_encryption_public_key().unwrap();
-    }
+    // Post-quantum keys (always present)
+    let pq_signing_pk: [u8; 1952] = keypair.pq_signing_public_key();
+    let pq_encryption_pk: [u8; 1184] = keypair.pq_encryption_public_key();
     
-    println!("Scheme: {:?}", keypair.scheme());
     println!("Capabilities: {:?}", keypair.capabilities());
 }
 
@@ -260,9 +235,9 @@ Create a new identity with the first machine enrolled:
 ```rust
 use zid_identity_core::{IdentityCore, CreateIdentityRequest, MachineKey};
 use zid_crypto::{
-    NeuralKey, MachineKeyCapabilities, KeyScheme,
-    derive_identity_signing_keypair, derive_machine_keypair_with_scheme,
-    canonicalize_identity_creation_message, sign_message, current_timestamp,
+    NeuralKey, MachineKeyCapabilities,
+    derive_identity_signing_keypair, derive_machine_keypair,
+    canonicalize_identity_creation_message, current_timestamp,
 };
 use uuid::Uuid;
 
@@ -278,14 +253,13 @@ async fn create_identity(
     let (identity_signing_public_key, identity_keypair) = 
         derive_identity_signing_keypair(neural_key, &identity_id)?;
     
-    // 2. Derive first machine key
-    let machine_keypair = derive_machine_keypair_with_scheme(
+    // 2. Derive first machine key (PQ-Hybrid)
+    let machine_keypair = derive_machine_keypair(
         neural_key,
         &identity_id,
         &machine_id,
         1, // epoch
         MachineKeyCapabilities::FULL_DEVICE,
-        KeyScheme::Classical,
     )?;
     
     // 3. Build MachineKey struct for enrollment
@@ -304,9 +278,8 @@ async fn create_identity(
         device_platform: "linux".to_string(),
         revoked: false,
         revoked_at: None,
-        key_scheme: KeyScheme::Classical,
-        pq_signing_public_key: None,
-        pq_encryption_public_key: None,
+        pq_signing_public_key: machine_keypair.pq_signing_public_key(),
+        pq_encryption_public_key: machine_keypair.pq_encryption_public_key(),
     };
     
     // 4. Create authorization signature
@@ -318,7 +291,7 @@ async fn create_identity(
         &machine_key.encryption_public_key,
         now,
     );
-    let signature = sign_message(&identity_keypair, &message);
+    let signature = identity_keypair.sign(&message);
     
     // 5. Submit creation request
     let request = CreateIdentityRequest {
@@ -355,7 +328,7 @@ async fn list_machines(
     for machine in &machines {
         println!("Machine: {}", machine.machine_id);
         println!("  Device: {} ({})", machine.device_name, machine.device_platform);
-        println!("  Scheme: {:?}", machine.key_scheme);
+        println!("  PQ Signing Key: {:?}", machine.pq_signing_public_key.is_some());
         println!("  Capabilities: {:?}", machine.capabilities);
         println!("  Revoked: {}", machine.revoked);
         println!("  Created: {}", machine.created_at);

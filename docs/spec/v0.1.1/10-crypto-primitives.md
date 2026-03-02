@@ -320,11 +320,11 @@ Service Master Key [32 bytes, server-generated]
 │
 ├─ HKDF(SMK, "cypher:id:jwt:v1" || key_epoch)
 │  └─ JWT Signing Seed [32 bytes]
-│     └─ Ed25519KeyPair
+│     └─ Ed25519 SigningKey (JWT only)
 │
 └─ HKDF(SMK, "cypher:managed:identity:v1" || method_type || method_id)
    └─ Managed Identity Signing Seed [32 bytes]
-      └─ Ed25519KeyPair (Managed ISK)
+      └─ IdentitySigningKey (Managed ISK)
 ```
 
 ---

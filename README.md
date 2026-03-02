@@ -44,13 +44,6 @@ A cryptographic identity and authentication service with client-controlled roots
 
 zid supports **post-quantum cryptography** via PQ-Hybrid key derivation, protecting against future quantum computing threats while maintaining backward compatibility.
 
-### Key Schemes
-
-| Scheme | Keys Derived | Use Case |
-|--------|-------------|----------|
-| **Classical** | Ed25519 + X25519 | Default, OpenMLS compatible, smaller keys |
-| **PQ-Hybrid** | Classical + ML-DSA-65 + ML-KEM-768 | Post-quantum protection with backward compatibility |
-
 ### Keys Derivable from Neural Key
 
 All keys are deterministically derived from a single 32-byte Neural Key using HKDF-SHA256 with domain separation:
@@ -61,13 +54,13 @@ Neural Key (32 bytes, client-only)
 ├── Identity Signing Key (Ed25519)
 │   Purpose: Signs machine enrollments, key rotations, recovery operations
 │
-└── Machine Key [per device, per epoch]
+└── Machine Key [per device, per epoch] (PQ-Hybrid)
     │
-    ├── Classical Keys (always present)
+    ├── Classical Keys
     │   ├── Signing Key (Ed25519, 32 B)
     │   └── Encryption Key (X25519, 32 B)
     │
-    └── Post-Quantum Keys (PQ-Hybrid mode)
+    └── Post-Quantum Keys
         ├── PQ Signing Key (ML-DSA-65, 1,952 B) — FIPS 204
         └── PQ Encryption Key (ML-KEM-768, 1,184 B) — FIPS 203
 ```
@@ -771,7 +764,7 @@ cargo llvm-cov --workspace --html
 
 ## Cryptographic Standards
 
-### Classical Cryptography (Default)
+### Classical Cryptography
 
 | Operation | Algorithm | Standard |
 |-----------|-----------|----------|
@@ -784,40 +777,32 @@ cargo llvm-cov --workspace --html
 
 ### Post-Quantum Cryptography
 
-zid supports PQ-Hybrid key derivation with ML-DSA-65 and ML-KEM-768 always available. Machine keys can include post-quantum keys alongside classical keys for defense against future quantum computers.
+All machine keys use PQ-Hybrid cryptography, combining classical keys (Ed25519 + X25519) with post-quantum keys (ML-DSA-65 + ML-KEM-768) for defense against both classical and quantum computing threats.
 
 | Operation | Algorithm | Standard | Key/Signature Size |
 |-----------|-----------|----------|-------------------|
 | PQ Signatures | ML-DSA-65 | FIPS 204 | 1,952 B / 3,309 B |
 | PQ Key Encapsulation | ML-KEM-768 | FIPS 203 | 1,184 B / 1,088 B |
 
-#### Key Schemes
-
-Machine keys support two schemes:
-
-- **Classical** (default): Ed25519 + X25519 only. OpenMLS compatible, smaller keys.
-- **PqHybrid**: Classical keys plus ML-DSA-65 + ML-KEM-768. Provides post-quantum protection while maintaining backward compatibility.
-
 ```rust
-use zid_crypto::{derive_machine_keypair_with_scheme, KeyScheme, MachineKeyCapabilities};
+use zid_crypto::{derive_machine_keypair, MachineKeyCapabilities};
 
-// Derive machine keys with post-quantum protection
-let keypair = derive_machine_keypair_with_scheme(
+// Derive PQ-Hybrid machine keys
+let keypair = derive_machine_keypair(
     &neural_key,
     &identity_id,
     &machine_id,
     epoch,
     MachineKeyCapabilities::FULL_DEVICE,
-    KeyScheme::PqHybrid,
 )?;
 
-// Access PQ keys
-if let Some(pq_sign_pk) = keypair.pq_signing_public_key() {
-    // 1,952-byte ML-DSA-65 public key
-}
-if let Some(pq_enc_pk) = keypair.pq_encryption_public_key() {
-    // 1,184-byte ML-KEM-768 public key
-}
+// Classical keys (present for OpenMLS compatibility)
+let ed25519_pk = keypair.signing_public_key();       // 32 bytes
+let x25519_pk = keypair.encryption_public_key();     // 32 bytes
+
+// Post-quantum keys (always present)
+let pq_sign_pk = keypair.pq_signing_public_key();       // 1,952 bytes (ML-DSA-65)
+let pq_enc_pk = keypair.pq_encryption_public_key();     // 1,184 bytes (ML-KEM-768)
 ```
 
 See [Quantum Considerations](docs/encryption/quantum.md) for migration strategy and threat analysis.

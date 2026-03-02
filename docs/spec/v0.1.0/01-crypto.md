@@ -6,10 +6,10 @@ The `zid-crypto` crate provides all cryptographic primitives for the Zero-Auth s
 
 ### 1.1 Purpose and Responsibilities
 
-- **Key Generation**: Generate Neural Keys, Ed25519 signing keys, X25519 encryption keys
+- **Key Generation**: Generate Neural Keys, PQ-Hybrid signing keys (Ed25519 + ML-DSA-65), X25519 encryption keys
 - **Key Derivation**: Hierarchical key derivation using HKDF-SHA256 with domain separation
 - **Encryption**: XChaCha20-Poly1305 AEAD encryption/decryption
-- **Signatures**: Ed25519 signing and verification with canonical message formats
+- **Signatures**: PQ-Hybrid signing (Ed25519 + ML-DSA-65) and verification with canonical message formats
 - **Hashing**: BLAKE3 for fast hashing, Argon2id for password hashing
 - **Secret Sharing**: 3-of-5 Shamir Secret Sharing for Neural Key backup
 
@@ -74,33 +74,51 @@ impl NeuralKey {
 - MUST be protected via Shamir Secret Sharing
 - MUST be zeroized immediately after use
 
-#### Ed25519KeyPair
+#### IdentitySigningKey
 
-Ed25519 signing key pair for digital signatures.
+PQ-Hybrid signing key derived from NeuralKey via HKDF. Produces `HybridSignature` (Ed25519 + ML-DSA-65).
 
 ```rust
-pub struct Ed25519KeyPair {
-    private_key: SigningKey,    // 32 bytes, zeroized on drop
-    public_key: VerifyingKey,   // 32 bytes
+pub struct IdentitySigningKey {
+    ed25519_key: SigningKey,      // 32-byte seed, zeroized on drop
+    ml_dsa_key: MlDsaKeyPair,    // ML-DSA-65 key pair
 }
 
-impl Ed25519KeyPair {
-    /// Generate from a 32-byte seed
-    pub fn from_seed(seed: &[u8; 32]) -> Result<Self>;
-    
-    /// Get the public key bytes
-    pub fn public_key_bytes(&self) -> [u8; 32];
-    
-    /// Get the private key seed bytes (32 bytes)
-    /// WARNING: Use with extreme caution. Only for secure encrypted storage.
-    /// These bytes can reconstruct the full keypair via from_seed().
-    pub fn seed_bytes(&self) -> [u8; 32];
-    
-    /// Get a reference to the private key (use with caution)
-    pub fn private_key(&self) -> &SigningKey;
-    
-    /// Get a reference to the public key
-    pub fn public_key(&self) -> &VerifyingKey;
+impl IdentitySigningKey {
+    pub fn from_seeds(ed_seed: &[u8; 32], pq_seed: &[u8; 32]) -> Result<Self>;
+    pub fn verifying_key(&self) -> IdentityVerifyingKey;
+    pub fn sign(&self, message: &[u8]) -> HybridSignature;
+}
+```
+
+#### IdentityVerifyingKey
+
+```rust
+pub struct IdentityVerifyingKey {
+    ed25519_key: VerifyingKey,    // 32 bytes
+    ml_dsa_key: Vec<u8>,         // 1952 bytes (ML-DSA-65 public key)
+}
+// Total: 1984 bytes (32 + 1952)
+
+impl IdentityVerifyingKey {
+    pub fn verify(&self, message: &[u8], signature: &HybridSignature) -> Result<()>;
+    pub fn to_bytes(&self) -> Vec<u8>;
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self>;
+}
+```
+
+#### HybridSignature
+
+```rust
+pub struct HybridSignature {
+    ed25519_sig: [u8; 64],       // Ed25519 signature
+    ml_dsa_sig: Vec<u8>,         // 3309 bytes (ML-DSA-65 signature)
+}
+// Total: 3373 bytes (64 + 3309)
+
+impl HybridSignature {
+    pub fn to_bytes(&self) -> Vec<u8>;
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self>;
 }
 ```
 
@@ -128,48 +146,48 @@ impl X25519KeyPair {
 
 #### MachineKeyPair
 
-Combined signing and encryption keys for a machine.
+Full PQ-Hybrid key set: Ed25519 + ML-DSA-65 for signing, X25519 + ML-KEM-768 for encryption.
 
 ```rust
 pub struct MachineKeyPair {
-    signing_key: Ed25519KeyPair,
-    encryption_key: X25519KeyPair,
+    ed25519_signing_key: SigningKey,
+    ml_dsa_signing_key: MlDsaKeyPair,
+    x25519_encryption_key: X25519KeyPair,
+    ml_kem_key: MlKemKeyPair,
     capabilities: MachineKeyCapabilities,
 }
 
 impl MachineKeyPair {
-    /// Create from separate signing and encryption seeds
     pub fn from_seeds(
         signing_seed: &[u8; 32],
         encryption_seed: &[u8; 32],
+        pq_signing_seed: &[u8; 32],
+        pq_kem_seed: &[u8; 64],
         capabilities: MachineKeyCapabilities,
     ) -> Result<Self>;
     
-    /// Get the signing public key bytes
-    pub fn signing_public_key(&self) -> [u8; 32];
-    
-    /// Get the encryption public key bytes
-    pub fn encryption_public_key(&self) -> [u8; 32];
-    
-    /// Get the capabilities
+    pub fn public_key(&self) -> MachinePublicKey;
+    pub fn sign(&self, message: &[u8]) -> HybridSignature;
     pub fn capabilities(&self) -> MachineKeyCapabilities;
 }
 ```
 
-#### KeyScheme
-
-Defines the key derivation scheme for machine keys.
+#### MachinePublicKey
 
 ```rust
-pub enum KeyScheme {
-    /// Classical only: Ed25519 + X25519 (OpenMLS compatible)
-    Classical,
-    /// PQ-Hybrid: Classical + ML-DSA-65 + ML-KEM-768
-    PqHybrid,
+pub struct MachinePublicKey {
+    ed25519_key: VerifyingKey,          // 32 bytes
+    ml_dsa_key: Vec<u8>,               // 1952 bytes
+    x25519_key: x25519_dalek::PublicKey, // 32 bytes
+    ml_kem_key: Vec<u8>,               // 1184 bytes
+}
+
+impl MachinePublicKey {
+    pub fn verify(&self, message: &[u8], signature: &HybridSignature) -> Result<()>;
 }
 ```
 
-Both schemes are always available for runtime selection. In **PqHybrid** mode, classical keys are always present for backward compatibility with OpenMLS and existing systems. The PQ keys provide additional protection for application-level protocols.
+Classical keys are always present for backward compatibility with OpenMLS and existing systems. The PQ keys provide additional protection against quantum threats.
 
 #### MachineKeyCapabilities
 
@@ -206,12 +224,12 @@ pub fn hkdf_derive(ikm: &[u8], info: &[u8], output_len: usize) -> Result<Vec<u8>
 /// Fixed 32-byte output HKDF
 pub fn hkdf_derive_32(ikm: &[u8], info: &[u8]) -> Result<[u8; 32]>;
 
-/// Derive Identity Signing Keypair from Neural Key
+/// Derive Identity Signing Keypair from Neural Key (PQ-Hybrid)
 /// Domain: "cypher:id:identity:v1" || identity_id
 pub fn derive_identity_signing_keypair(
     neural_key: &NeuralKey,
     identity_id: &Uuid,
-) -> Result<([u8; 32], Ed25519KeyPair)>;
+) -> Result<(IdentityVerifyingKey, IdentitySigningKey)>;
 
 /// Derive Machine Key seed
 /// Domain: "cypher:shared:machine:v1" || identity_id || machine_id || epoch
@@ -296,16 +314,20 @@ pub fn decrypt_jwt_signing_key(
 
 ### 2.4 Signature Functions
 
-```rust
-/// Sign a message with Ed25519
-pub fn sign_message(keypair: &Ed25519KeyPair, message: &[u8]) -> [u8; 64];
+Signing and verification are performed via methods on the key types:
 
-/// Verify an Ed25519 signature
-pub fn verify_signature(
-    public_key: &[u8; 32],
-    message: &[u8],
-    signature: &[u8; 64],
-) -> Result<()>;
+```rust
+// Identity signing (via IdentitySigningKey)
+let signature: HybridSignature = identity_signing_key.sign(message);
+
+// Identity verification (via IdentityVerifyingKey)
+identity_verifying_key.verify(message, &signature)?;
+
+// Machine signing (via MachineKeyPair)
+let signature: HybridSignature = machine_keypair.sign(message);
+
+// Machine verification (via MachinePublicKey)
+machine_public_key.verify(message, &signature)?;
 ```
 
 #### Canonical Message Formats
@@ -504,11 +526,11 @@ stateDiagram-v2
     MachineSeedDerived --> SigningSeedDerived: derive_machine_signing_seed()
     MachineSeedDerived --> EncryptionSeedDerived: derive_machine_encryption_seed()
     
-    SigningSeedDerived --> Ed25519KeyPairCreated: Ed25519KeyPair::from_seed()
-    EncryptionSeedDerived --> X25519KeyPairCreated: X25519KeyPair::from_seed()
+    SigningSeedDerived --> Ed25519Created: Ed25519 from seed
+    EncryptionSeedDerived --> X25519Created: X25519KeyPair.from_seed()
     
-    Ed25519KeyPairCreated --> MachineKeyPairReady
-    X25519KeyPairCreated --> MachineKeyPairReady
+    Ed25519Created --> MachineKeyPairReady
+    X25519Created --> MachineKeyPairReady
     
     MachineKeyPairReady --> [*]
 ```
@@ -530,7 +552,7 @@ sequenceDiagram
     
     Client->>Crypto: derive_identity_signing_keypair(neural_key, identity_id)
     Note over Crypto: HKDF("cypher:id:identity:v1" || identity_id)
-    Crypto-->>Client: (public_key, Ed25519KeyPair)
+    Crypto-->>Client: (IdentityVerifyingKey, IdentitySigningKey)
     
     Note over Client: Machine Enrollment
     Client->>Crypto: derive_machine_keypair(neural_key, identity_id, machine_id, epoch, caps)
@@ -558,13 +580,13 @@ sequenceDiagram
     
     Client->>Crypto: canonicalize_challenge(challenge)
     Crypto-->>Client: canonical_bytes (130 bytes)
-    Client->>Crypto: sign_message(machine_keypair, canonical_bytes)
-    Crypto-->>Client: signature (64 bytes)
+    Client->>Crypto: machine_keypair.sign(canonical_bytes)
+    Crypto-->>Client: HybridSignature (3373 bytes)
     Client-->>Server: signature
     
     Server->>Crypto: canonicalize_challenge(challenge)
     Crypto-->>Server: canonical_bytes
-    Server->>Crypto: verify_signature(machine_public_key, canonical_bytes, signature)
+    Server->>Crypto: machine_public_key.verify(canonical_bytes, signature)
     alt Valid
         Crypto-->>Server: Ok(())
     else Invalid
@@ -685,7 +707,7 @@ Hex encoding: 66 characters (2 chars per byte)
 | Requirement | Implementation |
 |-------------|----------------|
 | Key size | 256 bits (32 bytes) for all symmetric keys |
-| Signature size | 512 bits (64 bytes) for Ed25519 |
+| Signature size | 3373 bytes hybrid (Ed25519 64B + ML-DSA-65 3309B) |
 | Nonce size | 192 bits (24 bytes) for XChaCha20 |
 | Auth tag size | 128 bits (16 bytes) for Poly1305 |
 | Password hash | Argon2id: 64 MiB memory, 3 iterations |
@@ -714,7 +736,8 @@ All domain strings follow the format: `cypher:{service}:{purpose}:v{version}`
 
 The following types implement `Zeroize` and `ZeroizeOnDrop`:
 - `NeuralKey` — Explicitly zeroizes internal buffer
-- `Ed25519KeyPair` — Via `ed25519-dalek` SigningKey
+- `IdentitySigningKey` — Zeroizes Ed25519 and ML-DSA key material
+- `MachineKeyPair` — Zeroizes all classical and PQ key material
 - `X25519KeyPair` — Via `x25519-dalek` StaticSecret
 - All `Zeroizing<T>` wrappers for derived seeds
 

@@ -105,7 +105,7 @@ Based on analysis of `crates/zid-crypto/src/`, the system uses the following alg
 - **Usage**: Identity signing keys, machine signing keys, JWT signing
 - **Threat**: Shor's algorithm completely breaks Ed25519
 - **Mitigation**: ML-DSA-65 hybrid signatures provide post-quantum protection
-  - In `KeyScheme::PqHybrid` mode, both Ed25519 and ML-DSA-65 signatures are generated
+  - All keys use PQ-Hybrid mode: both Ed25519 and ML-DSA-65 signatures are generated
   - Security is maintained if either algorithm remains secure
 - **Implementation**: `MlDsaKeyPair` in `crates/zid-crypto/src/keys/pq.rs`
 
@@ -118,7 +118,7 @@ Based on analysis of `crates/zid-crypto/src/`, the system uses the following alg
 - **Usage**: Machine encryption keys, ECDH key agreement
 - **Threat**: Shor's algorithm completely breaks X25519
 - **Mitigation**: ML-KEM-768 hybrid key encapsulation provides post-quantum protection
-  - In `KeyScheme::PqHybrid` mode, both X25519 and ML-KEM-768 keys are derived
+  - All keys use PQ-Hybrid mode: both X25519 and ML-KEM-768 keys are derived
   - Shared secrets can be combined: `HKDF(X25519_DH || ML-KEM_decaps)`
 - **Implementation**: `MlKemKeyPair` in `crates/zid-crypto/src/keys/pq.rs`
 - **HNDL Protection**: ML-KEM-768 protects against "harvest now, decrypt later" attacks
@@ -300,16 +300,15 @@ pub struct MachineKeyPair {
 
 #### Key Derivation
 
-PQ-Hybrid keys are derived using `derive_machine_keypair_with_scheme()`:
+PQ-Hybrid keys are derived using `derive_machine_keypair()`:
 
 ```rust
-let keypair = derive_machine_keypair_with_scheme(
+let keypair = derive_machine_keypair(
     &neural_key,
     &identity_id,
     &machine_id,
     epoch,
     MachineKeyCapabilities::FULL_DEVICE,
-    KeyScheme::PqHybrid,
 )?;
 ```
 
@@ -523,8 +522,7 @@ Derive PQ-Hybrid machine keys:
 
 ```rust
 use zero_id_crypto::{
-    derive_machine_keypair_with_scheme,
-    KeyScheme,
+    derive_machine_keypair,
     MachineKeyCapabilities,
     NeuralKey,
 };
@@ -535,30 +533,23 @@ let identity_id = uuid::Uuid::new_v4();
 let machine_id = uuid::Uuid::new_v4();
 let epoch = 1u64;
 
-// Derive machine keys with PQ-Hybrid scheme
-let keypair = derive_machine_keypair_with_scheme(
+// Derive PQ-Hybrid machine keys
+let keypair = derive_machine_keypair(
     &neural_key,
     &identity_id,
     &machine_id,
     epoch,
     MachineKeyCapabilities::FULL_DEVICE,
-    KeyScheme::PqHybrid,
 )?;
 
-// Classical keys (always present, OpenMLS compatible)
+// Classical keys (present for OpenMLS compatibility)
 let ed25519_pk = keypair.signing_public_key();       // 32 bytes
 let x25519_pk = keypair.encryption_public_key();     // 32 bytes
 
-// Post-quantum keys (present in PqHybrid mode)
-if let Some(pq_sign_pk) = keypair.pq_signing_public_key() {
-    // 1,952-byte ML-DSA-65 public key (NIST FIPS 204)
-}
-if let Some(pq_kem_pk) = keypair.pq_encryption_public_key() {
-    // 1,184-byte ML-KEM-768 public key (NIST FIPS 203)
-}
+// Post-quantum keys (always present)
+let pq_sign_pk = keypair.pq_signing_public_key();       // 1,952 bytes (ML-DSA-65, FIPS 204)
+let pq_kem_pk = keypair.pq_encryption_public_key();     // 1,184 bytes (ML-KEM-768, FIPS 203)
 
-// Sign with ML-DSA-65
-if let Some(pq_keypair) = keypair.pq_signing_key_pair() {
-    let signature = pq_keypair.sign(b"message")?;  // 3,309 bytes
-}
+// Sign with hybrid signature (Ed25519 + ML-DSA-65)
+let signature = keypair.sign(b"message")?;  // HybridSignature, 3,373 bytes
 ```

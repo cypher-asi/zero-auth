@@ -136,13 +136,13 @@ NeuralKey (32 bytes, client CSPRNG)
 ├── Identity Signing Key (Ed25519)
 │   HKDF("cypher:id:identity:v1" || identity_id)
 │
-├── Machine Keys (per device) - Classical
+├── Machine Keys (per device) - Classical Components
 │   ├── Signing Key (Ed25519)
 │   │   HKDF("cypher:shared:machine:sign:v1" || machine_id)
 │   └── Encryption Key (X25519)
 │       HKDF("cypher:shared:machine:encrypt:v1" || machine_id)
 │
-├── Machine Keys (per device) - Post-Quantum (PQ-Hybrid mode)
+├── Machine Keys (per device) - Post-Quantum Components
 │   ├── PQ Signing Key (ML-DSA-65)
 │   │   HKDF("cypher:shared:machine:pq-sign:v1" || machine_id)
 │   └── PQ Encryption Key (ML-KEM-768)
@@ -741,19 +741,13 @@ Quantum computers running **Shor's algorithm** can efficiently solve:
 
 Zero-Auth is **production-ready** with full PQ-Hybrid cryptography. Unlike blockchain platforms constrained by on-chain storage costs, Zero-Auth can adopt larger post-quantum keys without protocol-level barriers.
 
-**Key Schemes** (always available, no feature flag required):
-```rust
-pub enum KeyScheme {
-    Classical,  // Ed25519 + X25519 only (default)
-    PqHybrid,   // Classical + ML-DSA-65 + ML-KEM-768
-}
-```
+All machine keys use PQ-Hybrid cryptography (Ed25519 + X25519 + ML-DSA-65 + ML-KEM-768). Classical keys remain present for OpenMLS backward compatibility.
 
 **Domain Separation**:
 ```
-Classical signing:     "cypher:shared:machine:sign:v1"     → Ed25519
-Classical encryption:  "cypher:shared:machine:encrypt:v1"  → X25519
-PQ signing:           "cypher:shared:machine:pq-sign:v1"  → ML-DSA-65
+Signing (Ed25519):    "cypher:shared:machine:sign:v1"     → Ed25519
+Encryption (X25519):  "cypher:shared:machine:encrypt:v1"  → X25519
+PQ Signing:           "cypher:shared:machine:pq-sign:v1"  → ML-DSA-65
 PQ KEM:               "cypher:shared:machine:pq-kem:v1"   → ML-KEM-768
 ```
 
@@ -766,8 +760,8 @@ PQ KEM:               "cypher:shared:machine:pq-kem:v1"   → ML-KEM-768
 | BLAKE3 | No change needed | Quantum-resistant hash |
 
 **PQ-Hybrid Key Derivation**:
-- Classical keys (Ed25519 + X25519) always present for OpenMLS compatibility
-- PQ keys derived alongside classical keys from same machine seed
+- Classical keys (Ed25519 + X25519) present for OpenMLS compatibility
+- PQ keys (ML-DSA-65 + ML-KEM-768) always derived alongside classical keys from same machine seed
 - Deterministic derivation from Neural Key preserved
 - Uses `fips203` and `fips204` crates for NIST-compliant implementations
 

@@ -540,7 +540,7 @@ sequenceDiagram
     Methods->>Storage: put(used_nonces, nonce)
     
     Methods->>Methods: canonicalize_challenge()
-    Methods->>Methods: verify_signature()
+    Methods->>Methods: MPK.verify(canonical, sig)
     
     alt Signature invalid
         Methods-->>Client: Err(InvalidSignature)

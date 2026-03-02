@@ -420,7 +420,7 @@ stateDiagram-v2
     
     Machine --> ChallengeCreated: create_challenge()
     ChallengeCreated --> SignatureReceived: Sign challenge
-    SignatureReceived --> Verified: verify_signature()
+    SignatureReceived --> Verified: MPK.verify()
     
     Email --> PasswordVerified: verify_password()
     

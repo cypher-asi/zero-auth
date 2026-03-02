@@ -268,7 +268,7 @@ sequenceDiagram
     Crypto-->>Client: machine_keypair
     
     Client->>Crypto: canonicalize_identity_creation_message()
-    Client->>Crypto: sign_message()
+    Client->>Crypto: ISK.sign()
     Crypto-->>Client: authorization_signature
     
     Client->>Server: POST /v1/identity
@@ -319,7 +319,7 @@ sequenceDiagram
         Client->>Crypto: Argon2id(passphrase) → KEK
         Client->>Crypto: decrypt(encrypted_machine_signing_seed)
         Crypto-->>Client: machine_signing_seed
-        Client->>Crypto: Ed25519KeyPair::from_seed()
+        Client->>Crypto: IdentitySigningKey::from_seeds(ed_seed, pq_seed)
         Crypto-->>Client: signing_keypair
     else Legacy Format (requires shard)
         User->>Client: neural shard (1 of 3)
@@ -334,8 +334,8 @@ sequenceDiagram
     end
     
     Client->>Crypto: canonicalize_challenge()
-    Client->>Crypto: sign_message(challenge)
-    Crypto-->>Client: signature
+    Client->>Crypto: machine_key.sign(challenge)
+    Crypto-->>Client: HybridSignature
     
     Client->>Server: POST /v1/auth/login/machine
     Note right of Client: {challenge_id, machine_id, signature}
@@ -368,7 +368,7 @@ sequenceDiagram
     Crypto-->>Client: identity_signing_keypair
     
     Client->>Crypto: canonicalize_enrollment_message()
-    Client->>Crypto: sign_message(isk_keypair)
+    Client->>Crypto: ISK.sign(enrollment_msg)
     Crypto-->>Client: authorization_signature
     
     Client->>Server: POST /v1/machines/enroll

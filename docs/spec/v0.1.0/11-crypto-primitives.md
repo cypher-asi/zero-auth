@@ -132,8 +132,9 @@ NeuralKey (32 bytes, client-generated via CSPRNG)
 │    │   Derivation:
 │    │     ikm = neural_key.as_bytes()
 │    │     info = "cypher:id:identity:v1" || identity_id.as_bytes()
-│    │     seed = HKDF-SHA256-Expand(ikm, info, 32)
-│    │     keypair = Ed25519::from_seed(seed)
+│    │     ed_seed = HKDF-SHA256-Expand(ikm, info, 32)
+│    │     pq_seed = HKDF-SHA256-Expand(ikm, info || "pq", 32)
+│    │     keypair = IdentitySigningKey::from_seeds(ed_seed, pq_seed)
 │    │
 │    └─── Purpose: Signs machine enrollments, key rotations, recovery approvals
 │
@@ -144,15 +145,17 @@ NeuralKey (32 bytes, client-generated via CSPRNG)
 │    │     info = "cypher:shared:machine:v1" || identity_id || machine_id || epoch.to_le_bytes()
 │    │     machine_seed = HKDF-SHA256-Expand(ikm, info, 32)
 │    │
-│    ├─── Machine Signing Key (Ed25519)
+│    ├─── Machine Signing Key (Ed25519 + ML-DSA-65)
 │    │    │
-│    │    │   Derivation:
+│    │    │   Derivation (Ed25519 component):
 │    │    │     ikm = machine_seed
 │    │    │     info = "cypher:shared:machine:sign:v1" || machine_id
 │    │    │     seed = HKDF-SHA256-Expand(ikm, info, 32)
-│    │    │     keypair = Ed25519::from_seed(seed)
+│    │    │   Derivation (ML-DSA-65 component):
+│    │    │     info = "cypher:shared:machine:pq-sign:v1" || machine_id
+│    │    │     pq_seed = HKDF-SHA256-Expand(ikm, info, 32)
 │    │    │
-│    │    └─── Purpose: Signs authentication challenges
+│    │    └─── Purpose: Signs authentication challenges (HybridSignature)
 │    │
 │    └─── Machine Encryption Key (X25519)
 │         │
@@ -328,7 +331,7 @@ Offset  Size  Field
 ------  ----
 Total:  137 bytes
 
-Signature = Ed25519_Sign(ISK_private, message[0:137])
+Signature = ISK.sign(message[0:137])  // HybridSignature (Ed25519 + ML-DSA-65)
 ```
 
 ### 9.2 Machine Enrollment Authorization (109 bytes)
@@ -346,7 +349,7 @@ Offset  Size  Field
 ------  ----
 Total:  109 bytes
 
-Signature = Ed25519_Sign(ISK_private, message[0:109])
+Signature = ISK.sign(message[0:109])  // HybridSignature (Ed25519 + ML-DSA-65)
 ```
 
 ### 9.3 Challenge (Variable, ~130 bytes)
@@ -364,7 +367,7 @@ pub struct Challenge {
 
 // Canonicalization for signing:
 canonical_bytes = serde_json::to_vec(&challenge)
-signature = Ed25519_Sign(machine_signing_key, blake3(canonical_bytes))
+signature = machine_key.sign(blake3(canonical_bytes))  // HybridSignature
 ```
 
 ### 9.4 Recovery Approval (73 bytes)
@@ -380,7 +383,7 @@ Offset  Size  Field
 ------  ----
 Total:  73 bytes
 
-Signature = Ed25519_Sign(machine_signing_key, message[0:73])
+Signature = machine_key.sign(message[0:73])  // HybridSignature
 ```
 
 ### 9.5 Neural Key Rotation Approval (57 bytes)
@@ -395,7 +398,7 @@ Offset  Size  Field
 ------  ----
 Total:  57 bytes
 
-Signature = Ed25519_Sign(machine_signing_key, message[0:57])
+Signature = machine_key.sign(message[0:57])  // HybridSignature
 ```
 
 ---
@@ -623,24 +626,24 @@ fn verify_tag(computed: &[u8], received: &[u8]) -> bool {
 
 | Current | PQ Alternative | Status |
 |---------|----------------|--------|
-| Ed25519 | ML-DSA-65 (Dilithium-3) | **Implemented** (optional) |
-| X25519 | ML-KEM-768 (Kyber-768) | **Implemented** (optional) |
+| Ed25519 | ML-DSA-65 (Dilithium-3) | **Always active** (PQ-Hybrid) |
+| X25519 | ML-KEM-768 (Kyber-768) | **Always active** (PQ-Hybrid) |
 | BLAKE3 | SHA-3 or BLAKE3 (quantum-safe) | No change needed |
 
 ### 15.2 PQ-Hybrid Key Derivation
 
-When using `KeyScheme::PqHybrid`, machine keys include both classical and post-quantum keys:
+All machine keys are always PQ-Hybrid, containing both classical and post-quantum keys:
 
 ```
 NeuralKey (32 bytes)
     │
-    └─► derive_machine_keypair_with_scheme(..., KeyScheme::PqHybrid)
+    └─► derive_machine_keypair(...)
             │
             ├─► Classical keys (always present):
             │       ├── Ed25519 (signing)      → OpenMLS compatible
             │       └── X25519 (encryption)    → OpenMLS compatible
             │
-            └─► Post-quantum keys (PqHybrid only):
+            └─► Post-quantum keys (always present):
                     ├── ML-DSA-65 (signing)    → FIPS 204, NIST Level 3
                     └── ML-KEM-768 (encryption)→ FIPS 203, NIST Level 3
 ```

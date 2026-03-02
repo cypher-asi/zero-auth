@@ -32,9 +32,9 @@ v0.1.1 specification and the server API surface.
 | ID | User Story | API Dependency | Security Constraints | Acceptance Criteria | Priority |
 |----|-----------|----------------|---------------------|---------------------|----------|
 | MC-01 | As a user I can enroll a new machine (device) | `POST /v1/identity/machines` | Machine keypair derived from Neural Key; canonical enrollment message signed with ISK; epoch tracked | Machine appears in list with signing/encryption public keys and capabilities | `required_for_parity` |
-| MC-02 | As a user I can list all enrolled machines | `GET /v1/identity/machines` | Access token required | Table shows machine_id, capabilities, key scheme (classical/PQ-hybrid), epoch, created_at | `required_for_parity` |
+| MC-02 | As a user I can list all enrolled machines | `GET /v1/identity/machines` | Access token required | Table shows machine_id, capabilities, epoch, created_at | `required_for_parity` |
 | MC-03 | As a user I can revoke a machine | `DELETE /v1/identity/machines/{id}` | Policy check; RevocationEvent published; epoch rotation triggered | Machine removed from list; subsequent auth with that machine fails; downstream events fired | `required_for_parity` |
-| MC-04 | As a user I can see whether a machine uses classical or PQ-hybrid keys | `GET /v1/identity/machines` | — | Key scheme badge displayed per machine (e.g., "Ed25519" vs "ML-DSA-65 + Ed25519") | `optional_for_v1` |
+| MC-04 | As a user I can see the PQ-hybrid key details for a machine | `GET /v1/identity/machines` | — | PQ-Hybrid key details displayed per machine (Ed25519 + ML-DSA-65 signing, X25519 + ML-KEM-768 encryption) | `optional_for_v1` |
 
 ## 4  Linked Identities (Credentials)
 
