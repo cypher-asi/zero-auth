@@ -25,9 +25,37 @@ impl RocksDbStorage {
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
 
-        // Open database with all column families
-        let db = DB::open_cf(&opts, &path, all_column_families())
+        let required: Vec<&str> = all_column_families();
+
+        // Discover any legacy column families left on disk from previous schema
+        // versions so RocksDB doesn't refuse to open.
+        let on_disk_cfs = if path.as_ref().exists() {
+            DB::list_cf(&opts, &path).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        let mut open_cfs: Vec<String> = required.iter().map(|s| s.to_string()).collect();
+        for cf in &on_disk_cfs {
+            if cf != "default" && !required.contains(&cf.as_str()) {
+                debug!("Including legacy column family for migration: {}", cf);
+                open_cfs.push(cf.clone());
+            }
+        }
+
+        let cf_refs: Vec<&str> = open_cfs.iter().map(|s| s.as_str()).collect();
+        let mut db = DB::open_cf(&opts, &path, &cf_refs)
             .map_err(|e| StorageError::Database(e.to_string()))?;
+
+        // Drop legacy column families that are no longer part of the schema
+        for cf in &on_disk_cfs {
+            if cf != "default" && !required.contains(&cf.as_str()) {
+                debug!("Dropping legacy column family: {}", cf);
+                if let Err(e) = db.drop_cf(cf) {
+                    debug!("Failed to drop legacy column family {}: {}", cf, e);
+                }
+            }
+        }
 
         debug!("Opened RocksDB at {:?}", path.as_ref());
 
