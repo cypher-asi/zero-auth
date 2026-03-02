@@ -8,7 +8,7 @@ use uuid::Uuid;
 use zid_crypto::MachineKeyCapabilities;
 use zid_crypto::{current_timestamp, hkdf_derive_32};
 use zid_identity_core::{IdentityCore, MachineKey};
-use zid_policy::{Operation, PolicyEngine};
+use zid_policy::PolicyEngine;
 use zid_storage::Storage;
 use zeroize::Zeroizing;
 

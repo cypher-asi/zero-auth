@@ -76,60 +76,6 @@ pub async fn login_machine(
     client.post("/v1/auth/login/machine", &body).await
 }
 
-pub async fn login_email(
-    client: &HttpClient,
-    email: &str,
-    password: &str,
-    machine_id: Option<Uuid>,
-) -> Result<SessionTokens, AppError> {
-    let body = EmailLoginBody {
-        email: email.to_string(),
-        password: password.to_string(),
-        machine_id,
-    };
-    client.post("/v1/auth/login/email", &body).await
-}
-
-pub async fn login_oauth_initiate(
-    client: &HttpClient,
-    provider: &str,
-) -> Result<String, AppError> {
-    #[derive(Deserialize)]
-    struct InitiateResp {
-        authorization_url: String,
-    }
-    let resp: InitiateResp = client
-        .get(&format!("/v1/auth/oauth/{provider}"))
-        .await?;
-    Ok(resp.authorization_url)
-}
-
-pub async fn login_oauth_callback(
-    client: &HttpClient,
-    provider: &str,
-    code: &str,
-    oauth_state: &str,
-) -> Result<SessionTokens, AppError> {
-    let body = serde_json::json!({ "code": code, "state": oauth_state });
-    client
-        .post(&format!("/v1/auth/oauth/{provider}/callback"), &body)
-        .await
-}
-
-pub async fn login_wallet(
-    client: &HttpClient,
-    wallet_address: &str,
-    signature: &str,
-    challenge_id: &Uuid,
-) -> Result<SessionTokens, AppError> {
-    let body = serde_json::json!({
-        "wallet_address": wallet_address,
-        "signature": signature,
-        "challenge_id": challenge_id,
-    });
-    client.post("/v1/auth/login/wallet", &body).await
-}
-
 pub async fn refresh(
     client: &HttpClient,
     refresh_token: &str,
@@ -142,16 +88,6 @@ pub async fn refresh(
         machine_id,
     };
     client.post("/v1/auth/refresh", &body).await
-}
-
-pub async fn introspect(
-    client: &HttpClient,
-    token: &str,
-) -> Result<TokenIntrospection, AppError> {
-    let body = IntrospectBody {
-        token: token.to_string(),
-    };
-    client.post("/v1/auth/introspect", &body).await
 }
 
 pub async fn revoke(client: &HttpClient, session_id: Uuid) -> Result<(), AppError> {

@@ -18,6 +18,7 @@ pub enum LoadStatus {
     Idle,
     Loading,
     Loaded,
+    #[allow(dead_code)]
     Error(String),
 }
 
@@ -46,6 +47,7 @@ pub enum CreateStep {
     Generating,
     Passphrase,
     ShardBackup,
+    #[allow(dead_code)]
     Done,
 }
 
@@ -55,6 +57,7 @@ pub enum RecoverStep {
     Recovering,
     NewPassphrase,
     NewShardBackup,
+    #[allow(dead_code)]
     Done,
 }
 
@@ -92,7 +95,9 @@ pub struct MachineViewModel {
     pub last_used_at: Option<String>,
     pub revoked: bool,
     pub key_scheme: String,
+    #[allow(dead_code)]
     pub capabilities: Vec<String>,
+    #[allow(dead_code)]
     pub epoch: u64,
 }
 
@@ -102,6 +107,7 @@ pub struct CredentialViewModel {
     pub method_id: String,
     pub primary: bool,
     pub verified: bool,
+    #[allow(dead_code)]
     pub created_at: String,
 }
 
@@ -124,6 +130,7 @@ pub struct NamespaceViewModel {
 #[derive(Debug, Clone)]
 pub struct FrozenInfo {
     pub reason: String,
+    #[allow(dead_code)]
     pub frozen_at: String,
 }
 
@@ -137,6 +144,7 @@ pub enum ToastLevel {
 
 #[derive(Debug, Clone)]
 pub struct ToastMessage {
+    #[allow(dead_code)]
     pub id: u64,
     pub level: ToastLevel,
     pub text: String,
@@ -162,14 +170,6 @@ impl FreezeReason {
             Self::SecurityIncident => "SecurityIncident",
             Self::SuspiciousActivity => "SuspiciousActivity",
             Self::UserRequested => "UserRequested",
-        }
-    }
-
-    pub fn display(&self) -> &str {
-        match self {
-            Self::SecurityIncident => "Security Incident",
-            Self::SuspiciousActivity => "Suspicious Activity",
-            Self::UserRequested => "User Requested",
         }
     }
 }
@@ -261,8 +261,11 @@ pub enum AppMessage {
     },
     IdentityLoaded(IdentityViewModel),
     IdentityFrozen,
+    #[allow(dead_code)]
     IdentityUnfrozen,
+    #[allow(dead_code)]
     IdentityDisabled,
+    #[allow(dead_code)]
     IdentityEnabled,
 
     // Auth / Session
@@ -319,6 +322,7 @@ pub enum AppMessage {
     ProfileDeleted(String),
 
     // Toast
+    #[allow(dead_code)]
     Toast(ToastLevel, String),
 }
 
@@ -400,10 +404,12 @@ pub struct AppState {
 
     // Sessions
     pub current_session: Option<SessionViewModel>,
+    #[allow(dead_code)]
     pub active_sessions: Vec<SessionViewModel>,
 
     // Namespaces
     pub namespaces: Vec<NamespaceViewModel>,
+    #[allow(dead_code)]
     pub active_namespace: Option<uuid::Uuid>,
 
     // Security
@@ -487,6 +493,7 @@ pub enum ConfirmAction {
     RevokeMachine(uuid::Uuid),
     RevokeCredential(String, String),
     FreezeIdentity,
+    #[allow(dead_code)]
     RevokeSession(uuid::Uuid),
     DeleteProfile(String),
     Logout,
