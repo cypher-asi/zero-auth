@@ -1776,18 +1776,18 @@ Complete linking an OAuth account.
 
 ## Post-Quantum Cryptography
 
-zid supports optional post-quantum (PQ) cryptographic keys alongside classical keys to provide defense against future quantum computers.
+All machine keys in zid use **PQ-Hybrid cryptography**, combining classical algorithms (Ed25519 + X25519) with post-quantum algorithms (ML-DSA-65 + ML-KEM-768). This provides defense-in-depth: security is maintained if either the classical or post-quantum algorithm remains secure.
 
 ### Overview
 
-Machine keys can be created with two key schemes:
+Every machine key contains both classical and post-quantum key material:
 
-| Scheme | Classical Keys | Post-Quantum Keys | Use Case |
-|--------|---------------|-------------------|----------|
-| `classical` | Ed25519 + X25519 | None | Default, OpenMLS compatible, smaller keys |
-| `pq_hybrid` | Ed25519 + X25519 | ML-DSA-65 + ML-KEM-768 | Post-quantum protection with backward compatibility |
+| Component | Classical | Post-Quantum |
+|-----------|-----------|-------------|
+| Signing | Ed25519 (RFC 8032) | ML-DSA-65 (FIPS 204) |
+| Encryption | X25519 (RFC 7748) | ML-KEM-768 (FIPS 203) |
 
-In PQ-Hybrid mode, classical keys are **always present** for backward compatibility. The PQ keys provide additional protection for application-level protocols.
+Classical keys remain present for backward compatibility with protocols like OpenMLS.
 
 ### Key Sizes
 
@@ -1805,62 +1805,30 @@ In PQ-Hybrid mode, classical keys are **always present** for backward compatibil
 | Ed25519 | 128 chars | 64 bytes |
 | ML-DSA-65 | 6,618 chars | 3,309 bytes |
 
-### Availability
-
-PQ-Hybrid support is always available on zid servers. Both `classical` and `pq_hybrid` key schemes are supported without any additional configuration.
-
-### Example: Creating Identity with PQ-Hybrid Keys
-
-```json
-{
-  "identity_id": "550e8400-e29b-41d4-a716-446655440000",
-  "identity_signing_public_key": "a1b2c3d4...",
-  "authorization_signature": "e5f6g7h8...",
-  "machine_key": {
-    "machine_id": "660e8400-e29b-41d4-a716-446655440001",
-    "signing_public_key": "i9j0k1l2...",
-    "encryption_public_key": "m3n4o5p6...",
-    "key_scheme": "pq_hybrid",
-    "pq_signing_public_key": "q7r8s9t0...(3904 hex chars)...",
-    "pq_encryption_public_key": "u1v2w3x4...(2368 hex chars)...",
-    "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
-    "device_name": "My Laptop",
-    "device_platform": "macos"
-  },
-  "namespace_name": "Personal",
-  "created_at": 1705838400
-}
-```
-
 ### Client-Side Key Derivation
 
-Use `zid-crypto` to derive PQ-Hybrid keys:
+Use `zid-crypto` to derive machine keys:
 
 ```rust
 use zero_id_crypto::{
-    derive_machine_keypair_with_scheme, KeyScheme, MachineKeyCapabilities,
+    derive_machine_keypair, MachineKeyCapabilities,
 };
 
-let keypair = derive_machine_keypair_with_scheme(
+let keypair = derive_machine_keypair(
     &neural_key,
     &identity_id,
     &machine_id,
     epoch,
     MachineKeyCapabilities::FULL_DEVICE,
-    KeyScheme::PqHybrid,
 )?;
 
-// Access classical keys (always present)
-let signing_pk = keypair.signing_public_key();       // 32 bytes
-let encryption_pk = keypair.encryption_public_key(); // 32 bytes
+// Classical keys
+let signing_pk = keypair.signing_public_key();       // 32 bytes (Ed25519)
+let encryption_pk = keypair.encryption_public_key(); // 32 bytes (X25519)
 
-// Access PQ keys (only in PqHybrid mode)
-if let Some(pq_sign_pk) = keypair.pq_signing_public_key() {
-    // 1,952 bytes ML-DSA-65 public key
-}
-if let Some(pq_kem_pk) = keypair.pq_encryption_public_key() {
-    // 1,184 bytes ML-KEM-768 public key
-}
+// Post-quantum keys
+let pq_sign_pk = keypair.pq_signing_public_key();       // 1,952 bytes (ML-DSA-65)
+let pq_kem_pk = keypair.pq_encryption_public_key();     // 1,184 bytes (ML-KEM-768)
 ```
 
 ### Security Considerations

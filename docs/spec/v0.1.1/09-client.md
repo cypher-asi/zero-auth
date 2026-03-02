@@ -60,8 +60,6 @@ client create-identity [OPTIONS]
 Options:
   -d, --device-name <NAME>     Device name [default: "Example Client Device"]
   -p, --platform <PLATFORM>    Device platform [default: "rust-app"]
-  -k, --key-scheme <SCHEME>    Key scheme [default: classical]
-                               [possible values: classical, pq-hybrid]
 ```
 
 Creates a new self-sovereign identity:
@@ -116,7 +114,6 @@ client enroll-machine [OPTIONS]
 Options:
   -d, --device-name <NAME>     Device name [default: "New Device"]
   -p, --platform <PLATFORM>    Device platform [default: "rust-app"]
-  -k, --key-scheme <SCHEME>    Key scheme [default: classical]
 ```
 
 Enrolls a new machine for the identity.
@@ -236,8 +233,8 @@ sequenceDiagram
     Crypto-->>Client: MachineKeyPair
     
     Client->>Crypto: canonicalize_identity_creation_message()
-    Client->>Crypto: sign_message(ISK, message)
-    Crypto-->>Client: signature
+    Client->>Crypto: ISK.sign(message)
+    Crypto-->>Client: HybridSignature
     
     Client->>Server: POST /v1/identity
     Server-->>Client: { identity_id, machine_id, namespace_id }
@@ -285,8 +282,8 @@ sequenceDiagram
     Crypto-->>Client: MachineKeyPair
     
     Client->>Crypto: canonicalize_challenge()
-    Client->>Crypto: sign_message(machine_key, canonical)
-    Crypto-->>Client: signature
+    Client->>Crypto: machine_key.sign(canonical)
+    Crypto-->>Client: HybridSignature
     
     Note over Client: Zeroize neural_key
     

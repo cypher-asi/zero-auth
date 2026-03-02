@@ -498,7 +498,7 @@ sequenceDiagram
     Sessions->>Crypto: derive_jwt_signing_seed(smk, new_epoch)
     Crypto-->>Sessions: seed
     
-    Sessions->>Crypto: Ed25519KeyPair::from_seed(seed)
+    Sessions->>Crypto: IdentitySigningKey::from_seeds(ed_seed, pq_seed)
     Crypto-->>Sessions: keypair
     
     Sessions->>Sessions: Generate new key_id

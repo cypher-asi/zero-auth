@@ -231,8 +231,8 @@ zid's post-quantum implementation is **fully compliant** with NIST FIPS 203 and 
 
 1. **Library**: zid uses the `fips203` and `fips204` Rust crates, which provide NIST-compliant implementations
 2. **Determinism**: All key derivation is deterministic from the Neural Key via HKDF with domain separation
-3. **Hybrid Mode**: Classical algorithms (Ed25519, X25519) are always available alongside PQ algorithms for defense-in-depth
-4. **No Feature Flags**: PQ cryptography is always available at runtime via `KeyScheme::PqHybrid`
+3. **Hybrid Mode**: Classical algorithms (Ed25519, X25519) are always present alongside PQ algorithms for defense-in-depth
+4. **Always PQ-Hybrid**: All keys use PQ-Hybrid cryptography; there is no classical-only mode
 
 ---
 
@@ -282,36 +282,18 @@ shared_secret = HKDF(X25519_DH(sk, pk) || ML-KEM_decaps(sk, ct))
 
 Algorithm version fields in key structures support parallel key types:
 
-```rust
-/// Key scheme selection (implemented in crates/zid-crypto/src/keys/mod.rs)
-pub enum KeyScheme {
-    /// Classical only: Ed25519 + X25519
-    /// - OpenMLS compatible
-    /// - No post-quantum protection
-    Classical,
-
-    /// PQ-Hybrid: Classical + Post-Quantum keys
-    /// - Ed25519 + X25519 (OpenMLS compatible)
-    /// - ML-DSA-65 (PQ signing, 1952 byte public key)
-    /// - ML-KEM-768 (PQ encryption, 1184 byte public key)
-    PqHybrid,
-}
-```
-
-The `MachineKeyPair` struct supports both schemes:
+All machine keys are now PQ-Hybrid, combining classical and post-quantum algorithms:
 
 ```rust
 pub struct MachineKeyPair {
-    /// Ed25519 signing key pair (always present for OpenMLS compatibility)
-    signing_key: Ed25519KeyPair,
-    /// X25519 encryption key pair (always present for OpenMLS compatibility)
+    /// Ed25519 signing key pair (present for OpenMLS compatibility)
+    signing_key: Ed25519SigningKey,
+    /// X25519 encryption key pair (present for OpenMLS compatibility)
     encryption_key: X25519KeyPair,
-    /// ML-DSA-65 post-quantum signing key pair (only in PqHybrid mode)
-    pq_signing_key: Option<MlDsaKeyPair>,
-    /// ML-KEM-768 post-quantum encryption key pair (only in PqHybrid mode)
-    pq_encryption_key: Option<MlKemKeyPair>,
-    /// Key scheme used for this machine key pair
-    scheme: KeyScheme,
+    /// ML-DSA-65 post-quantum signing key pair
+    pq_signing_key: MlDsaKeyPair,
+    /// ML-KEM-768 post-quantum encryption key pair
+    pq_encryption_key: MlKemKeyPair,
     // ...
 }
 ```
@@ -333,14 +315,20 @@ let keypair = derive_machine_keypair_with_scheme(
 
 ### 5.3 Future Phases
 
-#### Phase 2: Full PQC Migration (Future)
+#### Phase 2: PQ-Hybrid Mandatory (Current)
 
-Once hybrid mode is widely deployed and ecosystem support matures:
+PQ-Hybrid is now the only key scheme. All machine keys include both classical and post-quantum key material:
 
-1. **Deprecate classical-only keys**: Refuse authentication from Ed25519-only machines
-2. **Enforce PQC for new identities**: All new identity creation requires PQC keys
-3. **Re-keying ceremony**: Existing identities rotate to PQC-only keys
-4. **Remove hybrid overhead**: Optionally drop classical keys to reduce storage
+1. **Classical-only keys removed**: All machines use PQ-Hybrid keys
+2. **PQC required for all identities**: All identity creation and machine enrollment uses PQ-Hybrid keys
+3. **No scheme selection**: The `KeyScheme` enum has been removed; PQ-Hybrid is always used
+
+#### Phase 3: Full PQC Migration (Future)
+
+Once ecosystem support matures and classical algorithms are no longer needed for backward compatibility:
+
+1. **Drop classical keys**: Remove Ed25519/X25519 keys to reduce storage
+2. **PQC-only signatures**: Use ML-DSA-65 signatures exclusively
 
 #### Implementation Timeline
 
@@ -350,9 +338,10 @@ Once hybrid mode is widely deployed and ecosystem support matures:
 | PQ-Hybrid key derivation | ✅ Complete |
 | ML-DSA-65 signing/verification | ✅ Complete |
 | ML-KEM-768 encapsulation/decapsulation | ✅ Complete |
+| PQ-Hybrid mandatory (no classical-only) | ✅ Complete |
 | Protocol algorithm negotiation | 📋 Pending |
 | Storage schema updates | 📋 Pending |
-| Full PQC migration | 📋 Future |
+| Full PQC-only migration | 📋 Future |
 
 ---
 
@@ -435,10 +424,9 @@ Areas requiring protocol changes:
 ### 6.5 Backward Compatibility
 
 **Strategy**: 
-- Maintain support for classical-only clients during transition
-- Use algorithm negotiation in protocols
+- Classical keys (Ed25519, X25519) remain present in PQ-Hybrid keys for OpenMLS compatibility
 - Version all serialized key structures
-- Provide clear deprecation notices and timelines
+- Future PQC-only migration will remove classical keys when no longer needed
 
 ---
 
@@ -479,7 +467,7 @@ Areas requiring protocol changes:
 
 | Item | Status | Location |
 |------|--------|----------|
-| `KeyScheme` enum | ✅ Complete | `keys/mod.rs` |
+| PQ-Hybrid mandatory (no classical-only) | ✅ Complete | `keys/mod.rs` |
 | `MlDsaKeyPair` (ML-DSA-65) | ✅ Complete | `keys/pq.rs` |
 | `MlKemKeyPair` (ML-KEM-768) | ✅ Complete | `keys/pq.rs` |
 | ML-DSA-65 signing | ✅ Complete | `MlDsaKeyPair::sign()` |
@@ -491,7 +479,7 @@ Areas requiring protocol changes:
 | `derive_machine_keypair_with_scheme()` | ✅ Complete | `derivation/pq.rs` |
 | PQ domain separation strings | ✅ Complete | `constants.rs` |
 | `fips203`/`fips204` integration | ✅ Complete | `Cargo.toml` |
-| Always-available (no feature flag) | ✅ Complete | - |
+| PQ-Hybrid always-on (no classical-only mode) | ✅ Complete | - |
 | Deterministic key generation | ✅ Complete | `MlDsaKeyPair::from_seed()` |
 | Deterministic signing | ✅ Complete | `MlDsaKeyPair::sign_deterministic()` |
 
@@ -501,7 +489,7 @@ Areas requiring protocol changes:
 |------|--------|-------|
 | Storage schema updates | 📋 Pending | 60x increase for PQ public keys |
 | Protocol algorithm negotiation | 📋 Pending | JWT headers, challenge-response |
-| Hybrid signature verification (app-level) | 📋 Pending | Verify both Ed25519 + ML-DSA |
+| Hybrid signature verification (app-level) | ✅ Complete | Verify both Ed25519 + ML-DSA via `HybridSignature` |
 | Migration tooling | 📋 Pending | For existing identities |
 | Performance benchmarking | 📋 Pending | Target hardware validation |
 

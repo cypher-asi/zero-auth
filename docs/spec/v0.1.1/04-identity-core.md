@@ -285,9 +285,8 @@ pub struct MachineKey {
     pub device_platform: String,
     pub revoked: bool,
     pub revoked_at: Option<u64>,
-    pub key_scheme: KeyScheme,
-    pub pq_signing_public_key: Option<Vec<u8>>,      // ML-DSA-65: 1952 bytes
-    pub pq_encryption_public_key: Option<Vec<u8>>,   // ML-KEM-768: 1184 bytes
+    pub pq_signing_public_key: Vec<u8>,              // ML-DSA-65: 1952 bytes
+    pub pq_encryption_public_key: Vec<u8>,           // ML-KEM-768: 1184 bytes
 }
 ```
 
@@ -568,13 +567,13 @@ sequenceDiagram
     Client->>Client: derive_identity_signing_keypair()
     Client->>Client: derive_machine_keypair()
     Client->>Client: canonicalize_identity_creation_message()
-    Client->>Client: sign_message(ISK, message)
+    Client->>Client: ISK.sign(message)
     
     Client->>IdentityCore: create_identity(request)
     IdentityCore->>Policy: evaluate(CreateIdentity)
     Policy-->>IdentityCore: Allow
     
-    IdentityCore->>Crypto: verify_signature(ISK_public, message, sig)
+    IdentityCore->>Crypto: ISK_public.verify(message, sig)
     Crypto-->>IdentityCore: Ok
     
     IdentityCore->>Crypto: ed25519_to_did_key(ISK_public)
@@ -637,7 +636,7 @@ sequenceDiagram
     
     Client->>Client: derive_machine_keypair(neural_key, epoch)
     Client->>Client: canonicalize_enrollment_message()
-    Client->>Client: sign_message(ISK, enrollment_msg)
+    Client->>Client: ISK.sign(enrollment_msg)
     
     Client->>IdentityCore: enroll_machine_key(identity_id, machine_key, sig)
     
@@ -647,7 +646,7 @@ sequenceDiagram
     IdentityCore->>Policy: evaluate(EnrollMachine)
     Policy-->>IdentityCore: Allow
     
-    IdentityCore->>Crypto: verify_signature(ISK_public, message, sig)
+    IdentityCore->>Crypto: ISK_public.verify(message, sig)
     Crypto-->>IdentityCore: Ok
     
     IdentityCore->>Storage: exists(machine_keys, machine_id)
@@ -678,11 +677,11 @@ sequenceDiagram
     Client->>Client: canonicalize_rotation_approval_message()
     
     Client->>Machine1: Request approval
-    Machine1->>Machine1: sign_message(MPK1, message)
+    Machine1->>Machine1: MPK1.sign(message)
     Machine1-->>Client: Approval 1
     
     Client->>Machine2: Request approval
-    Machine2->>Machine2: sign_message(MPK2, message)
+    Machine2->>Machine2: MPK2.sign(message)
     Machine2-->>Client: Approval 2
     
     Client->>IdentityCore: rotate_neural_key(request + approvals)
@@ -693,7 +692,7 @@ sequenceDiagram
     IdentityCore->>IdentityCore: Verify 2+ approvals
     
     loop For each approval
-        IdentityCore->>Crypto: verify_signature(MPK, message, sig)
+        IdentityCore->>Crypto: MPK.verify(message, sig)
         Crypto-->>IdentityCore: Ok
     end
     

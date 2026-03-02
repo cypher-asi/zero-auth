@@ -523,7 +523,7 @@ sequenceDiagram
     Methods-->>Client: Challenge
     
     Client->>Client: canonicalize_challenge()
-    Client->>Client: sign_message(machine_key, canonical)
+    Client->>Client: machine_key.sign(canonical)
     
     Client->>Methods: authenticate_machine(response)
     
@@ -538,7 +538,7 @@ sequenceDiagram
     Storage-->>Methods: MachineKey
     
     Methods->>Crypto: canonicalize_challenge(challenge)
-    Methods->>Crypto: verify_signature(mpk, canonical, sig)
+    Methods->>Crypto: MPK.verify(canonical, sig)
     
     alt Invalid signature
         Methods-->>Client: Err(InvalidSignature)

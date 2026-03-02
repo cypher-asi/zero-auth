@@ -295,14 +295,14 @@ NeuralKey [32 bytes, client-generated]
 │
 ├─ HKDF(NK, "cypher:id:identity:v1" || identity_id)
 │  └─ Identity Signing Seed [32 bytes]
-│     └─ Ed25519KeyPair (ISK)
+│     └─ IdentitySigningKey (ISK) (ed25519_seed + ml_dsa_seed)
 │
 ├─ HKDF(NK, "cypher:shared:machine:v1" || identity_id || machine_id || epoch)
 │  └─ Machine Seed [32 bytes]
 │     │
 │     ├─ HKDF(seed, "cypher:shared:machine:sign:v1" || machine_id)
 │     │  └─ Machine Signing Seed [32 bytes]
-│     │     └─ Ed25519KeyPair (MPK)
+│     │     └─ MachineKeyPair (MPK) Ed25519 signing component
 │     │
 │     ├─ HKDF(seed, "cypher:shared:machine:encrypt:v1" || machine_id)
 │     │  └─ Machine Encryption Seed [32 bytes]
@@ -454,7 +454,8 @@ pub const KEY_STATUS_RETIRED: u8  = 0x03;
 - Use `zeroize` crate with `ZeroizeOnDrop`
 - Types requiring zeroization:
   - `NeuralKey`
-  - `Ed25519KeyPair.private_key`
+  - `IdentitySigningKey` (Ed25519 + ML-DSA key material)
+  - `MachineKeyPair` (all classical and PQ key material)
   - `X25519KeyPair.private_key`
   - All derived seeds
 

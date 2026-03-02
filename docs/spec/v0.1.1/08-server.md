@@ -207,8 +207,7 @@ Content-Type: application/json
     "encryption_public_key": "base64_encoded_32_bytes",
     "capabilities": 63,
     "device_name": "My Device",
-    "device_platform": "macos",
-    "key_scheme": "classical"
+    "device_platform": "macos"
   },
   "authorization_signature": "base64_encoded_64_bytes",
   "namespace_name": "Personal",
