@@ -17,7 +17,7 @@ use tracing::info;
 use uuid::Uuid;
 use zid_crypto::{
     current_timestamp, derive_managed_identity_signing_keypair, ed25519_to_did_key,
-    MachineKeyCapabilities,
+    IdentityVerifyingKey, MachineKeyCapabilities,
 };
 use zid_policy::PolicyEngine;
 use zid_storage::{
@@ -99,18 +99,18 @@ where
             });
         }
 
-        // Derive ISK from service master key
         let (identity_signing_public_key, _keypair) = derive_managed_identity_signing_keypair(
             &request.service_master_key,
             &request.method_type,
             &request.method_id,
         )?;
 
-        // Create the identity, namespace, and virtual machine
         let timestamp = current_timestamp();
 
-        // Compute DID from identity signing public key
-        let did = ed25519_to_did_key(&identity_signing_public_key);
+        let ed25519_bytes = IdentityVerifyingKey::from_bytes(&identity_signing_public_key)
+            .map_err(|e| IdentityCoreError::Other(format!("Invalid ISK: {}", e)))?
+            .ed25519_bytes();
+        let did = ed25519_to_did_key(&ed25519_bytes);
 
         let identity = Identity {
             identity_id,
@@ -348,8 +348,8 @@ mod tests {
     fn test_check_ceremony_allowed_managed() {
         let identity = Identity {
             identity_id: Uuid::new_v4(),
-            did: String::new(), // Empty for test
-            identity_signing_public_key: [0u8; 32],
+            did: String::new(),
+            identity_signing_public_key: vec![0u8; 32],
             status: IdentityStatus::Active,
             tier: IdentityTier::Managed,
             neural_key_commitment: None,
@@ -372,8 +372,8 @@ mod tests {
     fn test_check_ceremony_allowed_self_sovereign() {
         let identity = Identity {
             identity_id: Uuid::new_v4(),
-            did: String::new(), // Empty for test
-            identity_signing_public_key: [0u8; 32],
+            did: String::new(),
+            identity_signing_public_key: vec![0u8; 32],
             status: IdentityStatus::Active,
             tier: IdentityTier::SelfSovereign,
             neural_key_commitment: Some([1u8; 32]),

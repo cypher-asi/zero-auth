@@ -155,7 +155,7 @@ async fn create_new_identity(
         &pk.x25519_bytes(),
         created_at,
     );
-    let signature = zid_crypto::sign_message(&identity_signing_keypair, &message);
+    let signature = identity_signing_keypair.sign(&message);
 
     // Send creation request
     println!();
@@ -163,8 +163,8 @@ async fn create_new_identity(
 
     let request = serde_json::json!({
         "identity_id": identity_id,
-        "identity_signing_public_key": hex::encode(identity_signing_public_key),
-        "authorization_signature": hex::encode(signature),
+        "identity_signing_public_key": hex::encode(&identity_signing_public_key),
+        "authorization_signature": hex::encode(signature.to_bytes()),
         "machine_key": {
             "machine_id": machine_id,
             "signing_public_key": hex::encode(pk.ed25519_bytes()),
@@ -324,7 +324,7 @@ fn save_recovered_credentials(
     neural_key: &NeuralKey,
     identity_id: &Uuid,
     machine_id: &Uuid,
-    identity_signing_public_key: &[u8; 32],
+    identity_signing_public_key: &[u8],
     machine_keypair: &zid_crypto::MachineKeyPair,
     device_name: &str,
     platform: &str,
@@ -337,7 +337,7 @@ fn save_recovered_credentials(
     );
 
     // Compute commitment before splitting (for verification during reconstruction)
-    let neural_key_commitment = neural_key.compute_commitment();
+    let neural_key_commitment = zid_crypto::blake3_hash(neural_key.as_bytes());
 
     // Split neural key into 5 shards
     let mut rng = rand::thread_rng();

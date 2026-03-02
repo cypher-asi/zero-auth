@@ -30,7 +30,6 @@ where
             machine_id: Some(machine_id),
             namespace_id: identity.identity_id,
             auth_method: zid_policy::AuthMethod::OAuth,
-            mfa_verified: false,
             operation: Operation::Login,
             resource: None,
             ip_address,
@@ -58,7 +57,6 @@ where
             identity_id,
             machine_id,
             namespace_id: identity.identity_id,
-            mfa_verified: false,
             auth_method: AuthMethod::OAuth,
             warning: Some("Consider enrolling a real device for enhanced security".to_string()),
         }

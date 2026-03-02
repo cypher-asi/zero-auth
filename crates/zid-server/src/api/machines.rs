@@ -15,7 +15,8 @@ use crate::{
 };
 
 use super::helpers::{
-    format_timestamp_rfc3339, parse_capabilities, parse_hex_32, parse_hex_64, parse_pq_keys,
+    format_timestamp_rfc3339, parse_capabilities, parse_hex_32, parse_hex_hybrid_signature,
+    parse_pq_keys,
 };
 
 // ============================================================================
@@ -82,12 +83,11 @@ pub async fn enroll_machine(
     JsonWithErrors(req): JsonWithErrors<EnrollMachineRequest>,
 ) -> Result<Json<EnrollMachineResponse>, ApiError> {
     let identity_id = auth.claims.identity_id()?;
-    let mfa_verified = auth.claims.mfa_verified;
 
     // Parse hex strings
     let signing_public_key = parse_hex_32(&req.signing_public_key)?;
     let encryption_public_key = parse_hex_32(&req.encryption_public_key)?;
-    let authorization_signature = parse_hex_64(&req.authorization_signature)?;
+    let authorization_signature = parse_hex_hybrid_signature(&req.authorization_signature)?;
 
     // Parse capabilities
     let capabilities = parse_capabilities(&req.capabilities)?;
@@ -127,8 +127,7 @@ pub async fn enroll_machine(
         .enroll_machine_key(
             identity_id,
             machine_key,
-            authorization_signature.to_vec(),
-            mfa_verified,
+            authorization_signature,
             ctx.ip_address,
             ctx.user_agent,
         )
@@ -190,7 +189,6 @@ pub async fn revoke_machine(
 ) -> Result<StatusCode, ApiError> {
     let _identity_id = auth.claims.identity_id()?;
     let revoker_machine_id = auth.claims.machine_id()?;
-    let mfa_verified = auth.claims.mfa_verified;
 
     // Revoke machine
     state
@@ -199,7 +197,6 @@ pub async fn revoke_machine(
             machine_id,
             revoker_machine_id,
             req.reason,
-            mfa_verified,
             ctx.ip_address,
             ctx.user_agent,
         )

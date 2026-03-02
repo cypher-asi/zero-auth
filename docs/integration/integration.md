@@ -195,7 +195,6 @@ async fn setup_services() -> Result<Services, Box<dyn std::error::Error>> {
     ));
     
     // 5. Generate or load service master key (32 bytes)
-    // IMPORTANT: Store this securely, it protects MFA secrets
     let service_master_key: [u8; 32] = load_or_generate_master_key();
     
     // 6. Initialize Auth Methods (with optional OAuth configs)
@@ -490,15 +489,13 @@ async fn authenticate_with_machine_key(
         challenge_id: challenge.challenge_id,
         machine_id,
         signature: signature.to_vec(),
-        mfa_code: None, // Include if MFA is enabled
     };
     
     let auth_result = auth_methods
         .authenticate_machine(response, ip_address, user_agent)
         .await?;
     
-    println!("Auth result: identity={}, mfa_required={}", 
-        auth_result.identity_id, auth_result.mfa_required);
+    println!("Auth result: identity={}", auth_result.identity_id);
     
     Ok(auth_result)
 }
@@ -525,7 +522,6 @@ async fn authenticate_with_email(
         email,
         password,
         machine_id,
-        mfa_code: None, // Include if MFA is enabled
     };
     
     let auth_result = auth_methods
@@ -588,7 +584,6 @@ async fn create_user_session(
     identity_id: Uuid,
     machine_id: Uuid,
     namespace_id: Uuid,
-    mfa_verified: bool,
 ) -> Result<SessionTokens, Box<dyn std::error::Error>> {
     let capabilities = vec![
         "AUTHENTICATE".to_string(),
@@ -605,7 +600,6 @@ async fn create_user_session(
             identity_id,
             machine_id,
             namespace_id,
-            mfa_verified,
             capabilities,
             scope,
         )
@@ -661,51 +655,6 @@ async fn revoke_user_session(
 
 ---
 
-## 12. MFA Setup and Verification
-
-```rust
-use zid_methods::{AuthMethods, MfaSetup};
-use uuid::Uuid;
-
-async fn setup_mfa(
-    auth_methods: &impl AuthMethods,
-    identity_id: Uuid,
-) -> Result<MfaSetup, Box<dyn std::error::Error>> {
-    let setup = auth_methods.setup_mfa(identity_id).await?;
-    
-    // Display to user
-    println!("TOTP Secret: {}", setup.secret);
-    println!("QR Code URI: {}", setup.provisioning_uri);
-    println!("Backup codes: {:?}", setup.backup_codes);
-    
-    Ok(setup)
-}
-
-async fn enable_mfa(
-    auth_methods: &impl AuthMethods,
-    identity_id: Uuid,
-    verification_code: String,
-) -> Result<(), Box<dyn std::error::Error>> {
-    auth_methods
-        .enable_mfa(identity_id, verification_code)
-        .await?;
-    
-    println!("MFA enabled for identity {}", identity_id);
-    Ok(())
-}
-
-async fn verify_mfa_code(
-    auth_methods: &impl AuthMethods,
-    identity_id: Uuid,
-    code: String,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    let valid = auth_methods.verify_mfa(identity_id, code).await?;
-    Ok(valid)
-}
-```
-
----
-
 ## Complete Example: Registration Flow
 
 ```rust
@@ -734,15 +683,6 @@ async fn full_registration_flow() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
     
-    // 6. Setup MFA
-    let mfa_setup = services.auth_methods.setup_mfa(identity_id).await?;
-    // User configures authenticator app...
-    
-    // 7. Enable MFA with first code
-    services.auth_methods
-        .enable_mfa(identity_id, "123456".to_string())
-        .await?;
-    
     println!("Registration complete for identity {}", identity_id);
     Ok(())
 }
@@ -767,24 +707,12 @@ async fn full_login_flow(
         "MyApp/1.0".to_string(),
     ).await?;
     
-    // 2. Handle MFA if required
-    let mfa_verified = if auth_result.mfa_required {
-        // Prompt user for MFA code
-        let code = "123456".to_string(); // From user input
-        services.auth_methods
-            .verify_mfa(auth_result.identity_id, code)
-            .await?
-    } else {
-        false
-    };
-    
-    // 3. Create session
+    // 2. Create session
     let tokens = services.sessions
         .create_session(
             auth_result.identity_id,
             auth_result.machine_id,
             auth_result.namespace_id,
-            mfa_verified,
             auth_result.capabilities,
             vec!["identity:read".to_string()],
         )
@@ -814,12 +742,6 @@ fn handle_auth_error(err: AuthMethodsError) {
         AuthMethodsError::InvalidCredentials => {
             println!("Invalid email or password");
         }
-        AuthMethodsError::MfaRequired => {
-            println!("MFA verification required");
-        }
-        AuthMethodsError::MfaInvalid => {
-            println!("Invalid MFA code");
-        }
         AuthMethodsError::RateLimited { retry_after } => {
             println!("Too many attempts, retry after {} seconds", retry_after);
         }
@@ -839,7 +761,7 @@ fn handle_auth_error(err: AuthMethodsError) {
 
 1. **Neural Key**: Never transmit or store whole. Only public keys go to server.
 2. **Shamir Shares**: Distribute to trusted parties. Never store together.
-3. **Service Master Key**: Use HSM/KMS in production. Protects MFA secrets.
+3. **Service Master Key**: Use HSM/KMS in production.
 4. **Machine Keys**: Deterministic from Neural Key. Re-derivable if lost.
 5. **Rate Limiting**: Policy engine enforces limits. Handle `RateLimited` errors.
 6. **Token Rotation**: Refresh tokens have families. Reuse detection triggers revocation.

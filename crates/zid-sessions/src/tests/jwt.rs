@@ -88,7 +88,6 @@ fn test_jwt_encode_decode() {
         machine_id: uuid::Uuid::new_v4().to_string(),
         namespace_id: uuid::Uuid::new_v4().to_string(),
         session_id: uuid::Uuid::new_v4().to_string(),
-        mfa_verified: false,
         capabilities: vec![],
         scope: vec![],
         revocation_epoch: 1,

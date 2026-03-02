@@ -6,8 +6,16 @@ use std::sync::Arc;
 use crate::error::{ApiError, MapServiceErr};
 use crate::state::AppState;
 
-use super::auth::{LoginResponse, WalletLoginRequest};
+use super::auth::LoginResponse;
 use super::helpers::create_login_session;
+
+/// Wallet login request (EVM signature-based)
+#[derive(Debug, serde::Deserialize)]
+pub struct WalletLoginRequest {
+    pub wallet_address: String,
+    pub message: String,
+    pub signature: String,
+}
 
 /// POST /v1/auth/login/wallet
 pub async fn login_wallet(
@@ -141,7 +149,6 @@ async fn authenticate_wallet(
         .auth_service
         .authenticate_wallet_by_address(
             req.wallet_address.clone(),
-            None, // MFA code not yet supported in wallet login
             ctx.ip_address.clone(),
             ctx.user_agent.clone(),
         )

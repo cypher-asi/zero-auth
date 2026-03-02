@@ -8,7 +8,8 @@ use colored::*;
 use std::io::{self, Write};
 use uuid::Uuid;
 use zid_crypto::{
-    derive_machine_keypair, sign_message, Ed25519KeyPair, MachineKeyCapabilities, NeuralKey,
+    derive_machine_keypair, IdentitySigningKey, MachineKeyCapabilities, NeuralKey,
+    ZeroAuthOpaque,
 };
 
 use super::create_http_client;
@@ -23,7 +24,6 @@ use crate::types::{ChallengeResponse, ClientCredentials, LoginResponse, SessionD
 pub async fn login(server: &str) -> Result<()> {
     println!("{}", "=== Machine Key Authentication ===".bold().cyan());
 
-    // Check for legacy credentials and migrate if needed
     if is_legacy_credentials() {
         println!(
             "\n{}",
@@ -40,15 +40,12 @@ pub async fn login(server: &str) -> Result<()> {
         return Ok(());
     }
 
-    // Load credentials to get IDs (no passphrase needed yet)
     let credentials = load_credentials()?;
     print_credentials_info(&credentials.identity_id, &credentials.machine_id);
 
     let challenge_data = request_challenge(server, &credentials.machine_id).await?;
 
-    // Check if we have stored machine key (new format) or need Neural Key reconstruction
     if has_stored_machine_key() {
-        // Simplified flow: only passphrase needed
         println!("\n{}", "Step 3: Decrypting machine signing key...".yellow());
         let passphrase = prompt_passphrase("Enter passphrase: ")?;
 
@@ -67,7 +64,6 @@ pub async fn login(server: &str) -> Result<()> {
         print_login_success(&login_result);
         save_session_data(&login_result)?;
     } else {
-        // Legacy flow: requires passphrase + shard for Neural Key reconstruction
         println!(
             "\n{}",
             "Step 3: Credentials in old format - Neural Key reconstruction required...".yellow()
@@ -100,117 +96,29 @@ pub async fn login(server: &str) -> Result<()> {
 
 fn display_migration_shards(shards: &[zid_crypto::ShamirShare]) -> Result<()> {
     println!();
-    println!(
-        "{}",
-        "╔════════════════════════════════════════════════════════════╗"
-            .red()
-            .bold()
-    );
-    println!(
-        "{}",
-        "║              YOUR NEW NEURAL SHARDS                        ║"
-            .red()
-            .bold()
-    );
-    println!(
-        "{}",
-        "║                                                            ║"
-            .red()
-    );
-    println!(
-        "{}",
-        "║  Login now only requires your PASSPHRASE (no shard).       ║"
-            .white()
-            .bold()
-    );
-    println!(
-        "{}",
-        "║  Store shards in separate secure locations for RECOVERY.   ║"
-            .white()
-    );
-    println!(
-        "{}",
-        "║  Any 3 shards can recover your identity if device lost.    ║"
-            .white()
-    );
-    println!(
-        "{}",
-        "╠════════════════════════════════════════════════════════════╣"
-            .red()
-    );
-    println!(
-        "{}",
-        "║                                                            ║"
-            .red()
-    );
+    println!("{}", "╔════════════════════════════════════════════════════════════╗".red().bold());
+    println!("{}", "║              YOUR NEW NEURAL SHARDS                        ║".red().bold());
+    println!("{}", "║                                                            ║".red());
+    println!("{}", "║  Login now only requires your PASSPHRASE (no shard).       ║".white().bold());
+    println!("{}", "║  Store shards in separate secure locations for RECOVERY.   ║".white());
+    println!("{}", "║  Any 3 shards can recover your identity if device lost.    ║".white());
+    println!("{}", "╠════════════════════════════════════════════════════════════╣".red());
+    println!("{}", "║                                                            ║".red());
 
-    // Display each shard
-    println!(
-        "{}  {}",
-        "║".red(),
-        format!("Shard A: {}", shards[0].to_hex()).bright_white()
-    );
-    println!(
-        "{}",
-        "║                                                            ║"
-            .red()
-    );
-    println!(
-        "{}  {}",
-        "║".red(),
-        format!("Shard B: {}", shards[1].to_hex()).bright_white()
-    );
-    println!(
-        "{}",
-        "║                                                            ║"
-            .red()
-    );
-    println!(
-        "{}  {}",
-        "║".red(),
-        format!("Shard C: {}", shards[2].to_hex()).bright_white()
-    );
-    println!(
-        "{}",
-        "║                                                            ║"
-            .red()
-    );
-    println!(
-        "{}",
-        "╠════════════════════════════════════════════════════════════╣"
-            .red()
-    );
-    println!(
-        "{}",
-        "║  WARNING: Neural Shards will NOT be shown again!           ║"
-            .red()
-            .bold()
-    );
-    println!(
-        "{}",
-        "║  WARNING: Lose all 3 shards AND device = recovery          ║"
-            .red()
-            .bold()
-    );
-    println!(
-        "{}",
-        "║           IMPOSSIBLE.                                      ║"
-            .red()
-            .bold()
-    );
-    println!(
-        "{}",
-        "╚════════════════════════════════════════════════════════════╝"
-            .red()
-            .bold()
-    );
+    println!("{}  {}", "║".red(), format!("Shard A: {}", shards[0].to_hex()).bright_white());
+    println!("{}", "║                                                            ║".red());
+    println!("{}  {}", "║".red(), format!("Shard B: {}", shards[1].to_hex()).bright_white());
+    println!("{}", "║                                                            ║".red());
+    println!("{}  {}", "║".red(), format!("Shard C: {}", shards[2].to_hex()).bright_white());
+    println!("{}", "║                                                            ║".red());
+    println!("{}", "╠════════════════════════════════════════════════════════════╣".red());
+    println!("{}", "║  WARNING: Neural Shards will NOT be shown again!           ║".red().bold());
+    println!("{}", "║  WARNING: Lose all 3 shards AND device = recovery          ║".red().bold());
+    println!("{}", "║           IMPOSSIBLE.                                      ║".red().bold());
+    println!("{}", "╚════════════════════════════════════════════════════════════╝".red().bold());
 
-    // Wait for user acknowledgment
     println!();
-    print!(
-        "{}",
-        "Press Enter when you have saved your Neural Shards...".yellow()
-    );
+    print!("{}", "Press Enter when you have saved your Neural Shards...".yellow());
     io::stdout().flush()?;
 
     let mut input = String::new();
@@ -219,20 +127,112 @@ fn display_migration_shards(shards: &[zid_crypto::ShamirShare]) -> Result<()> {
     Ok(())
 }
 
+/// OPAQUE-based email login (2 round-trips, password never leaves client).
 pub async fn login_email(
     server: &str,
     email: &str,
     password: &str,
     machine_id: Option<Uuid>,
 ) -> Result<()> {
-    println!("{}", "=== Email Authentication ===".bold().cyan());
-
+    println!("{}", "=== OPAQUE Email Authentication ===".bold().cyan());
     print_email_login_info(email, machine_id.as_ref());
-    let login_result = attempt_email_login(server, email, password, machine_id).await?;
 
+    let login_result = attempt_opaque_email_login(server, email, password, machine_id).await?;
     print_email_login_success(&login_result);
     save_session_data(&login_result)?;
     Ok(())
+}
+
+async fn attempt_opaque_email_login(
+    server: &str,
+    email: &str,
+    password: &str,
+    machine_id: Option<Uuid>,
+) -> Result<LoginResponse> {
+    use opaque_ke::{ClientLogin, ClientLoginFinishParameters};
+
+    println!("\n{}", "Step 2: OPAQUE login init...".yellow());
+
+    let mut rng = rand::rngs::OsRng;
+    let client_start = ClientLogin::<ZeroAuthOpaque>::start(&mut rng, password.as_bytes())
+        .context("OPAQUE client login start failed")?;
+
+    let credential_request = serde_json::to_vec(&client_start.message)
+        .context("Failed to serialize CredentialRequest")?;
+
+    let client = create_http_client()?;
+    let init_request = serde_json::json!({
+        "email": email,
+        "credential_request": base64::engine::general_purpose::STANDARD.encode(&credential_request),
+    });
+
+    let init_resp = client
+        .post(format!("{}/v1/auth/login/email/init", server))
+        .json(&init_request)
+        .send()
+        .await
+        .context("Failed to send OPAQUE login init")?;
+
+    if !init_resp.status().is_success() {
+        let status = init_resp.status();
+        let text = init_resp.text().await?;
+        anyhow::bail!("Login init failed {}: {}", status, text);
+    }
+
+    let init_data: serde_json::Value = init_resp.json().await?;
+    let login_state_id = init_data["login_state_id"]
+        .as_str()
+        .context("Missing login_state_id")?;
+    let cred_resp_b64 = init_data["credential_response"]
+        .as_str()
+        .context("Missing credential_response")?;
+
+    println!("{}", "  ✓ Received CredentialResponse".green());
+
+    println!("\n{}", "Step 3: OPAQUE login finish...".yellow());
+
+    let cred_resp_bytes = base64::engine::general_purpose::STANDARD
+        .decode(cred_resp_b64)
+        .context("Invalid base64 for credential_response")?;
+
+    let credential_response: opaque_ke::CredentialResponse<ZeroAuthOpaque> =
+        serde_json::from_slice(&cred_resp_bytes)
+            .context("Failed to deserialize CredentialResponse")?;
+
+    let client_finish = client_start
+        .state
+        .finish(
+            &mut rng,
+            password.as_bytes(),
+            credential_response,
+            ClientLoginFinishParameters::default(),
+        )
+        .map_err(|_| anyhow::anyhow!("Invalid credentials"))?;
+
+    let finalization_bytes = serde_json::to_vec(&client_finish.message)
+        .context("Failed to serialize CredentialFinalization")?;
+
+    let finish_request = serde_json::json!({
+        "login_state_id": login_state_id,
+        "credential_finalization": base64::engine::general_purpose::STANDARD.encode(&finalization_bytes),
+        "machine_id": machine_id,
+    });
+
+    let finish_resp = client
+        .post(format!("{}/v1/auth/login/email/finish", server))
+        .json(&finish_request)
+        .send()
+        .await
+        .context("Failed to send OPAQUE login finish")?;
+
+    if !finish_resp.status().is_success() {
+        let status = finish_resp.status();
+        let text = finish_resp.text().await?;
+        anyhow::bail!("Login finish failed {}: {}", status, text);
+    }
+
+    println!("{}", "  ✓ OPAQUE key exchange complete".green());
+    Ok(finish_resp.json().await?)
 }
 
 fn print_credentials_info(identity_id: &Uuid, machine_id: &Uuid) {
@@ -267,10 +267,9 @@ async fn request_challenge(server: &str, machine_id: &Uuid) -> Result<ChallengeR
     Ok(challenge_data)
 }
 
-/// Sign challenge using stored machine signing key (simplified flow)
 fn sign_challenge_with_key(
     challenge_data: &ChallengeResponse,
-    signing_keypair: &Ed25519KeyPair,
+    signing_keypair: &IdentitySigningKey,
 ) -> Result<Vec<u8>> {
     println!("\n{}", "Step 4: Signing challenge...".yellow());
 
@@ -282,13 +281,11 @@ fn sign_challenge_with_key(
         serde_json::from_slice(&challenge_bytes).context("Failed to deserialize challenge")?;
 
     let canonical_challenge = zid_crypto::canonicalize_challenge(&challenge);
-
-    let signature = sign_message(signing_keypair, &canonical_challenge);
+    let signature = signing_keypair.sign(&canonical_challenge);
     println!("{}", "✓ Challenge signed".green());
-    Ok(signature.to_vec())
+    Ok(signature.to_bytes().to_vec())
 }
 
-/// Sign challenge by deriving machine key from Neural Key (legacy flow)
 fn sign_challenge_with_neural_key(
     challenge_data: &ChallengeResponse,
     credentials: &ClientCredentials,
@@ -372,60 +369,9 @@ fn print_email_login_info(email: &str, machine_id: Option<&Uuid>) {
     }
 }
 
-async fn attempt_email_login(
-    server: &str,
-    email: &str,
-    password: &str,
-    machine_id: Option<Uuid>,
-) -> Result<LoginResponse> {
-    println!("\n{}", "Step 2: Authenticating with email...".yellow());
-
-    let client = create_http_client()?;
-    let request = serde_json::json!({
-        "email": email,
-        "password": password,
-        "machine_id": machine_id,
-        "mfa_code": null
-    });
-
-    let response = client
-        .post(format!("{}/v1/auth/login/email", server))
-        .json(&request)
-        .send()
-        .await
-        .context("Failed to send login request")?;
-
-    if !response.status().is_success() {
-        return handle_email_login_error(response, email).await;
-    }
-
-    Ok(response.json().await?)
-}
-
-async fn handle_email_login_error<T>(response: reqwest::Response, email: &str) -> Result<T> {
-    let status = response.status();
-    let error_text = response.text().await?;
-
-    if error_text.contains("Machine ID required") || error_text.contains("Available machines") {
-        println!("\n{}", "❌ Machine ID required".red().bold());
-        println!("\n{}", error_text.yellow());
-        print_machine_id_help(email);
-        anyhow::bail!("Please provide a machine_id to continue");
-    }
-
-    anyhow::bail!("Login failed {}: {}", status, error_text)
-}
-
-fn print_machine_id_help(email: &str) {
-    println!("\n{}", "💡 Available options:".bold());
-    println!("  1. List your machines: cargo run -p client -- list-machines");
-    println!("  2. Login with specific machine: cargo run -p client -- login-email -e {} -p <password> -m <machine-id>", email);
-    println!("  3. Or use machine key login: cargo run -p client -- login");
-}
-
 fn print_email_login_success(login_result: &LoginResponse) {
     if let Some(warning) = &login_result.warning {
-        println!("\n{}", format!("⚠ Warning: {}", warning).yellow());
+        println!("\n{}", format!("Warning: {}", warning).yellow());
     }
 
     println!("{}", "✓ Login successful!".green().bold());
@@ -442,7 +388,7 @@ fn print_email_login_success(login_result: &LoginResponse) {
     if login_result.warning.is_some() {
         println!(
             "\n{}",
-            "💡 Tip: This session is using a virtual machine. For better security, enroll a real device.".dimmed()
+            "Tip: This session is using a virtual machine. For better security, enroll a real device.".dimmed()
         );
     }
 }

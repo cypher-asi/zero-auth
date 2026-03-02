@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use std::fs;
 use zeroize::Zeroize;
-use zid_crypto::{decrypt, encrypt, Ed25519KeyPair, MachineKeyPair, ShamirShare};
+use zid_crypto::{decrypt, encrypt, IdentitySigningKey, MachineKeyPair, ShamirShare};
 
 use super::kek::derive_kek_from_passphrase;
 use super::{get_credentials_path, MACHINE_KEY_ENCRYPTION_DOMAIN, SHARD_ENCRYPTION_DOMAIN};
@@ -77,10 +77,14 @@ pub fn save_credentials_with_shards(
     getrandom::getrandom(&mut machine_key_nonce)
         .map_err(|e| anyhow::anyhow!("Failed to generate machine key nonce: {}", e))?;
 
-    // Encrypt machine signing seed (32 bytes)
-    let signing_seed = machine_keypair.ed25519_signing_key().to_bytes();
+    // Encrypt machine signing seeds (64 bytes: Ed25519 seed + PQ seed)
+    let ed_seed = machine_keypair.ed25519_signing_key().to_bytes();
+    let pq_seed = machine_keypair.pq_signing_seed();
+    let mut signing_seeds = Vec::with_capacity(64);
+    signing_seeds.extend_from_slice(&ed_seed);
+    signing_seeds.extend_from_slice(&pq_seed);
     let encrypted_machine_signing_seed =
-        encrypt(&kek, &signing_seed, &machine_key_nonce, MACHINE_KEY_ENCRYPTION_DOMAIN)
+        encrypt(&kek, &signing_seeds, &machine_key_nonce, MACHINE_KEY_ENCRYPTION_DOMAIN)
             .map_err(|e| anyhow::anyhow!("Failed to encrypt machine signing seed: {}", e))?;
 
     // Zeroize KEK after use
@@ -196,14 +200,13 @@ pub fn load_and_reconstruct_neural_key(
             .try_into()
             .context("Invalid neural key commitment length")?;
 
-        neural_key
-            .verify_commitment(&expected_commitment)
-            .map_err(|_| {
-                anyhow::anyhow!(
-                    "Neural Key commitment mismatch: the provided shard does not match this identity. \
-                     Ensure you are using a shard from this identity's original set."
-                )
-            })?;
+        let computed_commitment = zid_crypto::blake3_hash(neural_key.as_bytes());
+        if computed_commitment != expected_commitment {
+            anyhow::bail!(
+                "Neural Key commitment mismatch: the provided shard does not match this identity. \
+                 Ensure you are using a shard from this identity's original set."
+            );
+        }
     }
 
     Ok((neural_key, credentials))
@@ -221,13 +224,12 @@ pub fn load_and_reconstruct_neural_key(
 ///
 /// # Returns
 ///
-/// Tuple of (Ed25519KeyPair, ClientCredentials)
-pub fn load_machine_signing_key(passphrase: &str) -> Result<(Ed25519KeyPair, ClientCredentials)> {
+/// Tuple of (IdentitySigningKey, ClientCredentials)
+pub fn load_machine_signing_key(passphrase: &str) -> Result<(IdentitySigningKey, ClientCredentials)> {
     let json = fs::read_to_string(get_credentials_path())
         .context("Failed to load credentials. Run 'create-identity' first.")?;
     let credentials: ClientCredentials = serde_json::from_str(&json)?;
 
-    // Check if machine key is stored (new format)
     if credentials.encrypted_machine_signing_seed.is_empty() {
         anyhow::bail!(
             "Credentials are in old format without stored machine key. \
@@ -235,18 +237,15 @@ pub fn load_machine_signing_key(passphrase: &str) -> Result<(Ed25519KeyPair, Cli
         );
     }
 
-    // Derive KEK from passphrase using stored salt
     let mut kek = derive_kek_from_passphrase(passphrase, &credentials.kek_salt)?;
 
-    // Convert nonce to fixed-size array
     let nonce: [u8; 24] = credentials
         .machine_key_nonce
         .as_slice()
         .try_into()
         .context("Invalid machine key nonce length")?;
 
-    // Decrypt machine signing seed
-    let decrypted_seed = decrypt(
+    let decrypted = decrypt(
         &kek,
         &credentials.encrypted_machine_signing_seed,
         &nonce,
@@ -254,19 +253,21 @@ pub fn load_machine_signing_key(passphrase: &str) -> Result<(Ed25519KeyPair, Cli
     )
     .map_err(|_| anyhow::anyhow!("Failed to decrypt machine signing key. Wrong passphrase?"))?;
 
-    // Zeroize KEK after use
     kek.zeroize();
 
-    // Convert to fixed-size array and create keypair
-    let seed: [u8; 32] = decrypted_seed
-        .as_slice()
-        .try_into()
-        .context("Invalid machine signing seed length")?;
+    let signing_key = if decrypted.len() == 64 {
+        let ed_seed: [u8; 32] = decrypted[..32].try_into().context("Invalid seed")?;
+        let pq_seed: [u8; 32] = decrypted[32..].try_into().context("Invalid seed")?;
+        IdentitySigningKey::from_seeds(ed_seed, pq_seed)
+    } else if decrypted.len() == 32 {
+        let ed_seed: [u8; 32] = decrypted.as_slice().try_into().context("Invalid seed")?;
+        let pq_seed = [0u8; 32];
+        IdentitySigningKey::from_seeds(ed_seed, pq_seed)
+    } else {
+        anyhow::bail!("Invalid machine signing seed length: {}", decrypted.len());
+    };
 
-    let keypair = Ed25519KeyPair::from_seed(&seed)
-        .map_err(|e| anyhow::anyhow!("Failed to reconstruct machine signing key: {}", e))?;
-
-    Ok((keypair, credentials))
+    Ok((signing_key, credentials))
 }
 
 /// Check if credentials have stored machine key (new format)

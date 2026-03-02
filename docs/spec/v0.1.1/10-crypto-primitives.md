@@ -165,10 +165,9 @@ pub const SHAMIR_THRESHOLD: usize = 3;
 pub const SHAMIR_TOTAL_SHARES: usize = 5;
 ```
 
-### 3.5 MFA Constants
+### 3.5 Other Constants
 
 ```rust
-pub const MFA_BACKUP_CODES_COUNT: usize = 10;
 pub const CHALLENGE_NONCE_SIZE: usize = 32;
 ```
 
@@ -188,8 +187,6 @@ All domain strings follow the format: `cypher:{service}:{purpose}:v{version}`
 | `cypher:shared:machine:pq-sign:v1` | `\|\| machine_id` | Machine PQ signing key |
 | `cypher:shared:machine:pq-kem:v1` | `\|\| machine_id` | Machine PQ KEM key |
 | `cypher:id:jwt:v1` | `\|\| key_epoch` | JWT signing key |
-| `cypher:id:mfa-kek:v1` | `\|\| identity_id` | MFA KEK |
-| `cypher:id:mfa-totp:v1` | `\|\| identity_id` | MFA TOTP AAD |
 | `cypher:share-backup-kek:v1` | `\|\| identity_id` | Shard backup KEK |
 | `cypher:share-backup:v1` | `\|\| identity_id \|\| share_index` | Shard backup AAD |
 
@@ -318,9 +315,6 @@ NeuralKey [32 bytes, client-generated]
 │     └─ HKDF(seed, "cypher:shared:machine:pq-kem:v1" || machine_id)
 │        └─ PQ KEM Seed [64 bytes]
 │           └─ MlKemKeyPair (ML-KEM-768)
-│
-└─ HKDF(NK, "cypher:id:mfa-kek:v1" || identity_id)
-   └─ MFA KEK [32 bytes]
 
 Service Master Key [32 bytes, server-generated]
 │

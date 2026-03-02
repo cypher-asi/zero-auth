@@ -12,7 +12,6 @@ pub enum AppError {
     InvalidCredentials,
     SessionExpired,
     TokenFamilyRevoked,
-    MfaRequired,
     IdentityFrozen,
 
     // Validation
@@ -39,7 +38,6 @@ impl fmt::Display for AppError {
             Self::InvalidCredentials => write!(f, "Invalid credentials. Please check and try again."),
             Self::SessionExpired => write!(f, "Your session has expired. Please log in again."),
             Self::TokenFamilyRevoked => write!(f, "Session invalidated — possible unauthorized access detected. Log in again to secure your identity."),
-            Self::MfaRequired => write!(f, "Multi-factor authentication is required to continue."),
             Self::IdentityFrozen => write!(f, "Your identity is frozen. Authentication is not available until unfreezing is completed."),
             Self::InvalidInput(msg) => write!(f, "Invalid input: {msg}"),
             Self::ShardCombineFailed => write!(f, "Could not reconstruct key. Verify your shards are correct and you have at least 3."),

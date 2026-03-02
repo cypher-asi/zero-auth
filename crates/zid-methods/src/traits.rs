@@ -22,45 +22,37 @@ pub trait AuthMethods: Send + Sync {
         user_agent: String,
     ) -> Result<AuthResult>;
 
-    /// Authenticate with email + password
+    /// OPAQUE email login – step 1.
     ///
-    /// Supports both primary flow (with machine_id) and fallback flow (virtual machine).
-    async fn authenticate_email(
+    /// Returns a `CredentialResponse` and an ephemeral login state ID.
+    async fn email_login_init(
         &self,
-        request: EmailAuthRequest,
+        request: EmailLoginInitRequest,
+    ) -> Result<EmailLoginInitResponse>;
+
+    /// OPAQUE email login – step 2.
+    ///
+    /// Verifies the `CredentialFinalization` and issues a session.
+    async fn email_login_finish(
+        &self,
+        request: EmailLoginFinishRequest,
         ip_address: String,
         user_agent: String,
     ) -> Result<AuthResult>;
 
-    /// Attach email credential to existing identity
-    ///
-    /// Allows adding email+password authentication to an existing identity.
-    async fn attach_email_credential(
+    /// OPAQUE email credential attachment – step 1 (authenticated).
+    async fn email_credential_register_init(
         &self,
         identity_id: Uuid,
-        email: String,
-        password: String,
+        request: EmailRegisterInitRequest,
+    ) -> Result<EmailRegisterInitResponse>;
+
+    /// OPAQUE email credential attachment – step 2 (authenticated).
+    async fn email_credential_register_finish(
+        &self,
+        identity_id: Uuid,
+        request: EmailRegisterFinishRequest,
     ) -> Result<()>;
-
-    /// Setup MFA for identity
-    ///
-    /// Generates TOTP secret and backup codes, returns setup information.
-    async fn setup_mfa(&self, identity_id: Uuid) -> Result<MfaSetup>;
-
-    /// Enable MFA after verification
-    ///
-    /// Verifies the initial MFA code and enables MFA for the identity.
-    async fn enable_mfa(&self, identity_id: Uuid, verification_code: String) -> Result<()>;
-
-    /// Disable MFA
-    ///
-    /// Requires MFA code to disable (prevents unauthorized disabling).
-    async fn disable_mfa(&self, identity_id: Uuid, mfa_code: String) -> Result<()>;
-
-    /// Verify MFA code
-    ///
-    /// Checks TOTP code or backup code against stored secret.
-    async fn verify_mfa(&self, identity_id: Uuid, code: String) -> Result<bool>;
 
     /// Initiate OAuth link flow
     ///
@@ -116,7 +108,6 @@ pub trait AuthMethods: Send + Sync {
     async fn authenticate_wallet_by_address(
         &self,
         wallet_address: String,
-        mfa_code: Option<String>,
         ip_address: String,
         user_agent: String,
     ) -> Result<AuthResult>;

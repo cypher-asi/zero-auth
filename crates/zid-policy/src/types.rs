@@ -24,7 +24,6 @@ pub struct PolicyContext {
     pub machine_id: Option<Uuid>,
     pub namespace_id: Uuid,
     pub auth_method: AuthMethod,
-    pub mfa_verified: bool,
 
     // Operation
     pub operation: Operation,
@@ -127,8 +126,6 @@ pub enum AuthMethod {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AuthFactor {
     Password = 0x01,
-    MfaTotp = 0x02,
-    MfaBackupCode = 0x03,
     MachineKey = 0x04,
     WalletSignature = 0x05,
     EmailVerification = 0x06,
@@ -162,11 +159,6 @@ pub enum Operation {
     ResetPassword = 0x0501,
     AttachEmail = 0x0502,
     AttachWallet = 0x0503,
-
-    // MFA
-    EnableMfa = 0x0600,
-    DisableMfa = 0x0601,
-    VerifyMfa = 0x0602,
 
     // Sessions
     RevokeSession = 0x0700,
@@ -215,19 +207,6 @@ impl Operation {
             Operation::DisableIdentity
                 | Operation::FreezeIdentity
                 | Operation::RotateNeuralKey
-                | Operation::DisableMfa
-                | Operation::RevokeAllSessions
-        )
-    }
-
-    /// Check if operation requires MFA
-    pub fn requires_mfa(&self) -> bool {
-        matches!(
-            self,
-            Operation::DisableIdentity
-                | Operation::RotateNeuralKey
-                | Operation::DisableMfa
-                | Operation::ChangePassword
                 | Operation::RevokeAllSessions
         )
     }
@@ -272,11 +251,6 @@ impl Operation {
             Operation::AttachEmail => AUTHENTICATE | SIGN,
             Operation::AttachWallet => AUTHENTICATE | SIGN,
 
-            // MFA operations
-            Operation::EnableMfa => AUTHENTICATE | SIGN,
-            Operation::DisableMfa => AUTHENTICATE | SIGN,
-            Operation::VerifyMfa => AUTHENTICATE,
-
             // Session operations
             Operation::RevokeSession => AUTHENTICATE | SIGN,
             Operation::RevokeAllSessions => AUTHENTICATE | SIGN | REVOKE,
@@ -294,14 +268,6 @@ mod tests {
         assert!(Operation::DisableIdentity.is_high_risk());
         assert!(!Operation::Login.is_high_risk());
         assert!(!Operation::EnrollMachine.is_high_risk());
-    }
-
-    #[test]
-    fn test_operation_requires_mfa() {
-        assert!(Operation::RotateNeuralKey.requires_mfa());
-        assert!(Operation::ChangePassword.requires_mfa());
-        assert!(!Operation::Login.requires_mfa());
-        assert!(!Operation::EnrollMachine.requires_mfa());
     }
 
     #[test]

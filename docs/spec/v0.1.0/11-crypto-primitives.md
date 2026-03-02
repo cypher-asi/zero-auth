@@ -80,15 +80,6 @@ This document specifies the cryptographic primitives, algorithms, and binary for
 | `SHAMIR_THRESHOLD` | 3 | Minimum shards to reconstruct |
 | `SHAMIR_TOTAL_SHARES` | 5 | Total shards generated |
 
-### 3.4 MFA Constants
-
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `MFA_BACKUP_CODES_COUNT` | 10 | Backup codes per identity |
-| `TOTP_DIGITS` | 6 | TOTP code length |
-| `TOTP_STEP` | 30 | TOTP time step in seconds |
-| `TOTP_ALGORITHM` | SHA-256 | Improved security over RFC 6238 default |
-
 ---
 
 ## 4. Domain Separation Strings
@@ -106,13 +97,11 @@ All domain strings follow the format: `cypher:{service}:{purpose}:v{version}`
 | `cypher:shared:machine:pq-sign:v1` | Machine PQ signing key (ML-DSA-65) | `machine_id` |
 | `cypher:shared:machine:pq-kem:v1` | Machine PQ KEM key (ML-KEM-768) | `machine_id` |
 
-### 4.2 Session and MFA
+### 4.2 Session
 
 | Domain String | Purpose | Concatenated With |
 |---------------|---------|-------------------|
 | `cypher:id:jwt:v1` | JWT signing key seed | `key_epoch` |
-| `cypher:id:mfa-kek:v1` | MFA KEK derivation | `identity_id` |
-| `cypher:id:mfa-totp:v1` | MFA TOTP AAD | `identity_id` |
 
 ### 4.3 Recovery
 
@@ -174,15 +163,6 @@ NeuralKey (32 bytes, client-generated via CSPRNG)
 │         │     keypair = X25519::from_bytes(seed)
 │         │
 │         └─── Purpose: ECDH key agreement, data encryption
-│
-└─── MFA KEK
-     │
-     │   Derivation:
-     │     ikm = neural_key.as_bytes()
-     │     info = "cypher:id:mfa-kek:v1" || identity_id
-     │     kek = HKDF-SHA256-Expand(ikm, info, 32)
-     │
-     └─── Purpose: Encrypts MFA TOTP secrets at rest
 ```
 
 ### 5.2 HKDF Implementation
@@ -468,7 +448,6 @@ bitflags! {
   "machine_id": "<machine_id>",
   "namespace_id": "<namespace_id>",
   "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
-  "mfa_verified": false,
   "revocation_epoch": 0
 }
 ```

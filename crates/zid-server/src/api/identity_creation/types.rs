@@ -3,13 +3,29 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Request to create identity via email
+/// OPAQUE email registration – step 1 API request
 #[derive(Debug, Deserialize)]
-pub struct CreateEmailIdentityRequest {
+pub struct CreateEmailIdentityInitRequest {
     /// Email address
     pub email: String,
-    /// Password
-    pub password: String,
+    /// base64-encoded OPAQUE `RegistrationRequest`
+    pub registration_request: String,
+}
+
+/// OPAQUE email registration – step 1 API response
+#[derive(Debug, Serialize)]
+pub struct CreateEmailIdentityInitResponse {
+    /// base64-encoded OPAQUE `RegistrationResponse`
+    pub registration_response: String,
+}
+
+/// OPAQUE email registration – step 2 API request
+#[derive(Debug, Deserialize)]
+pub struct CreateEmailIdentityFinishRequest {
+    /// Email address
+    pub email: String,
+    /// base64-encoded OPAQUE `RegistrationUpload`
+    pub registration_upload: String,
     /// Optional namespace name
     pub namespace_name: Option<String>,
 }

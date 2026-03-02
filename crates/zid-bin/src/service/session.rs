@@ -63,7 +63,6 @@ pub struct TokenIntrospection {
     pub active: bool,
     pub identity_id: Option<Uuid>,
     pub machine_id: Option<Uuid>,
-    pub mfa_verified: Option<bool>,
     pub capabilities: Option<Vec<String>>,
     pub exp: Option<i64>,
 }
@@ -75,7 +74,7 @@ pub async fn request_challenge(client: &HttpClient) -> Result<ChallengeResponse,
 pub async fn login_machine(
     client: &HttpClient,
     machine_id: &Uuid,
-    keypair: &zid_crypto::Ed25519KeyPair,
+    keypair: &zid_crypto::IdentitySigningKey,
 ) -> Result<SessionTokens, AppError> {
     let challenge_resp: ChallengeResponse = client
         .get(&format!("/v1/auth/challenge?machine_id={}", machine_id))
@@ -203,13 +202,21 @@ pub async fn login_machine_after_create(
         &nonce,
         &creds.identity_id,
     )?;
-    let seed: [u8; 32] = seed_bytes
-        .try_into()
-        .map_err(|_| AppError::CryptoError("Invalid seed length".into()))?;
-    let keypair = zid_crypto::Ed25519KeyPair::from_seed(&seed)
-        .map_err(|e| AppError::CryptoError(e.to_string()))?;
+    let signing_key = if seed_bytes.len() == 64 {
+        let ed_seed: [u8; 32] = seed_bytes[..32].try_into()
+            .map_err(|_| AppError::CryptoError("Invalid seed length".into()))?;
+        let pq_seed: [u8; 32] = seed_bytes[32..].try_into()
+            .map_err(|_| AppError::CryptoError("Invalid seed length".into()))?;
+        zid_crypto::IdentitySigningKey::from_seeds(ed_seed, pq_seed)
+    } else if seed_bytes.len() == 32 {
+        let ed_seed: [u8; 32] = seed_bytes.try_into()
+            .map_err(|_| AppError::CryptoError("Invalid seed length".into()))?;
+        zid_crypto::IdentitySigningKey::from_seeds(ed_seed, [0u8; 32])
+    } else {
+        return Err(AppError::CryptoError("Invalid seed length".into()));
+    };
 
-    login_machine(client, machine_id, &keypair).await
+    login_machine(client, machine_id, &signing_key).await
 }
 
 pub fn tokens_to_view_model(tokens: &SessionTokens) -> SessionViewModel {

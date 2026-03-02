@@ -8,7 +8,7 @@ use std::io::{self, Write};
 use uuid::Uuid;
 use zid_crypto::{
     canonicalize_identity_creation_message, derive_identity_signing_keypair, derive_machine_keypair,
-    sign_message, Ed25519KeyPair, MachineKeyCapabilities,
+    IdentitySigningKey, MachineKeyCapabilities,
     NeuralKey, ShamirShare,
 };
 
@@ -60,7 +60,7 @@ pub async fn create_identity(server: &str, device_name: &str, platform: &str) ->
     );
 
     // Compute commitment before splitting (for verification during reconstruction)
-    let neural_key_commitment = neural_key.compute_commitment();
+    let neural_key_commitment = zid_crypto::blake3_hash(neural_key.as_bytes());
 
     // Split neural key into 5 shards (threshold=3, total=5)
     let mut rng = rand::thread_rng();
@@ -78,7 +78,7 @@ pub async fn create_identity(server: &str, device_name: &str, platform: &str) ->
         &machine_keypair,
         identity_id,
         machine_id,
-        &hex::encode(identity_signing_public_key),
+        &hex::encode(&identity_signing_public_key),
         device_name,
         platform,
         &passphrase,
@@ -155,7 +155,7 @@ fn create_authorization_signature(
     machine_id: &Uuid,
     machine_signing_pk: &[u8],
     machine_encryption_pk: &[u8],
-    identity_signing_keypair: &Ed25519KeyPair,
+    identity_signing_keypair: &IdentitySigningKey,
 ) -> Result<Vec<u8>> {
     println!(
         "\n{}",
@@ -163,10 +163,6 @@ fn create_authorization_signature(
     );
     let created_at = chrono::Utc::now().timestamp() as u64;
 
-    // Convert slices to fixed-size arrays
-    let identity_signing_pk: [u8; 32] = identity_signing_public_key
-        .try_into()
-        .context("Invalid identity signing public key length")?;
     let machine_sign_pk: [u8; 32] = machine_signing_pk
         .try_into()
         .context("Invalid machine signing public key length")?;
@@ -176,15 +172,15 @@ fn create_authorization_signature(
 
     let message = canonicalize_identity_creation_message(
         identity_id,
-        &identity_signing_pk,
+        identity_signing_public_key,
         machine_id,
         &machine_sign_pk,
         &machine_enc_pk,
         created_at,
     );
-    let signature = sign_message(identity_signing_keypair, &message);
+    let signature = identity_signing_keypair.sign(&message);
     println!("{}", "✓ Signature created".green());
-    Ok(signature.to_vec())
+    Ok(signature.to_bytes().to_vec())
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -11,7 +11,6 @@ Complete endpoint reference for the zid REST API.
 - [Authentication](#authentication)
 - [OAuth](#oauth)
 - [Sessions](#sessions)
-- [Multi-Factor Authentication](#multi-factor-authentication)
 - [Credentials](#credentials)
 - [Post-Quantum Cryptography](#post-quantum-cryptography)
 - [Integrations](#integrations)
@@ -116,9 +115,8 @@ Create a new self-sovereign identity with an initial machine key.
     "machine_id": "660e8400-e29b-41d4-a716-446655440001",
     "signing_public_key": "i9j0k1l2...",
     "encryption_public_key": "m3n4o5p6...",
-    "key_scheme": "classical",
-    "pq_signing_public_key": null,
-    "pq_encryption_public_key": null,
+    "pq_signing_public_key": "q7r8s9t0...(3904 hex chars)...",
+    "pq_encryption_public_key": "u1v2w3x4...(2368 hex chars)...",
     "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
     "device_name": "My Laptop",
     "device_platform": "macos"
@@ -137,9 +135,8 @@ Create a new self-sovereign identity with an initial machine key.
 | `machine_key.machine_id` | UUID | Yes | Client-generated machine ID |
 | `machine_key.signing_public_key` | string | Yes | Ed25519 public key (hex, 64 chars) |
 | `machine_key.encryption_public_key` | string | Yes | X25519 public key (hex, 64 chars) |
-| `machine_key.key_scheme` | string | No | Key scheme: `classical` (default) or `pq_hybrid` |
-| `machine_key.pq_signing_public_key` | string | No | ML-DSA-65 public key (hex, 3904 chars). Required if `key_scheme` is `pq_hybrid` |
-| `machine_key.pq_encryption_public_key` | string | No | ML-KEM-768 public key (hex, 2368 chars). Required if `key_scheme` is `pq_hybrid` |
+| `machine_key.pq_signing_public_key` | string | Yes | ML-DSA-65 public key (hex, 3904 chars) |
+| `machine_key.pq_encryption_public_key` | string | Yes | ML-KEM-768 public key (hex, 2368 chars) |
 | `machine_key.capabilities` | array | Yes | Capability strings (see below) |
 | `machine_key.device_name` | string | Yes | Human-readable device name |
 | `machine_key.device_platform` | string | Yes | Platform identifier (e.g., "macos", "windows", "linux", "ios", "android") |
@@ -159,23 +156,16 @@ Create a new self-sovereign identity with an initial machine key.
 | `VAULT_OPERATIONS` | Can access vault operations |
 | `SERVICE_MACHINE` | Service-level machine (automated systems) |
 
-**Key Scheme (Optional Post-Quantum Support):**
+**PQ-Hybrid Keys:**
 
-The `key_scheme` field controls whether post-quantum keys are included alongside classical keys. This is optional and defaults to `classical`.
-
-| Scheme | Description |
-|--------|-------------|
-| `classical` | Ed25519 + X25519 only (default, OpenMLS compatible) |
-| `pq_hybrid` | Classical keys + ML-DSA-65 + ML-KEM-768 (post-quantum protection) |
-
-When using `pq_hybrid`, the machine key includes additional post-quantum public keys:
+All machine keys use PQ-Hybrid cryptography, combining classical keys (Ed25519 + X25519) with post-quantum keys (ML-DSA-65 + ML-KEM-768) for defense against both classical and quantum computing threats.
 
 | Field | Size | Description |
 |-------|------|-------------|
+| `signing_public_key` | 64 hex chars (32 bytes) | Ed25519 public key (RFC 8032) |
+| `encryption_public_key` | 64 hex chars (32 bytes) | X25519 public key (RFC 7748) |
 | `pq_signing_public_key` | 3,904 hex chars (1,952 bytes) | ML-DSA-65 public key (FIPS 204) |
 | `pq_encryption_public_key` | 2,368 hex chars (1,184 bytes) | ML-KEM-768 public key (FIPS 203) |
-
-**Note:** PQ-Hybrid support is always available. Both classical and post-quantum key schemes can be used without any feature flags.
 
 **Response (200 OK):**
 
@@ -184,7 +174,6 @@ When using `pq_hybrid`, the machine key includes additional post-quantum public 
   "identity_id": "550e8400-e29b-41d4-a716-446655440000",
   "machine_id": "660e8400-e29b-41d4-a716-446655440001",
   "namespace_id": "550e8400-e29b-41d4-a716-446655440000",
-  "key_scheme": "classical",
   "created_at": "2025-01-21T12:00:00Z"
 }
 ```
@@ -194,7 +183,6 @@ When using `pq_hybrid`, the machine key includes additional post-quantum public 
 | `identity_id` | UUID | Created identity ID |
 | `machine_id` | UUID | Enrolled machine ID |
 | `namespace_id` | UUID | Personal namespace ID (same as identity_id) |
-| `key_scheme` | string | Key scheme used: `classical` or `pq_hybrid` |
 | `created_at` | string | RFC 3339 timestamp |
 
 **Errors:**
@@ -396,9 +384,9 @@ Perform identity recovery ceremony. Used when the Neural Key is lost and must be
 
 ### POST /v1/identity/rotation
 
-Rotate the identity signing key. This is a high-risk operation requiring MFA verification and multi-party approval.
+Rotate the identity signing key. This is a high-risk operation requiring multi-party approval.
 
-**Authentication:** Bearer token required (MFA must be verified)
+**Authentication:** Bearer token required
 
 **Request Body:**
 
@@ -442,7 +430,6 @@ The `rotation_signature` must sign the message: `"rotate" || identity_id || new_
 | Code | Description |
 |------|-------------|
 | `UNAUTHORIZED` | Missing or invalid token |
-| `MFA_REQUIRED` | MFA verification required for this operation |
 | `INVALID_REQUEST` | Missing required fields or insufficient approvals |
 | `INVALID_SIGNATURE` | Rotation or approval signature verification failed |
 
@@ -466,9 +453,8 @@ Enroll a new machine key for an existing identity.
   "namespace_id": "550e8400-e29b-41d4-a716-446655440000",
   "signing_public_key": "a1b2c3d4...",
   "encryption_public_key": "e5f6g7h8...",
-  "key_scheme": "classical",
-  "pq_signing_public_key": null,
-  "pq_encryption_public_key": null,
+  "pq_signing_public_key": "q7r8s9t0...(3904 hex chars)...",
+  "pq_encryption_public_key": "u1v2w3x4...(2368 hex chars)...",
   "capabilities": ["AUTHENTICATE", "SIGN"],
   "device_name": "My Phone",
   "device_platform": "ios",
@@ -482,9 +468,8 @@ Enroll a new machine key for an existing identity.
 | `namespace_id` | UUID | No | Target namespace (defaults to personal namespace) |
 | `signing_public_key` | string | Yes | Ed25519 public key (hex, 64 chars) |
 | `encryption_public_key` | string | Yes | X25519 public key (hex, 64 chars) |
-| `key_scheme` | string | No | Key scheme: `classical` (default) or `pq_hybrid` |
-| `pq_signing_public_key` | string | No | ML-DSA-65 public key (hex, 3904 chars). Required if `key_scheme` is `pq_hybrid` |
-| `pq_encryption_public_key` | string | No | ML-KEM-768 public key (hex, 2368 chars). Required if `key_scheme` is `pq_hybrid` |
+| `pq_signing_public_key` | string | Yes | ML-DSA-65 public key (hex, 3904 chars) |
+| `pq_encryption_public_key` | string | Yes | ML-KEM-768 public key (hex, 2368 chars) |
 | `capabilities` | array | Yes | Capability strings |
 | `device_name` | string | Yes | Human-readable device name |
 | `device_platform` | string | Yes | Platform identifier |
@@ -496,7 +481,6 @@ Enroll a new machine key for an existing identity.
 {
   "machine_id": "770e8400-e29b-41d4-a716-446655440002",
   "namespace_id": "550e8400-e29b-41d4-a716-446655440000",
-  "key_scheme": "classical",
   "enrolled_at": "2025-01-21T12:00:00Z"
 }
 ```
@@ -505,7 +489,6 @@ Enroll a new machine key for an existing identity.
 |-------|------|-------------|
 | `machine_id` | UUID | Enrolled machine ID |
 | `namespace_id` | UUID | Namespace the machine is enrolled in |
-| `key_scheme` | string | Key scheme used: `classical` or `pq_hybrid` |
 | `enrolled_at` | string | RFC 3339 timestamp |
 
 **Errors:**
@@ -540,8 +523,6 @@ List enrolled machines for the authenticated identity.
       "machine_id": "660e8400-e29b-41d4-a716-446655440001",
       "device_name": "My Laptop",
       "device_platform": "macos",
-      "key_scheme": "classical",
-      "has_pq_keys": false,
       "created_at": "2025-01-21T12:00:00Z",
       "last_used_at": "2025-01-21T14:30:00Z",
       "revoked": false
@@ -550,8 +531,6 @@ List enrolled machines for the authenticated identity.
       "machine_id": "770e8400-e29b-41d4-a716-446655440002",
       "device_name": "My Phone",
       "device_platform": "ios",
-      "key_scheme": "pq_hybrid",
-      "has_pq_keys": true,
       "created_at": "2025-01-22T10:00:00Z",
       "last_used_at": null,
       "revoked": false
@@ -566,8 +545,6 @@ List enrolled machines for the authenticated identity.
 | `machines[].machine_id` | UUID | Machine ID |
 | `machines[].device_name` | string | Human-readable name |
 | `machines[].device_platform` | string | Platform identifier |
-| `machines[].key_scheme` | string | Key scheme: `classical` or `pq_hybrid` |
-| `machines[].has_pq_keys` | boolean | Whether machine has post-quantum keys |
 | `machines[].created_at` | string | RFC 3339 timestamp |
 | `machines[].last_used_at` | string | RFC 3339 timestamp or `null` |
 | `machines[].revoked` | boolean | Whether the machine is revoked |
@@ -1044,7 +1021,7 @@ Authenticate using a machine key by responding to a challenge.
 |-------|------|----------|-------------|
 | `challenge_id` | UUID | Yes | Challenge ID from `/v1/auth/challenge` |
 | `machine_id` | UUID | Yes | Machine performing authentication |
-| `signature` | string | Yes | Ed25519 signature of challenge (hex, 128 chars) |
+| `signature` | string | Yes | Hybrid signature of challenge (Ed25519 + ML-DSA-65, hex-encoded) |
 
 **Response (200 OK):**
 
@@ -1092,8 +1069,7 @@ Authenticate using email and password.
 {
   "email": "user@example.com",
   "password": "secure_password",
-  "machine_id": "660e8400-e29b-41d4-a716-446655440001",
-  "mfa_code": "123456"
+  "machine_id": "660e8400-e29b-41d4-a716-446655440001"
 }
 ```
 
@@ -1102,7 +1078,6 @@ Authenticate using email and password.
 | `email` | string | Yes | Email address |
 | `password` | string | Yes | Password |
 | `machine_id` | UUID | No | Specific machine to use (required if identity has multiple machines) |
-| `mfa_code` | string | No | TOTP code if MFA is enabled |
 
 **Response (200 OK):**
 
@@ -1114,7 +1089,6 @@ Same as [POST /v1/auth/login/machine](#post-v1authloginmachine).
 |------|-------------|
 | `INVALID_REQUEST` | Invalid email format, machine_id required but not provided |
 | `UNAUTHORIZED` | Invalid email or password |
-| `MFA_REQUIRED` | MFA code required but not provided |
 | `IDENTITY_FROZEN` | Identity is frozen |
 | `RATE_LIMITED` | Too many failed attempts |
 
@@ -1433,9 +1407,9 @@ Revoke a specific session.
 
 ### DELETE /v1/sessions
 
-Revoke all sessions for the authenticated identity. This is a high-risk operation requiring MFA verification.
+Revoke all sessions for the authenticated identity.
 
-**Authentication:** Bearer token required (MFA must be verified)
+**Authentication:** Bearer token required
 
 **Response:** `204 No Content`
 
@@ -1444,7 +1418,6 @@ Revoke all sessions for the authenticated identity. This is a high-risk operatio
 | Code | Description |
 |------|-------------|
 | `UNAUTHORIZED` | Missing or invalid token |
-| `MFA_REQUIRED` | MFA verification required |
 
 ---
 
@@ -1487,7 +1460,6 @@ Introspect a token to validate it and retrieve claims.
   "identity_id": "550e8400-e29b-41d4-a716-446655440000",
   "machine_id": "660e8400-e29b-41d4-a716-446655440001",
   "namespace_id": "550e8400-e29b-41d4-a716-446655440000",
-  "mfa_verified": false,
   "capabilities": ["AUTHENTICATE", "SIGN", "ENCRYPT"],
   "scope": ["default"],
   "revocation_epoch": 0,
@@ -1503,7 +1475,6 @@ Introspect a token to validate it and retrieve claims.
   "identity_id": null,
   "machine_id": null,
   "namespace_id": null,
-  "mfa_verified": null,
   "capabilities": null,
   "scope": null,
   "revocation_epoch": null,
@@ -1517,7 +1488,6 @@ Introspect a token to validate it and retrieve claims.
 | `identity_id` | UUID | Identity ID (null if inactive) |
 | `machine_id` | UUID | Machine ID (null if inactive) |
 | `namespace_id` | UUID | Namespace ID (null if inactive) |
-| `mfa_verified` | boolean | MFA status (null if inactive) |
 | `capabilities` | array | Machine capabilities (null if inactive) |
 | `scope` | array | Authorized scopes (null if inactive) |
 | `revocation_epoch` | integer | Current revocation epoch (null if inactive) |
@@ -1566,109 +1536,6 @@ Get the JSON Web Key Set for JWT verification.
 | `keys[].use` | string | Key usage (always `"sig"`) |
 | `keys[].crv` | string | Curve (always `"Ed25519"`) |
 | `keys[].x` | string | Base64url-encoded public key |
-
----
-
-## Multi-Factor Authentication
-
-Endpoints for TOTP-based multi-factor authentication.
-
-### POST /v1/mfa/setup
-
-Set up TOTP-based MFA for an identity.
-
-**Authentication:** Bearer token required
-
-**Request Body:**
-
-```json
-{
-  "encrypted_totp_secret": {
-    "ciphertext": "a1b2c3d4...",
-    "nonce": "e5f6g7h8i9j0k1l2m3n4o5p6...",
-    "algorithm": "xchacha20poly1305"
-  },
-  "backup_code_hashes": [
-    "hash1...",
-    "hash2...",
-    "hash3..."
-  ],
-  "verification_code": "123456"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `encrypted_totp_secret` | object | Yes | Client-encrypted TOTP secret |
-| `encrypted_totp_secret.ciphertext` | string | Yes | Encrypted secret (hex) |
-| `encrypted_totp_secret.nonce` | string | Yes | 24-byte nonce (hex, 48 chars) |
-| `encrypted_totp_secret.algorithm` | string | Yes | Must be `"xchacha20poly1305"` |
-| `backup_code_hashes` | array | Yes | Pre-hashed backup codes (hex, 1-20 codes) |
-| `verification_code` | string | Yes | TOTP code to verify setup |
-
-**Response (200 OK):**
-
-```json
-{
-  "mfa_enabled": true,
-  "enabled_at": "2025-01-21T12:00:00Z",
-  "totp_secret": "JBSWY3DPEHPK3PXP",
-  "qr_code_url": "otpauth://totp/zid:user?secret=JBSWY3DPEHPK3PXP&issuer=zid",
-  "backup_codes": [
-    "XXXX-XXXX-XXXX",
-    "YYYY-YYYY-YYYY",
-    "ZZZZ-ZZZZ-ZZZZ"
-  ]
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `mfa_enabled` | boolean | Always `true` on success |
-| `enabled_at` | string | RFC 3339 timestamp |
-| `totp_secret` | string | Base32-encoded secret (show once!) |
-| `qr_code_url` | string | URL for QR code generation |
-| `backup_codes` | array | Plaintext backup codes (show once!) |
-
-**Important:** The `totp_secret` and `backup_codes` are only returned once. Users must save them securely.
-
-**Errors:**
-
-| Code | Description |
-|------|-------------|
-| `UNAUTHORIZED` | Missing or invalid token |
-| `INVALID_REQUEST` | Invalid algorithm, nonce length, or verification code |
-| `CONFLICT` | MFA already enabled |
-
----
-
-### DELETE /v1/mfa
-
-Disable MFA for an identity.
-
-**Authentication:** Bearer token required (MFA must be verified)
-
-**Request Body:**
-
-```json
-{
-  "mfa_code": "123456"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `mfa_code` | string | Yes | Current TOTP code or backup code |
-
-**Response:** `204 No Content`
-
-**Errors:**
-
-| Code | Description |
-|------|-------------|
-| `UNAUTHORIZED` | Missing or invalid token |
-| `MFA_REQUIRED` | MFA verification required for this operation |
-| `INVALID_REQUEST` | Invalid MFA code |
 
 ---
 

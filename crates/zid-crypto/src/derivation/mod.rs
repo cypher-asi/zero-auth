@@ -1,14 +1,14 @@
 //! Key derivation using HKDF-SHA256.
 //!
 //! PQ-Hybrid machine key derivation is handled by the `zid` crate.
-//! This module provides server-specific derivation (managed identity, JWT, MFA)
+//! This module provides server-specific derivation (managed identity, JWT)
 //! and convenience wrappers around zid's derivation that accept `uuid::Uuid`.
 
 mod identity;
 mod session;
 
 pub use identity::{derive_identity_signing_keypair, derive_managed_identity_signing_keypair};
-pub use session::{derive_jwt_signing_seed, derive_mfa_kek};
+pub use session::derive_jwt_signing_seed;
 
 use crate::errors::*;
 use hkdf::Hkdf;

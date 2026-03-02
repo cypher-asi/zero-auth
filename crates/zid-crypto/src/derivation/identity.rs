@@ -1,28 +1,23 @@
 //! Identity key derivations.
 
-use crate::{constants::*, errors::*, keys::Ed25519KeyPair};
+use crate::errors::*;
+use zid::IdentitySigningKey;
 
-use super::hkdf_derive_32;
-
-/// Derive Identity Signing Keypair from Neural Key (Ed25519 component)
+/// Derive Identity Signing Keypair from Neural Key.
 ///
-/// This wraps zid's derive_identity_signing_key but returns the Ed25519
-/// public key bytes and keypair for backward compatibility with server code.
+/// Returns the serialized hybrid verifying key bytes and the signing key.
 pub fn derive_identity_signing_keypair(
     neural_key: &crate::keys::NeuralKey,
     identity_id: &uuid::Uuid,
-) -> Result<([u8; 32], Ed25519KeyPair)> {
-    let mut info = Vec::with_capacity(DOMAIN_IDENTITY_SIGNING.len() + 16);
-    info.extend_from_slice(DOMAIN_IDENTITY_SIGNING.as_bytes());
-    info.extend_from_slice(identity_id.as_bytes());
-
-    let signing_seed = hkdf_derive_32(neural_key.as_bytes(), &info)?;
-    let keypair = Ed25519KeyPair::from_seed(&signing_seed)?;
-    let public_key = keypair.public_key_bytes();
-    Ok((public_key, keypair))
+) -> Result<(Vec<u8>, IdentitySigningKey)> {
+    let id = zid::IdentityId::from(*identity_id.as_bytes());
+    let isk = zid::derive_identity_signing_key(neural_key, id)
+        .map_err(|e| CryptoError::KeyDerivationFailed(e.to_string()))?;
+    let vk_bytes = isk.verifying_key().to_bytes();
+    Ok((vk_bytes, isk))
 }
 
-/// Derive managed Identity Signing Keypair (server-side)
+/// Derive managed Identity Signing Keypair (server-side).
 ///
 /// Used for managed identities where the ISK is deterministically derived from
 /// the service master key and the authentication method.
@@ -30,53 +25,69 @@ pub fn derive_managed_identity_signing_keypair(
     service_master_key: &[u8; 32],
     method_type: &str,
     method_id: &str,
-) -> Result<([u8; 32], Ed25519KeyPair)> {
+) -> Result<(Vec<u8>, IdentitySigningKey)> {
+    use crate::constants::DOMAIN_MANAGED_IDENTITY;
+    use super::hkdf_derive_32;
+
+    // Derive Ed25519 seed
     let mut ikm = Vec::with_capacity(32 + method_type.len() + method_id.len());
     ikm.extend_from_slice(service_master_key);
     ikm.extend_from_slice(method_type.as_bytes());
     ikm.extend_from_slice(method_id.as_bytes());
 
-    let signing_seed = hkdf_derive_32(&ikm, DOMAIN_MANAGED_IDENTITY.as_bytes())?;
-    let keypair = Ed25519KeyPair::from_seed(&signing_seed)?;
-    let public_key = keypair.public_key_bytes();
-    Ok((public_key, keypair))
+    let ed_seed = hkdf_derive_32(&ikm, DOMAIN_MANAGED_IDENTITY.as_bytes())?;
+
+    // Derive ML-DSA-65 seed with separate domain
+    let pq_seed = hkdf_derive_32(&ikm, b"cypher:managed:identity:pq-sign:v1")?;
+
+    let isk = IdentitySigningKey::from_seeds(ed_seed, pq_seed);
+    let vk_bytes = isk.verifying_key().to_bytes();
+    Ok((vk_bytes, isk))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::keys::NeuralKey;
+    use zid::IdentityVerifyingKey;
 
     #[test]
     fn test_derive_identity_signing_keypair() {
         let neural_key = NeuralKey::generate(&mut rand::thread_rng());
         let identity_id = uuid::Uuid::new_v4();
-        let (public_key, keypair) =
+        let (vk_bytes, isk) =
             derive_identity_signing_keypair(&neural_key, &identity_id).unwrap();
-        assert_eq!(public_key.len(), 32);
-        assert_eq!(keypair.public_key_bytes(), public_key);
+        assert_eq!(vk_bytes.len(), 1984);
+        // Verify round-trip
+        let vk = IdentityVerifyingKey::from_bytes(&vk_bytes).unwrap();
+        let msg = b"test";
+        let sig = isk.sign(msg);
+        assert!(vk.verify(msg, &sig).is_ok());
     }
 
     #[test]
     fn test_derive_managed_identity_signing_keypair() {
         let service_master_key = [42u8; 32];
-        let (public_key, keypair) =
+        let (vk_bytes, isk) =
             derive_managed_identity_signing_keypair(&service_master_key, "oauth:google", "user-123")
                 .unwrap();
-        assert_eq!(public_key.len(), 32);
-        assert_eq!(keypair.public_key_bytes(), public_key);
+        assert_eq!(vk_bytes.len(), 1984);
+        let vk = IdentityVerifyingKey::from_bytes(&vk_bytes).unwrap();
+        let msg = b"test";
+        let sig = isk.sign(msg);
+        assert!(vk.verify(msg, &sig).is_ok());
     }
 
     #[test]
     fn test_managed_identity_derivation_is_deterministic() {
         let service_master_key = [42u8; 32];
-        let (pk1, _) =
+        let (vk1, _) =
             derive_managed_identity_signing_keypair(&service_master_key, "email", "user@example.com")
                 .unwrap();
-        let (pk2, _) =
+        let (vk2, _) =
             derive_managed_identity_signing_keypair(&service_master_key, "email", "user@example.com")
                 .unwrap();
-        assert_eq!(pk1, pk2);
+        assert_eq!(vk1, vk2);
     }
 
     #[test]

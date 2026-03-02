@@ -56,7 +56,7 @@ pub struct Identity {
     /// Derived from identity_signing_public_key for external verification
     #[serde(default)]
     pub did: String,
-    pub identity_signing_public_key: [u8; 32],
+    pub identity_signing_public_key: Vec<u8>,
     pub status: IdentityStatus,
     /// Identity tier: Managed or SelfSovereign
     #[serde(default)]
@@ -126,7 +126,7 @@ pub struct IdentityNamespaceMembership {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateIdentityRequest {
     pub identity_id: Uuid,
-    pub identity_signing_public_key: [u8; 32],
+    pub identity_signing_public_key: Vec<u8>,
     pub machine_key: MachineKey,
     pub authorization_signature: Vec<u8>,
     pub namespace_name: Option<String>,
@@ -145,7 +145,7 @@ pub struct Approval {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RotationRequest {
     pub identity_id: Uuid,
-    pub new_identity_signing_public_key: [u8; 32],
+    pub new_identity_signing_public_key: Vec<u8>,
     pub approvals: Vec<Approval>,
     pub new_machines: Vec<MachineKey>,
 }

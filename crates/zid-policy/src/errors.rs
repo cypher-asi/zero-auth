@@ -21,10 +21,6 @@ pub enum PolicyError {
     #[error("Rate limit exceeded: {0}")]
     RateLimitExceeded(String),
 
-    /// MFA required
-    #[error("MFA required")]
-    MfaRequired,
-
     /// Insufficient capabilities
     #[error("Insufficient capabilities: missing {0:?}")]
     InsufficientCapabilities(Vec<String>),

@@ -129,7 +129,6 @@ pub struct IntrospectResponse {
     pub active: bool,
     pub identity_id: Option<Uuid>,
     pub machine_id: Option<Uuid>,
-    pub mfa_verified: Option<bool>,
     pub capabilities: Option<Vec<String>>,
     #[allow(dead_code)] // Deserialized by clients that need revocation data.
     pub revocation_epoch: Option<u32>,

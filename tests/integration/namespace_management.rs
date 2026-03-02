@@ -10,7 +10,7 @@ use serde_json::json;
 use uuid::Uuid;
 use zid_crypto::{
     canonicalize_identity_creation_message, derive_identity_signing_keypair, derive_machine_keypair,
-    generate_neural_key, sign_message, MachineKeyCapabilities,
+    generate_neural_key, MachineKeyCapabilities,
 };
 
 #[path = "../common/mod.rs"]
@@ -56,13 +56,13 @@ async fn create_identity_and_login() -> Result<(Uuid, String), Box<dyn std::erro
         created_at,
     );
 
-    let signature = sign_message(&identity_signing_keypair, &message);
+    let signature = identity_signing_keypair.sign(&message);
 
     // 6. Create identity
     let request = json!({
         "identity_id": identity_id,
-        "identity_signing_public_key": hex::encode(identity_signing_public_key),
-        "authorization_signature": hex::encode(signature),
+        "identity_signing_public_key": hex::encode(&identity_signing_public_key),
+        "authorization_signature": hex::encode(signature.to_bytes()),
         "machine_key": {
             "machine_id": machine_id,
             "signing_public_key": hex::encode(&machine_signing_pk),

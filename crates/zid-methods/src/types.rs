@@ -19,8 +19,6 @@ pub struct ChallengeResponse {
     /// Ed25519 signature of canonical challenge
     pub signature: Vec<u8>,
 
-    /// Optional MFA code
-    pub mfa_code: Option<String>,
 }
 
 /// Authentication result
@@ -35,9 +33,6 @@ pub struct AuthResult {
     /// Namespace ID
     pub namespace_id: Uuid,
 
-    /// Whether MFA was verified
-    pub mfa_verified: bool,
-
     /// Authentication method used
     pub auth_method: AuthMethod,
 
@@ -48,7 +43,10 @@ pub struct AuthResult {
 // Re-export AuthMethod from policy crate to avoid duplication
 pub use zid_policy::AuthMethod;
 
-/// Email credential
+/// Email credential (OPAQUE password file).
+///
+/// Stores the serialised `ServerRegistration` produced by the OPAQUE
+/// protocol — the server never sees the plaintext password.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmailCredential {
     /// Identity ID
@@ -57,8 +55,8 @@ pub struct EmailCredential {
     /// Email address (lowercased)
     pub email: String,
 
-    /// Argon2id password hash
-    pub password_hash: String,
+    /// Serialised OPAQUE `ServerRegistration` (password file)
+    pub opaque_record: Vec<u8>,
 
     /// Created timestamp
     pub created_at: u64,
@@ -73,41 +71,6 @@ pub struct EmailCredential {
     pub verification_token: Option<String>,
 }
 
-/// MFA secret (encrypted)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MfaSecret {
-    /// Identity ID
-    pub identity_id: Uuid,
-
-    /// Encrypted TOTP secret (XChaCha20-Poly1305)
-    pub encrypted_secret: Vec<u8>,
-
-    /// Nonce for decryption
-    pub nonce: [u8; 24],
-
-    /// Backup codes (hashed)
-    pub backup_codes: Vec<String>,
-
-    /// Created timestamp
-    pub created_at: u64,
-
-    /// Whether MFA is enabled
-    pub enabled: bool,
-}
-
-/// MFA setup response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MfaSetup {
-    /// TOTP secret (base32 encoded)
-    pub secret: String,
-
-    /// QR code URL for authenticator apps
-    pub qr_code_url: String,
-
-    /// Backup codes (plaintext, shown once)
-    pub backup_codes: Vec<String>,
-}
-
 /// Challenge request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChallengeRequest {
@@ -118,21 +81,63 @@ pub struct ChallengeRequest {
     pub purpose: Option<String>,
 }
 
-/// Email authentication request
+/// OPAQUE email login – step 1 request (client → server)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EmailAuthRequest {
+pub struct EmailLoginInitRequest {
     /// Email address
     pub email: String,
+    /// Serialised OPAQUE `CredentialRequest`
+    pub credential_request: Vec<u8>,
+}
 
-    /// Password
-    pub password: String,
+/// OPAQUE email login – step 1 response (server → client)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailLoginInitResponse {
+    /// Serialised OPAQUE `CredentialResponse`
+    pub credential_response: Vec<u8>,
+    /// Ephemeral state ID for the finish step
+    pub login_state_id: Uuid,
+}
 
+/// OPAQUE email login – step 2 request (client → server)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailLoginFinishRequest {
+    /// State ID returned from init
+    pub login_state_id: Uuid,
+    /// Serialised OPAQUE `CredentialFinalization`
+    pub credential_finalization: Vec<u8>,
     /// Machine ID (optional, for existing devices)
     pub machine_id: Option<Uuid>,
-
-    /// MFA code (if MFA enabled)
-    pub mfa_code: Option<String>,
 }
+
+/// OPAQUE email registration – step 1 request (client → server)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailRegisterInitRequest {
+    /// Email address
+    pub email: String,
+    /// Serialised OPAQUE `RegistrationRequest`
+    pub registration_request: Vec<u8>,
+}
+
+/// OPAQUE email registration – step 1 response (server → client)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailRegisterInitResponse {
+    /// Serialised OPAQUE `RegistrationResponse`
+    pub registration_response: Vec<u8>,
+}
+
+/// OPAQUE email registration – step 2 request (client → server)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailRegisterFinishRequest {
+    /// Email address
+    pub email: String,
+    /// Serialised OPAQUE `RegistrationUpload`
+    pub registration_upload: Vec<u8>,
+    /// Optional namespace name (identity creation only)
+    pub namespace_name: Option<String>,
+}
+
+
 
 /// OAuth provider
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -204,8 +209,6 @@ pub struct WalletSignature {
     /// SECP256k1 signature (65 bytes: r, s, v)
     pub signature: Vec<u8>,
 
-    /// Optional MFA code
-    pub mfa_code: Option<String>,
 }
 
 /// Wallet blockchain types

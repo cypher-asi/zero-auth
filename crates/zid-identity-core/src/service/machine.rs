@@ -3,7 +3,7 @@
 use crate::{errors::*, traits::EventPublisher, types::*};
 use tracing::info;
 use uuid::Uuid;
-use zid_crypto::{canonicalize_enrollment_message, verify_signature};
+use zid_crypto::{canonicalize_enrollment_message, HybridSignature, IdentityVerifyingKey};
 use zid_policy::PolicyEngine;
 use zid_storage::{
     traits::BatchExt, Storage, CF_IDENTITIES, CF_MACHINE_KEYS, CF_MACHINE_KEYS_BY_IDENTITY,
@@ -24,7 +24,6 @@ where
         identity_id: Uuid,
         machine_key: MachineKey,
         authorization_signature: Vec<u8>,
-        mfa_verified: bool,
         ip_address: String,
         user_agent: String,
     ) -> Result<Uuid> {
@@ -39,7 +38,6 @@ where
             machine_id: Some(machine_key.machine_id),
             namespace_id: machine_key.namespace_id,
             auth_method: zid_policy::AuthMethod::MachineKey,
-            mfa_verified,
             operation: zid_policy::Operation::EnrollMachine,
             resource: Some(zid_policy::Resource::Machine(machine_key.machine_id)),
             ip_address,
@@ -89,14 +87,12 @@ where
             machine_key.created_at,
         );
 
-        verify_signature(
-            &identity.identity_signing_public_key,
-            &message,
-            &authorization_signature
-                .as_slice()
-                .try_into()
-                .map_err(|_| IdentityCoreError::InvalidAuthorizationSignature)?,
-        )?;
+        let vk = IdentityVerifyingKey::from_bytes(&identity.identity_signing_public_key)
+            .map_err(|_| IdentityCoreError::InvalidAuthorizationSignature)?;
+        let sig = HybridSignature::from_bytes(&authorization_signature)
+            .map_err(|_| IdentityCoreError::InvalidAuthorizationSignature)?;
+        vk.verify(&message, &sig)
+            .map_err(|_| IdentityCoreError::InvalidAuthorizationSignature)?;
 
         // Check if machine already exists
         if self

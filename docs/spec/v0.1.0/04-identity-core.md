@@ -76,7 +76,6 @@ pub trait IdentityCore: Send + Sync {
         identity_id: Uuid,
         machine_key: MachineKey,
         authorization_signature: Vec<u8>,
-        mfa_verified: bool,
         ip_address: String,
         user_agent: String,
     ) -> Result<Uuid>;
@@ -91,7 +90,6 @@ pub trait IdentityCore: Send + Sync {
         machine_id: Uuid,
         revoked_by: Uuid,
         reason: String,
-        mfa_verified: bool,
         ip_address: String,
         user_agent: String,
     ) -> Result<()>;
@@ -353,7 +351,6 @@ pub enum IdentityCoreError {
     InvalidApprovingMachine,
     DuplicateApproval(Uuid),
     PolicyDenied(String),
-    MfaRequired(Vec<AuthFactor>),
     
     // Namespace errors
     NamespaceNotFound(Uuid),

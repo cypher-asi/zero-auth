@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The `zid-storage` crate provides the storage abstraction layer for Zero-ID. It defines traits for key-value operations and implements a RocksDB backend with 33 column families for data isolation.
+The `zid-storage` crate provides the storage abstraction layer for Zero-ID. It defines traits for key-value operations and implements a RocksDB backend with 32 column families for data isolation.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -167,7 +167,7 @@ pub type Result<T> = std::result::Result<T, StorageError>;
 
 ## 3. Column Families
 
-### 3.1 Complete List (33 Column Families)
+### 3.1 Complete List (32 Column Families)
 
 ```rust
 // Identity
@@ -182,7 +182,6 @@ pub const CF_NAMESPACES_BY_IDENTITY: &str = "namespaces_by_identity";
 
 // Auth Credentials
 pub const CF_AUTH_CREDENTIALS: &str = "auth_credentials";
-pub const CF_MFA_SECRETS: &str = "mfa_secrets";
 pub const CF_CHALLENGES: &str = "challenges";
 pub const CF_USED_NONCES: &str = "used_nonces";
 
@@ -234,7 +233,6 @@ pub const CF_REPUTATION: &str = "reputation";
 | `identity_namespace_memberships` | `(identity_id, namespace_id)` | `Membership` | — | Membership records |
 | `namespaces_by_identity` | `(identity_id, namespace_id)` | `()` | — | Index |
 | `auth_credentials` | `(identity_id, cred_type)` | `Credential` | — | Auth credentials |
-| `mfa_secrets` | `identity_id: Uuid` | `MfaSecret` | — | Encrypted MFA secrets |
 | `challenges` | `challenge_id: Uuid` | `Challenge` | 5 min | Auth challenges |
 | `used_nonces` | `nonce_hex: String` | `expiry: u64` | 6 min | Replay prevention |
 | `auth_links` | `(identity_id, method_type)` | `AuthLinkRecord` | — | Auth method links |
@@ -421,7 +419,7 @@ sequenceDiagram
 ### 7.1 Data at Rest
 
 - RocksDB uses Snappy compression by default
-- Sensitive data (MFA secrets, JWT private keys) is encrypted before storage
+- Sensitive data (JWT private keys) is encrypted before storage
 - No built-in encryption at rest (rely on filesystem/volume encryption)
 
 ### 7.2 Column Family Isolation

@@ -279,7 +279,6 @@ cargo run -p client -- validate-token <TOKEN>
 **Output:**
 - Token validity status
 - Identity ID, Machine ID
-- MFA verification status
 - Capabilities
 - Expiration time
 
@@ -382,7 +381,6 @@ async fn login_with_email(
             "email": email,
             "password": password,
             "machine_id": machine_id,
-            "mfa_code": None::<String>
         }))
         .send()
         .await?;
@@ -774,12 +772,6 @@ async fn revoke_machine(
 - Argon2id hashing
 - Rate limiting recommended
 
-**MFA:**
-- Enable for sensitive operations
-- TOTP-based (Google Authenticator, Authy)
-- Backup codes for recovery
-- Required for high-security accounts
-
 ### 5. Recovery Procedures
 
 **Before you need it:**
@@ -856,10 +848,6 @@ async fn revoke_machine(
 - **Cause:** Password doesn't meet complexity requirements
 - **Solution:** Use password with 12+ chars, uppercase, lowercase, digit, special character
 - **Example:** `Password123!`
-
-**"MFA required"**
-- **Cause:** MFA enabled but no code provided
-- **Solution:** Provide MFA code in login request
 
 **"Challenge expired"**
 - **Cause:** Challenge not used within 60 seconds

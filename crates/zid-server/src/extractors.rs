@@ -43,7 +43,6 @@ where
 pub struct JwtClaims {
     pub sub: String,
     pub machine_id: String,
-    pub mfa_verified: bool,
 }
 
 impl JwtClaims {
@@ -59,15 +58,6 @@ impl JwtClaims {
             .map_err(|_| ApiError::InvalidRequest("Invalid machine_id in token".to_string()))
     }
 
-    /// Check if MFA is verified (for operations requiring MFA)
-    pub fn require_mfa(&self) -> Result<(), ApiError> {
-        if !self.mfa_verified {
-            return Err(ApiError::InvalidRequest(
-                "MFA verification required for this operation".to_string(),
-            ));
-        }
-        Ok(())
-    }
 }
 
 /// Extractor for authenticated requests
@@ -119,7 +109,6 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedUser {
         let claims = JwtClaims {
             sub: introspection.identity_id.to_string(),
             machine_id: introspection.machine_id.to_string(),
-            mfa_verified: introspection.mfa_verified,
         };
 
         Ok(AuthenticatedUser { claims })

@@ -67,7 +67,7 @@ pub struct IdentityCreationResult {
     pub shard_set: ShardSet,
     pub encrypted_machine_seed: Vec<u8>,
     pub machine_key_nonce: [u8; 24],
-    pub isk_public: [u8; 32],
+    pub isk_public: Vec<u8>,
     pub machine_signing_pub: String,
     pub machine_encryption_pub: String,
 }
@@ -96,7 +96,7 @@ pub async fn create_self_sovereign(
 
     let body = CreateIdentityBody {
         identity_id,
-        identity_signing_public_key: hex::encode(keys.isk_public),
+        identity_signing_public_key: hex::encode(&keys.isk_public),
         authorization_signature: hex::encode(sig),
         machine_key: MachineKeyBody {
             machine_id,

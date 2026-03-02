@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 use zid_methods::{
-    AuthMethods, ChallengeRequest, ChallengeResponse as AuthChallengeResponse, EmailAuthRequest,
+    AuthMethods, ChallengeRequest, ChallengeResponse as AuthChallengeResponse,
+    EmailLoginFinishRequest, EmailLoginInitRequest,
     OAuthCompleteRequest as AuthOAuthCompleteRequest,
 };
 
@@ -29,7 +30,7 @@ pub struct ChallengeQuery {
 #[derive(Debug, Serialize)]
 pub struct ChallengeResponse {
     pub challenge_id: Uuid,
-    pub challenge: String, // base64
+    pub challenge: String,
     pub expires_at: String,
 }
 
@@ -37,23 +38,32 @@ pub struct ChallengeResponse {
 pub struct MachineLoginRequest {
     pub challenge_id: Uuid,
     pub machine_id: Uuid,
-    pub signature: String, // hex
+    pub signature: String,
 }
 
+/// OPAQUE login step 1 request (JSON)
 #[derive(Debug, Deserialize)]
-pub struct EmailLoginRequest {
+pub struct EmailLoginInitApiRequest {
     pub email: String,
-    pub password: String,
-    pub machine_id: Option<Uuid>,
-    pub mfa_code: Option<String>,
+    /// base64-encoded OPAQUE `CredentialRequest`
+    pub credential_request: String,
 }
 
+/// OPAQUE login step 1 response (JSON)
+#[derive(Debug, Serialize)]
+pub struct EmailLoginInitApiResponse {
+    /// base64-encoded OPAQUE `CredentialResponse`
+    pub credential_response: String,
+    pub login_state_id: Uuid,
+}
+
+/// OPAQUE login step 2 request (JSON)
 #[derive(Debug, Deserialize)]
-pub struct WalletLoginRequest {
-    pub wallet_address: String, // hex
-    pub signature: String,      // hex
-    /// Message that was signed (should be challenge or standard auth message)
-    pub message: String,
+pub struct EmailLoginFinishApiRequest {
+    pub login_state_id: Uuid,
+    /// base64-encoded OPAQUE `CredentialFinalization`
+    pub credential_finalization: String,
+    pub machine_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -99,7 +109,6 @@ pub async fn get_challenge(
         .await
         .map_svc_err()?;
 
-    // Serialize the challenge to canonical form
     let challenge_bytes =
         serde_json::to_vec(&challenge).map_err(|e| ApiError::Internal(anyhow::anyhow!(e)))?;
 
@@ -116,7 +125,6 @@ pub async fn login_machine(
     ctx: crate::request_context::RequestContext,
     Json(req): Json<MachineLoginRequest>,
 ) -> Result<Json<LoginResponse>, ApiError> {
-    // Log authentication attempt with request context
     tracing::info!(
         ip = %ctx.ip_address,
         user_agent = %ctx.user_agent,
@@ -124,16 +132,13 @@ pub async fn login_machine(
         "Machine authentication attempt"
     );
 
-    // Parse signature
     let signature_bytes = hex::decode(&req.signature)
         .map_err(|_| ApiError::InvalidRequest("Invalid hex encoding".to_string()))?;
 
-    // Authenticate
     let challenge_response = AuthChallengeResponse {
         challenge_id: req.challenge_id,
         machine_id: req.machine_id,
         signature: signature_bytes,
-        mfa_code: None,
     };
 
     let auth_result = state
@@ -157,32 +162,73 @@ pub async fn login_machine(
     Ok(Json(create_login_session(&state, &auth_result).await?))
 }
 
-/// POST /v1/auth/login/email
-pub async fn login_email(
+/// POST /v1/auth/login/email/init — OPAQUE step 1
+pub async fn login_email_init(
     State(state): State<Arc<AppState>>,
     ctx: crate::request_context::RequestContext,
-    Json(req): Json<EmailLoginRequest>,
-) -> Result<Json<LoginResponse>, ApiError> {
-    // Log authentication attempt with request context
+    Json(req): Json<EmailLoginInitApiRequest>,
+) -> Result<Json<EmailLoginInitApiResponse>, ApiError> {
     tracing::info!(
         ip = %ctx.ip_address,
         user_agent = %ctx.user_agent,
         email_hash = %hash_for_log(&req.email),
-        "Email authentication attempt"
+        "OPAQUE email login init"
     );
 
-    // Authenticate with email+password
-    let email_request = EmailAuthRequest {
-        email: req.email.clone(),
-        password: req.password,
-        machine_id: req.machine_id,
-        mfa_code: req.mfa_code,
-    };
+    let credential_request = BASE64_STANDARD
+        .decode(&req.credential_request)
+        .map_err(|_| ApiError::InvalidRequest("Invalid base64 for credential_request".into()))?;
+
+    let result = state
+        .auth_service
+        .email_login_init(EmailLoginInitRequest {
+            email: req.email.clone(),
+            credential_request,
+        })
+        .await
+        .map_err(|e| {
+            tracing::warn!(
+                ip = %ctx.ip_address,
+                email_hash = %hash_for_log(&req.email),
+                error = %e,
+                "OPAQUE email login init failed"
+            );
+            map_service_error(anyhow::anyhow!(e))
+        })?;
+
+    Ok(Json(EmailLoginInitApiResponse {
+        credential_response: BASE64_STANDARD.encode(&result.credential_response),
+        login_state_id: result.login_state_id,
+    }))
+}
+
+/// POST /v1/auth/login/email/finish — OPAQUE step 2
+pub async fn login_email_finish(
+    State(state): State<Arc<AppState>>,
+    ctx: crate::request_context::RequestContext,
+    Json(req): Json<EmailLoginFinishApiRequest>,
+) -> Result<Json<LoginResponse>, ApiError> {
+    tracing::info!(
+        ip = %ctx.ip_address,
+        user_agent = %ctx.user_agent,
+        login_state_id = %req.login_state_id,
+        "OPAQUE email login finish"
+    );
+
+    let credential_finalization = BASE64_STANDARD
+        .decode(&req.credential_finalization)
+        .map_err(|_| {
+            ApiError::InvalidRequest("Invalid base64 for credential_finalization".into())
+        })?;
 
     let auth_result = state
         .auth_service
-        .authenticate_email(
-            email_request,
+        .email_login_finish(
+            EmailLoginFinishRequest {
+                login_state_id: req.login_state_id,
+                credential_finalization,
+                machine_id: req.machine_id,
+            },
             ctx.ip_address.clone(),
             ctx.user_agent.clone(),
         )
@@ -190,9 +236,9 @@ pub async fn login_email(
         .map_err(|e| {
             tracing::warn!(
                 ip = %ctx.ip_address,
-                email_hash = %hash_for_log(&req.email),
+                login_state_id = %req.login_state_id,
                 error = %e,
-                "Email authentication failed"
+                "OPAQUE email login finish failed"
             );
             map_service_error(anyhow::anyhow!(e))
         })?;
@@ -205,10 +251,8 @@ pub async fn oauth_initiate(
     State(state): State<Arc<AppState>>,
     Path(provider_str): Path<String>,
 ) -> Result<Json<OAuthInitiateResponse>, ApiError> {
-    // Parse provider
     let provider = parse_oauth_provider(&provider_str)?;
 
-    // Initiate OAuth flow
     let response = state
         .auth_service
         .oauth_initiate_login(provider)
@@ -228,10 +272,8 @@ pub async fn oauth_complete(
     Path(provider_str): Path<String>,
     Json(req): Json<OAuthCompleteRequest>,
 ) -> Result<Json<LoginResponse>, ApiError> {
-    // Parse provider
     let provider = parse_oauth_provider(&provider_str)?;
 
-    // Complete OAuth flow for authentication
     let oauth_request = AuthOAuthCompleteRequest {
         provider,
         code: req.code,

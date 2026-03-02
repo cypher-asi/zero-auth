@@ -14,8 +14,8 @@ pub struct ShardSet {
 }
 
 pub struct DerivedKeys {
-    pub isk_public: [u8; 32],
-    pub isk_keypair: zid_crypto::Ed25519KeyPair,
+    pub isk_public: Vec<u8>,
+    pub isk_keypair: zid_crypto::IdentitySigningKey,
     pub machine_keypair: zid_crypto::MachineKeyPair,
 }
 
@@ -108,7 +108,8 @@ pub fn encrypt_machine_seed_for_storage(
 ) -> Result<(Vec<u8>, [u8; 24]), AppError> {
     let kek = crypto_adapter::derive_kek(passphrase, salt)?;
     let nonce = crypto_adapter::generate_nonce();
-    let seed = crypto_adapter::machine_signing_seed(machine_keypair);
-    let encrypted = crypto_adapter::encrypt_machine_seed(&kek, &seed, &nonce, identity_id)?;
+    let (ed_seed, pq_seed) = crypto_adapter::machine_signing_seeds(machine_keypair);
+    let combined_seed = [ed_seed.as_slice(), pq_seed.as_slice()].concat();
+    let encrypted = crypto_adapter::encrypt_machine_seed(&kek, &combined_seed, &nonce, identity_id)?;
     Ok((encrypted, nonce))
 }

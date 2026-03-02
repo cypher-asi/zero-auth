@@ -153,12 +153,12 @@ graph TB
 | Crate | Layer | Responsibility |
 |-------|-------|----------------|
 | `zid-crypto` | Core | Key derivation, encryption, signatures, Shamir secret sharing, DID |
-| `zid-storage` | Core | Storage abstraction, RocksDB implementation, 33 column families |
+| `zid-storage` | Core | Storage abstraction, RocksDB implementation, 32 column families |
 | `zid-policy` | Domain | Rate limiting, reputation scoring, authorization decisions |
 | `zid-identity-core` | Domain | Identity, machine, and namespace lifecycle management |
 | `zid-integrations` | Domain | mTLS service auth, SSE streaming, webhook delivery |
 | `zid-sessions` | Domain | JWT issuance, token refresh, introspection, key rotation |
-| `zid-methods` | Application | Machine, email, OAuth, wallet, and MFA authentication |
+| `zid-methods` | Application | Machine, email, OAuth, and wallet authentication |
 | `zid-server` | Application | HTTP API, middleware, request handling |
 | `zid-client` | Application | CLI interface, local credential storage |
 
@@ -219,10 +219,6 @@ NeuralKey (32 bytes, client-generated, never leaves device)
 │        │   └── HKDF(seed, "cypher:shared:machine:pq-sign:v1" || machine_id)
 │        └── KEM Key (ML-KEM-768)
 │            └── HKDF(seed, "cypher:shared:machine:pq-kem:v1" || machine_id)
-│
-└─── MFA KEK
-     ├── Derivation: HKDF("cypher:id:mfa-kek:v1" || identity_id)
-     └── Purpose: Encrypts MFA TOTP secrets at rest
 ```
 
 ### 3.3 DID Format
@@ -245,12 +241,12 @@ The DID is derived from the Identity Signing Public Key using:
 
 ### 4.1 Supported Methods
 
-| Method | Primary Factor | Second Factor | Identity Tier |
-|--------|----------------|---------------|---------------|
-| **Machine Key** | Ed25519 signature | Optional TOTP | Self-Sovereign |
-| **Email/Password** | Argon2id hash | Optional TOTP | Managed |
-| **OAuth** | Provider token | Optional TOTP | Managed |
-| **Wallet** | SECP256k1/Ed25519 signature | Optional TOTP | Managed |
+| Method | Primary Factor | Identity Tier |
+|--------|----------------|---------------|
+| **Machine Key** | Ed25519 signature | Self-Sovereign |
+| **Email/Password** | Argon2id hash | Managed |
+| **OAuth** | Provider token | Managed |
+| **Wallet** | SECP256k1/Ed25519 signature | Managed |
 
 ### 4.2 Authentication Flow State Machine
 
@@ -264,25 +260,13 @@ stateDiagram-v2
     SignaturePending --> SignatureSubmitted: POST /auth/login/*
     SignatureSubmitted --> PolicyEvaluated: Check rate limits
     
-    PolicyEvaluated --> MfaRequired: MFA enabled, not verified
-    PolicyEvaluated --> Authenticated: MFA not required or verified
+    PolicyEvaluated --> Authenticated: Policy passed
     PolicyEvaluated --> Denied: Policy violation
-    
-    MfaRequired --> MfaVerified: Valid TOTP/backup code
-    MfaRequired --> Denied: Invalid MFA
-    
-    MfaVerified --> Authenticated
     Authenticated --> SessionCreated: Issue tokens
     SessionCreated --> [*]
     
     Denied --> [*]
 ```
-
-### 4.3 MFA Support
-
-- **TOTP**: RFC 6238 compliant, 6-digit codes, 30-second step
-- **Backup Codes**: 10 single-use codes, generated at setup
-- **Enforcement**: Per-namespace policy configuration
 
 ---
 
@@ -348,12 +332,12 @@ sequenceDiagram
 
 ## 6. Storage Schema
 
-### 6.1 Column Families (33 total)
+### 6.1 Column Families (32 total)
 
 | Category | Column Families | Count |
 |----------|-----------------|-------|
 | **Identity** | `identities`, `identities_by_did`, `machine_keys`, `machine_keys_by_identity`, `machine_keys_by_namespace`, `namespaces`, `identity_namespace_memberships`, `namespaces_by_identity` | 8 |
-| **Auth** | `auth_credentials`, `mfa_secrets`, `challenges`, `used_nonces` | 4 |
+| **Auth** | `auth_credentials`, `challenges`, `used_nonces` | 3 |
 | **Auth Links** | `auth_links`, `auth_links_by_method`, `primary_auth_method` | 3 |
 | **OAuth** | `oauth_states`, `oauth_links`, `oauth_links_by_identity`, `oidc_nonces`, `jwks_cache` | 5 |
 | **Wallet** | `wallet_credentials`, `wallet_credentials_by_identity` | 2 |
@@ -549,15 +533,6 @@ sequenceDiagram
 | POST | `/v1/credentials/wallet` | Attach wallet credential |
 | GET | `/v1/oauth/{provider}/initiate` | Start OAuth flow |
 | POST | `/v1/oauth/callback` | Complete OAuth flow |
-
-### 10.5 MFA
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/v1/mfa/setup` | Setup MFA |
-| POST | `/v1/mfa/enable` | Enable MFA |
-| POST | `/v1/mfa/disable` | Disable MFA |
-| POST | `/v1/mfa/verify` | Verify MFA code |
 
 ---
 

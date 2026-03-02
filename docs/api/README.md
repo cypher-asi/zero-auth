@@ -33,7 +33,6 @@ Access tokens are obtained through the authentication endpoints (`/v1/auth/login
 | `machine_id` | Machine key ID used for authentication |
 | `namespace_id` | Active namespace context |
 | `session_id` | Current session ID |
-| `mfa_verified` | Whether MFA was verified for this session |
 | `capabilities` | Machine key capabilities array |
 | `scope` | Authorized scopes |
 | `exp` | Token expiration timestamp |

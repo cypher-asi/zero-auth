@@ -14,8 +14,7 @@ impl PolicyEvaluator {
     /// 3. Machine revocation check
     /// 4. Namespace status check
     /// 5. Capability checks
-    /// 6. MFA requirements
-    /// 7. Approval requirements
+    /// 6. Approval requirements
     /// 8. Reputation checks
     /// 9. Rate limiting
     pub fn evaluate(context: &PolicyContext) -> PolicyDecision {
@@ -63,20 +62,7 @@ impl PolicyEvaluator {
             }
         }
 
-        // 6. MFA requirements
-        if context.operation.requires_mfa() && !context.mfa_verified {
-            audit_tags.push("mfa_required".to_string());
-            return PolicyDecision {
-                verdict: Verdict::RequireAdditionalAuth,
-                required_factors: vec![AuthFactor::MfaTotp],
-                required_approvals: 0,
-                rate_limit: None,
-                audit_tags,
-                reason: "MFA verification required for this operation".to_string(),
-            };
-        }
-
-        // 7. Approval requirements
+        // 6. Approval requirements
         let required_approvals = context.operation.required_approvals();
         if required_approvals > 0 {
             audit_tags.push(format!("approvals_required:{}", required_approvals));
@@ -90,13 +76,13 @@ impl PolicyEvaluator {
             };
         }
 
-        // 8. Reputation checks
+        // 7. Reputation checks
         if context.reputation_score < -50 {
             audit_tags.push("low_reputation".to_string());
             return Self::deny("Low reputation score", audit_tags);
         }
 
-        // 9. Rate limiting (based on recent failed attempts)
+        // 8. Rate limiting (based on recent failed attempts)
         if context.recent_failed_attempts >= 5 {
             audit_tags.push("rate_limited".to_string());
             return PolicyDecision {
@@ -175,7 +161,6 @@ mod tests {
             machine_id: Some(uuid::Uuid::new_v4()),
             namespace_id: uuid::Uuid::new_v4(),
             auth_method: AuthMethod::MachineKey,
-            mfa_verified: true,
             operation: Operation::Login,
             resource: None,
             ip_address: "127.0.0.1".to_string(),
@@ -285,24 +270,8 @@ mod tests {
     }
 
     #[test]
-    fn test_mfa_required() {
-        let mut context = create_test_context();
-        context.operation = Operation::ChangePassword; // Requires MFA
-        context.mfa_verified = false;
-        // Give sufficient capabilities
-        context.machine_capabilities = Some(capabilities::AUTHENTICATE | capabilities::SIGN);
-
-        let decision = PolicyEvaluator::evaluate(&context);
-
-        assert_eq!(decision.verdict, Verdict::RequireAdditionalAuth);
-        assert!(decision.required_factors.contains(&AuthFactor::MfaTotp));
-    }
-
-    #[test]
     fn test_approvals_required() {
         let mut context = create_test_context();
-        context.operation = Operation::UnfreezeIdentity; // Requires 2 approvals
-        context.mfa_verified = true;
         // Give sufficient capabilities including APPROVE
         context.machine_capabilities = Some(
             capabilities::AUTHENTICATE | capabilities::SIGN | capabilities::APPROVE,
@@ -373,7 +342,6 @@ mod tests {
         context.machine_revoked = Some(false);
         context.namespace_active = Some(true);
         context.machine_capabilities = Some(capabilities::AUTHENTICATE | capabilities::SIGN);
-        context.mfa_verified = true;
         context.reputation_score = 50;
         context.recent_failed_attempts = 0;
 

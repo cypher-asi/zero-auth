@@ -48,7 +48,6 @@ pub struct IntrospectTokenResponse {
     pub identity_id: Option<Uuid>,
     pub machine_id: Option<Uuid>,
     pub namespace_id: Option<Uuid>,
-    pub mfa_verified: Option<bool>,
     pub capabilities: Option<Vec<String>>,
     pub scope: Option<Vec<String>>,
     pub revocation_epoch: Option<u64>,
@@ -131,9 +130,6 @@ pub async fn revoke_all_sessions(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedUser,
 ) -> Result<StatusCode, ApiError> {
-    // Revoking all sessions is a high-risk operation - require MFA
-    auth.claims.require_mfa()?;
-
     let identity_id = auth.claims.identity_id()?;
 
     // Revoke all sessions for the identity
@@ -190,7 +186,6 @@ pub async fn introspect_token(
                             identity_id: Some(result.identity_id),
                             machine_id: Some(result.machine_id),
                             namespace_id: Some(result.namespace_id),
-                            mfa_verified: Some(result.mfa_verified),
                             capabilities: Some(result.capabilities.clone()),
                             scope: Some(result.scopes.clone()),
                             revocation_epoch: Some(result.revocation_epoch),
@@ -206,7 +201,6 @@ pub async fn introspect_token(
                 identity_id: Some(result.identity_id),
                 machine_id: Some(result.machine_id),
                 namespace_id: Some(result.namespace_id),
-                mfa_verified: Some(result.mfa_verified),
                 capabilities: Some(result.capabilities),
                 scope: Some(result.scopes),
                 revocation_epoch: Some(result.revocation_epoch),
@@ -220,7 +214,6 @@ pub async fn introspect_token(
                 identity_id: None,
                 machine_id: None,
                 namespace_id: None,
-                mfa_verified: None,
                 capabilities: None,
                 scope: None,
                 revocation_epoch: None,

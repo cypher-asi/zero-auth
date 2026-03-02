@@ -49,11 +49,6 @@ pub enum ApiError {
     #[error("Machine revoked")]
     MachineRevoked,
 
-    /// MFA verification required
-    #[allow(dead_code)] // Used when MFA enforcement is enabled.
-    #[error("MFA required")]
-    MfaRequired,
-
     /// Challenge has expired
     #[allow(dead_code)] // Returned by challenge validation paths.
     #[error("Challenge expired")]
@@ -97,12 +92,6 @@ impl IntoResponse for ApiError {
                 StatusCode::FORBIDDEN,
                 "MACHINE_REVOKED",
                 "Machine key has been revoked".to_string(),
-                None,
-            ),
-            ApiError::MfaRequired => (
-                StatusCode::FORBIDDEN,
-                "MFA_REQUIRED",
-                "MFA verification required".to_string(),
                 None,
             ),
             ApiError::ChallengeExpired => (
@@ -172,12 +161,6 @@ pub fn map_service_error(error: anyhow::Error) -> ApiError {
             zid_methods::AuthMethodsError::InvalidCredentials => {
                 // Invalid credentials (wrong email/password) - return 401 Unauthorized
                 return ApiError::Unauthorized;
-            }
-            zid_methods::AuthMethodsError::MfaRequired => {
-                return ApiError::MfaRequired;
-            }
-            zid_methods::AuthMethodsError::InvalidMfaCode => {
-                return ApiError::InvalidRequest("Invalid MFA code".to_string());
             }
             zid_methods::AuthMethodsError::IdentityFrozen { .. } => {
                 return ApiError::IdentityFrozen;

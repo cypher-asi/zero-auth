@@ -70,22 +70,6 @@ pub enum AuthMethodsError {
     #[error("Email credential not found: {0}")]
     EmailCredentialNotFound(String),
 
-    /// MFA required
-    #[error("MFA verification required")]
-    MfaRequired,
-
-    /// Invalid MFA code
-    #[error("Invalid MFA code")]
-    InvalidMfaCode,
-
-    /// MFA not enabled
-    #[error("MFA not enabled for identity: {0}")]
-    MfaNotEnabled(Uuid),
-
-    /// MFA already enabled
-    #[error("MFA already enabled for identity: {0}")]
-    MfaAlreadyEnabled(Uuid),
-
     /// Machine ID required
     #[error("Machine ID required: {hint}")]
     MachineIdRequired {
@@ -123,9 +107,13 @@ pub enum AuthMethodsError {
     #[error("Password hashing error: {0}")]
     PasswordHash(String),
 
-    /// TOTP error
-    #[error("TOTP error: {0}")]
-    TotpError(String),
+    /// OPAQUE protocol error
+    #[error("OPAQUE protocol error: {0}")]
+    OpaqueProtocol(String),
+
+    /// OPAQUE login state not found or expired
+    #[error("OPAQUE login state not found or expired: {0}")]
+    OpaqueLoginStateNotFound(uuid::Uuid),
 
     /// OAuth configuration invalid
     #[error("OAuth configuration invalid: {0}")]

@@ -263,36 +263,6 @@ pub fn passphrase_input(
     valid
 }
 
-pub fn totp_input(ui: &mut Ui, code: &mut String) -> bool {
-    ui.horizontal(|ui| {
-        labels::field_label(ui, "TOTP Code:");
-        let te = egui::TextEdit::singleline(code)
-            .desired_width(120.0)
-            .hint_text("000000")
-            .font(egui::FontId::monospace(font_size::BODY));
-        ui.add(te);
-    });
-    code.len() == 6 && code.chars().all(|c| c.is_ascii_digit())
-}
-
-pub fn backup_code_grid(ui: &mut Ui, codes: &[String]) {
-    egui::Grid::new("backup_codes")
-        .num_columns(2)
-        .spacing([spacing::XXL, spacing::SM])
-        .show(ui, |ui| {
-            for (i, code) in codes.iter().enumerate() {
-                ui.label(
-                    RichText::new(format!("{}. {}", i + 1, code))
-                        .font(egui::FontId::monospace(font_size::BODY))
-                        .color(tokens::TEXT_PRIMARY),
-                );
-                if i % 2 == 1 {
-                    ui.end_row();
-                }
-            }
-        });
-}
-
 pub fn acknowledge_checkbox(ui: &mut Ui, checked: &mut bool, label: &str) -> bool {
     ui.checkbox(
         checked,

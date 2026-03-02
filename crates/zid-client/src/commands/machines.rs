@@ -7,7 +7,7 @@ use colored::*;
 use uuid::Uuid;
 use zid_crypto::{
     canonicalize_enrollment_message, derive_identity_signing_keypair, derive_machine_keypair,
-    sign_message, MachineKeyCapabilities, NeuralKey,
+    MachineKeyCapabilities, NeuralKey,
 };
 
 use super::create_http_client;
@@ -144,9 +144,9 @@ fn create_enrollment_signature(
         created_at,
     );
 
-    let signature = sign_message(&identity_signing_keypair, &message);
+    let signature = identity_signing_keypair.sign(&message);
     println!("{}", "✓ Authorization signature created".green());
-    Ok(signature.to_vec())
+    Ok(signature.to_bytes().to_vec())
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -61,9 +61,6 @@ Neural Key (32 bytes, client-only)
 ├── Identity Signing Key (Ed25519)
 │   Purpose: Signs machine enrollments, key rotations, recovery operations
 │
-├── MFA Key Encryption Key (XChaCha20-Poly1305)
-│   Purpose: Encrypts TOTP secrets
-│
 └── Machine Key [per device, per epoch]
     │
     ├── Classical Keys (always present)
@@ -113,7 +110,7 @@ For detailed technical specifications of each component:
 | [Identity Core](docs/spec/v0.1.1/04-identity-core.md) | `zid-identity-core` | Identities, machines, namespaces, ceremonies |
 | [Sessions](docs/spec/v0.1.1/05-sessions.md) | `zid-sessions` | JWT issuance, refresh tokens, introspection |
 | [Integrations](docs/spec/v0.1.1/06-integrations.md) | `zid-integrations` | mTLS auth, SSE streaming, webhooks |
-| [Auth Methods](docs/spec/v0.1.1/07-methods.md) | `zid-methods` | Machine, email, OAuth, wallet, MFA |
+| [Auth Methods](docs/spec/v0.1.1/07-methods.md) | `zid-methods` | Machine, email, OAuth, wallet |
 | [Server](docs/spec/v0.1.1/08-server.md) | `zid-server` | HTTP API endpoints and middleware |
 | [Client](docs/spec/v0.1.1/09-client.md) | `zid-client` | CLI commands and workflows |
 | [Crypto Primitives Deep Dive](docs/spec/v0.1.1/10-crypto-primitives.md) | — | Algorithms and binary formats |
@@ -231,7 +228,7 @@ Neural Key (32 bytes, client-only)
 | `machine_id` | UUID assigned to each enrolled device |
 | `epoch` | Integer that increments during key rotation ceremonies, producing new key material |
 
-**Domain separation** ensures that even though all keys are derived from the same Neural Key, each derivation produces a completely different output because the HKDF `info` parameter includes a unique domain string (e.g., `"cypher:id:identity:v1"` vs `"cypher:id:mfa-kek:v1"`). This prevents accidentally deriving the same key for different purposes, which would be a security vulnerability. The contextual identifiers (identity_id, machine_id, epoch) further ensure uniqueness within each key type.
+**Domain separation** ensures that even though all keys are derived from the same Neural Key, each derivation produces a completely different output because the HKDF `info` parameter includes a unique domain string (e.g., `"cypher:id:identity:v1"` vs `"cypher:shared:machine:v1"`). This prevents accidentally deriving the same key for different purposes, which would be a security vulnerability. The contextual identifiers (identity_id, machine_id, epoch) further ensure uniqueness within each key type.
 
 ### Machine Keys
 
@@ -259,7 +256,7 @@ Machine Key capabilities include:
 1. **Creation**: Client generates Neural Key, derives keys, sends public keys to server
 2. **Enrollment**: Additional devices are enrolled by deriving new Machine Keys
 3. **Authentication**: Machine Keys prove identity via challenge-response
-4. **Key Rotation**: Neural Key can be replaced, requiring a signature from the current Identity Signing Key, MFA verification, and approval from 2+ enrolled devices
+4. **Key Rotation**: Neural Key can be replaced, requiring a signature from the current Identity Signing Key and approval from 2+ enrolled devices
 5. **Recovery**: If Neural Key is lost, reconstruct from 3 of 5 recovery shards
 6. **Revocation**: Individual devices or entire identity can be revoked
 
@@ -366,7 +363,6 @@ PolicyContext
 ├── machine_id: Option<UUID>
 ├── namespace_id: UUID
 ├── auth_method: AuthMethod
-├── mfa_verified: bool
 ├── operation: Operation
 ├── resource: Option<Resource>
 ├── ip_address: String
@@ -384,7 +380,7 @@ The engine returns one of five verdicts:
 |---------|-------------|
 | Allow | Operation permitted |
 | Deny | Operation blocked |
-| RequireAdditionalAuth | MFA or additional factor required |
+| RequireAdditionalAuth | Additional authentication factor required |
 | RequireApproval | Multi-device approval needed |
 | RateLimited | Too many attempts, try later |
 
@@ -392,11 +388,10 @@ The engine returns one of five verdicts:
 
 Operations are classified by risk level, which determines security requirements:
 
-**High-Risk Operations** (require MFA when enabled):
+**High-Risk Operations**:
 - Disable Identity
 - Freeze Identity
 - Rotate Neural Key
-- Disable MFA
 - Change Password
 - Revoke All Sessions
 
@@ -448,7 +443,6 @@ Request
             ├── Machine status (revoked?)
             ├── Namespace status (active?)
             ├── Operation risk level
-            ├── MFA requirements
             ├── Reputation score
             ├── Failed attempt count
             └── Approval requirements
@@ -519,11 +513,10 @@ zid supports multiple authentication methods, each associated with an identity t
 | Email + Password | Argon2id password hashing | Managed | Traditional account creation, account linking |
 | OAuth | Google, X/Twitter, Epic Games | Managed | Social login, account linking |
 | Wallet | EVM (SECP256k1), Solana (Ed25519) | Managed | Blockchain-based authentication |
-| MFA | TOTP with backup codes | Both | Additional security for sensitive operations |
 
 The authentication system is designed to be extensible with OAuth and OIDC, allowing integration with any range of trusted identity providers. New providers can be added as modules to the system without modifying the core authentication logic.
 
-All methods can be combined with MFA for high-security operations. Managed identities created through email, OAuth, or wallet authentication can be upgraded to self-sovereign status through an upgrade ceremony.
+Managed identities created through email, OAuth, or wallet authentication can be upgraded to self-sovereign status through an upgrade ceremony.
 
 ## Architecture
 
@@ -537,7 +530,7 @@ The system is composed of modular crates organized in three layers:
 | `zid-identity-core` | Domain | Identity, Machine Key, and namespace management |
 | `zid-sessions` | Domain | Session and JWT token management |
 | `zid-integrations` | Domain | Event streaming (SSE) and webhooks |
-| `zid-methods` | Application | Authentication methods (Machine Key, Email, OAuth, Wallet, MFA) |
+| `zid-methods` | Application | Authentication methods (Machine Key, Email, OAuth, Wallet) |
 | `zid-server` | Application | HTTP API server (Axum) |
 | `zid-client` | Application | Official CLI client |
 
@@ -669,7 +662,7 @@ cargo test --test identity_creation -- --ignored --nocapture
 | Crate | Unit Tests | Description |
 |-------|------------|-------------|
 | `zid-crypto` | 116 | Cryptographic primitives, key derivation, Shamir sharing, PQ keys |
-| `zid-methods` | 47 | Authentication methods, OAuth/OIDC, MFA, wallet signing |
+| `zid-methods` | 47 | Authentication methods, OAuth/OIDC, wallet signing |
 | `zid-identity-core` | 37 | Identity and machine key management, namespaces, upgrades |
 | `zid-policy` | 34 | Policy engine, rate limiting, authorization rules |
 | `zid-sessions` | 21 | JWT tokens, session lifecycle, introspection |
@@ -746,15 +739,6 @@ cargo llvm-cov --workspace --html
 | `/v1/oauth/callback` | POST | Complete OAuth flow |
 | `/v1/oauth/:provider` | DELETE | Revoke OAuth link |
 
-### Multi-Factor Authentication
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/mfa/setup` | POST | Setup MFA |
-| `/v1/mfa/enable` | POST | Enable MFA (verify code) |
-| `/v1/mfa/disable` | POST | Disable MFA |
-| `/v1/mfa/verify` | POST | Verify MFA code |
-
 ### Sessions
 
 | Endpoint | Method | Description |
@@ -797,7 +781,6 @@ cargo llvm-cov --workspace --html
 | Key Derivation | HKDF-SHA256 | RFC 5869 |
 | Password Hashing | Argon2id (64MB, 3 iterations) | RFC 9106 |
 | Non-password Hashing | BLAKE3 | - |
-| MFA | TOTP (SHA-1, 6 digits, 30s) | RFC 6238 |
 
 ### Post-Quantum Cryptography
 

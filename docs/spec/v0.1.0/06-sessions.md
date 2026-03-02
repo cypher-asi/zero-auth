@@ -56,7 +56,6 @@ pub trait SessionManager: Send + Sync {
         identity_id: Uuid,
         machine_id: Uuid,
         namespace_id: Uuid,
-        mfa_verified: bool,
         capabilities: Vec<String>,
         scope: Vec<String>,
     ) -> Result<SessionTokens>;
@@ -229,7 +228,6 @@ pub struct TokenClaims {
     pub machine_id: String,
     pub namespace_id: String,
     pub session_id: String,
-    pub mfa_verified: bool,
     pub capabilities: Vec<String>,
     pub scope: Vec<String>,
     pub revocation_epoch: u64,    // Machine key epoch
@@ -271,7 +269,6 @@ pub struct TokenIntrospection {
     pub machine_id: Uuid,
     pub namespace_id: Uuid,
     pub session_id: Uuid,
-    pub mfa_verified: bool,
     pub capabilities: Vec<String>,
     pub scopes: Vec<String>,
     pub revocation_epoch: u64,
@@ -617,7 +614,6 @@ Payload:
   "machine_id": "...",
   "namespace_id": "...",
   "session_id": "...",
-  "mfa_verified": true,
   "capabilities": ["AUTHENTICATE", "SIGN"],
   "scope": ["namespace:*:*"],
   "revocation_epoch": 0

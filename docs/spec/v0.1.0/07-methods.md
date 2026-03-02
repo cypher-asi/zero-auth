@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The `zid-methods` crate provides multiple authentication mechanisms for Zero-Auth. It supports five distinct authentication methods: machine key challenge-response, email+password, OAuth/OIDC providers, EVM wallet signatures, and multi-factor authentication (TOTP).
+The `zid-methods` crate provides multiple authentication mechanisms for Zero-Auth. It supports four distinct authentication methods: machine key challenge-response, email+password, OAuth/OIDC providers, and EVM wallet signatures.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -10,18 +10,15 @@ The `zid-methods` crate provides multiple authentication mechanisms for Zero-Aut
 - **Email+Password Authentication**: Traditional credentials with Argon2id hashing
 - **OAuth/OIDC Authentication**: Third-party identity providers (Google, X, Epic Games)
 - **Wallet Authentication**: EVM wallet signatures using SECP256k1 (EIP-191)
-- **Multi-Factor Authentication**: TOTP-based second factor with backup codes
 - **Virtual Machines**: Automatic machine creation for non-device-based auth
 - **Credential Management**: Attach, list, and revoke authentication credentials
 
 ### 1.2 Key Design Decisions
 
 - **Policy Integration**: All authentication methods enforce policy decisions before returning success
-- **MFA Enforcement**: MFA verification integrated into all primary auth flows when enabled
 - **Virtual Machines**: Email/OAuth/wallet auth creates short-lived virtual machines for session binding
 - **Constant-Time Auth**: Email authentication uses constant-time comparison to prevent timing attacks
 - **OIDC Validation**: Google OAuth uses full OIDC ID token validation with JWKS caching
-- **Encrypted MFA Secrets**: TOTP secrets encrypted with per-user KEK derived from service master key
 
 ### 1.3 Position in Dependency Graph
 
@@ -74,12 +71,6 @@ pub trait AuthMethods: Send + Sync {
         email: String,
         password: String,
     ) -> Result<()>;
-
-    // MFA (TOTP)
-    async fn setup_mfa(&self, identity_id: Uuid) -> Result<MfaSetup>;
-    async fn enable_mfa(&self, identity_id: Uuid, verification_code: String) -> Result<()>;
-    async fn disable_mfa(&self, identity_id: Uuid, mfa_code: String) -> Result<()>;
-    async fn verify_mfa(&self, identity_id: Uuid, code: String) -> Result<bool>;
 
     // OAuth/OIDC
     async fn oauth_initiate(
@@ -193,7 +184,6 @@ pub struct ChallengeResponse {
     pub challenge_id: Uuid,
     pub machine_id: Uuid,
     pub signature: Vec<u8>,        // Ed25519 signature (64 bytes)
-    pub mfa_code: Option<String>,
 }
 ```
 
@@ -204,7 +194,6 @@ pub struct AuthResult {
     pub identity_id: Uuid,
     pub machine_id: Uuid,          // Always present (real or virtual)
     pub namespace_id: Uuid,
-    pub mfa_verified: bool,
     pub auth_method: AuthMethod,
     pub warning: Option<String>,   // e.g., "Enroll real device"
 }
@@ -235,26 +224,6 @@ pub struct EmailAuthRequest {
     pub email: String,
     pub password: String,
     pub machine_id: Option<Uuid>,  // Optional for existing devices
-    pub mfa_code: Option<String>,
-}
-```
-
-#### MFA Types
-
-```rust
-pub struct MfaSecret {
-    pub identity_id: Uuid,
-    pub encrypted_secret: Vec<u8>, // XChaCha20-Poly1305
-    pub nonce: [u8; 24],
-    pub backup_codes: Vec<String>, // BLAKE3 hashed
-    pub created_at: u64,
-    pub enabled: bool,
-}
-
-pub struct MfaSetup {
-    pub secret: String,            // Base32 encoded TOTP secret
-    pub qr_code_url: String,       // OTPAuth URL
-    pub backup_codes: Vec<String>, // Plaintext (shown once)
 }
 ```
 
@@ -326,7 +295,6 @@ pub struct WalletSignature {
     pub challenge_id: Uuid,
     pub wallet_address: String,    // 0x-prefixed
     pub signature: Vec<u8>,        // 65 bytes: r(32) + s(32) + v(1)
-    pub mfa_code: Option<String>,
 }
 
 pub struct WalletCredential {
@@ -400,12 +368,6 @@ pub enum AuthMethodsError {
     EmailCredentialNotFound(String),
     CredentialNotFound,
 
-    // MFA errors
-    MfaRequired,
-    InvalidMfaCode,
-    MfaNotEnabled(Uuid),
-    MfaAlreadyEnabled(Uuid),
-
     // Policy errors
     PolicyDenied(String),
     RateLimitExceeded,
@@ -447,7 +409,6 @@ pub enum AuthMethodsError {
     Crypto(CryptoError),
     Policy(PolicyError),
     PasswordHash(String),
-    TotpError(String),
     Other(String),
 }
 
@@ -511,33 +472,7 @@ stateDiagram-v2
     end note
 ```
 
-### 3.3 MFA Secret Lifecycle
-
-```mermaid
-stateDiagram-v2
-    [*] --> Pending: setup_mfa()
-    
-    Pending --> Enabled: enable_mfa()
-    Pending --> Expired: timeout (no enable)
-    
-    Enabled --> Enabled: verify_mfa()
-    Enabled --> Disabled: disable_mfa()
-    
-    Disabled --> [*]
-    Expired --> [*]
-    
-    note right of Pending
-        enabled = false
-        Secret stored but not active
-    end note
-    
-    note right of Enabled
-        enabled = true
-        Required for all auth
-    end note
-```
-
-### 3.4 OAuth Link Lifecycle
+### 3.3 OAuth Link Lifecycle
 
 ```mermaid
 stateDiagram-v2
@@ -611,10 +546,6 @@ sequenceDiagram
         Methods-->>Client: Err(InvalidSignature)
     end
     
-    opt MFA code provided
-        Methods->>Methods: verify_mfa()
-    end
-    
     Methods->>Policy: evaluate(PolicyContext)
     
     alt Policy denied
@@ -657,19 +588,6 @@ sequenceDiagram
     
     alt Identity frozen
         Methods-->>Client: Err(IdentityFrozen)
-    end
-    
-    Methods->>Storage: get(mfa_secrets, identity_id)
-    
-    alt MFA enabled and no code
-        Methods-->>Client: Err(MfaRequired)
-    end
-    
-    opt MFA enabled
-        Methods->>Methods: verify_mfa()
-        alt MFA invalid
-            Methods-->>Client: Err(InvalidMfaCode)
-        end
     end
     
     alt machine_id provided
@@ -788,39 +706,6 @@ sequenceDiagram
     Methods-->>Client: AuthResult
 ```
 
-### 4.5 MFA Setup and Verification
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Methods as AuthMethodsService
-    participant Storage
-    
-    Client->>Methods: setup_mfa(identity_id)
-    Methods->>Methods: generate TOTP secret (20 bytes)
-    Methods->>Methods: generate backup codes (10 × 8 digits)
-    Methods->>Methods: derive MFA KEK from service_master_key
-    Methods->>Methods: encrypt secret with XChaCha20-Poly1305
-    Methods->>Methods: hash backup codes with BLAKE3
-    
-    Methods->>Storage: put(mfa_secrets, MfaSecret{enabled: false})
-    Methods-->>Client: MfaSetup{secret, qr_url, backup_codes}
-    
-    Note over Client: User adds to authenticator app
-    
-    Client->>Methods: enable_mfa(identity_id, code)
-    Methods->>Storage: get(mfa_secrets, identity_id)
-    Methods->>Methods: decrypt secret
-    Methods->>Methods: verify TOTP code (SHA-256, 30s step)
-    
-    alt Code invalid
-        Methods-->>Client: Err(InvalidMfaCode)
-    end
-    
-    Methods->>Storage: put(mfa_secrets, {enabled: true})
-    Methods-->>Client: Ok(())
-```
-
 ---
 
 ## 5. Data Structures
@@ -832,7 +717,6 @@ sequenceDiagram
 | `challenges` | `challenge_id` | `Challenge` | Active authentication challenges |
 | `used_nonces` | `hex(nonce)` | `u64` (expiry) | Replay prevention |
 | `auth_credentials` | `email` (lowercase) | `EmailCredential` | Email+password credentials |
-| `mfa_secrets` | `identity_id` | `MfaSecret` | Encrypted TOTP secrets |
 | `oauth_states` | `state` | `OAuthState` | CSRF protection states |
 | `oauth_links` | `provider:user_id` | `OAuthLink` | OAuth account links |
 | `oauth_links_by_identity` | `identity_id:provider` | `link_id` | Index |
@@ -884,21 +768,6 @@ Signature Format (65 bytes):
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 5.4 MFA Secret Encryption
-
-```
-Encrypted MFA Secret:
-┌─────────────────────────────────────────────────────────────┐
-│ KEK Derivation                                              │
-│   ikm = service_master_key || identity_id                   │
-│   kek = HKDF-SHA256(ikm, "cypher:id:mfa-kek:v1")         │
-├─────────────────────────────────────────────────────────────┤
-│ Encryption                                                  │
-│   nonce = random(24)  // XChaCha20 nonce                   │
-│   ciphertext = XChaCha20-Poly1305(kek, nonce, secret)      │
-└─────────────────────────────────────────────────────────────┘
-```
-
 ---
 
 ## 6. Security Considerations
@@ -911,7 +780,6 @@ Encrypted MFA Secret:
 | Challenge Expiry | 60-second TTL, validated before signature verification |
 | Timing Attacks | Constant-time password verification for email auth |
 | Password Storage | Argon2id (64 MiB, 3 iterations, 1 thread) |
-| MFA Secret Storage | XChaCha20-Poly1305 with per-user KEK |
 
 ### 6.2 OAuth Security
 
@@ -955,7 +823,6 @@ Key Derivation:
 | Email | RFC 5321 compliant, max 254 chars, local 1-64, domain 1-253 with dot |
 | Password | 12-128 chars, uppercase, lowercase, digit, special char required |
 | Wallet Address | 0x-prefixed, 40 hex characters, lowercased |
-| TOTP Code | 6 digits or 8-digit backup code |
 
 ### 6.6 Constant-Time Email Authentication
 
@@ -995,7 +862,6 @@ if !password_valid || credential.is_none() {
 
 | Crate | Version | Purpose |
 |-------|---------|---------|
-| `totp-rs` | 5.6 | TOTP generation and verification |
 | `k256` | 0.13 | SECP256k1 ECDSA for wallet signatures |
 | `sha3` | 0.10 | Keccak-256 for Ethereum addresses |
 | `reqwest` | 0.11 | HTTP client for OAuth token exchange |
@@ -1021,15 +887,6 @@ if !password_valid || credential.is_none() {
 const CHALLENGE_EXPIRY_SECONDS: u64 = 60;
 const DEFAULT_AUDIENCE: &str = "zid.cypher.io";
 
-// TOTP configuration
-const TOTP_DIGITS: usize = 6;
-const TOTP_STEP: u64 = 30;           // 30 seconds
-const TOTP_ALGORITHM: Algorithm = Algorithm::SHA256;
-
-// Backup codes
-const BACKUP_CODE_COUNT: usize = 10;
-const BACKUP_CODE_LENGTH: usize = 8;
-
 // OAuth state
 const OAUTH_STATE_EXPIRY: u64 = 600; // 10 minutes
 
@@ -1046,11 +903,7 @@ const CHALLENGE_CANONICAL_SIZE: usize = 130;
 
 // Nonce sizes
 const CHALLENGE_NONCE_SIZE: usize = 32;
-const MFA_NONCE_SIZE: usize = 24;    // XChaCha20
 
 // Wallet signature size
 const WALLET_SIGNATURE_SIZE: usize = 65;
-
-// TOTP secret size
-const TOTP_SECRET_SIZE: usize = 20;  // 160 bits
 ```

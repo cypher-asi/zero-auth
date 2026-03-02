@@ -119,7 +119,7 @@ fn verify_solana_signature(
     sig.copy_from_slice(signature);
 
     // Use Ed25519 verification from zid-crypto
-    zid_crypto::verify_signature(&pubkey, message, &sig)
+    zid_crypto::verify_ed25519_signature(&pubkey, message, &sig)
         .map_err(|_| AuthMethodsError::WalletSignatureInvalid(
             "Ed25519 signature verification failed".to_string()
         ))

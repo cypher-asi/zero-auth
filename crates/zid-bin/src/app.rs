@@ -357,21 +357,6 @@ impl ZeroIdApp {
                     }
                 });
             }
-            ConfirmAction::DisableMfa => {
-                let code = self.state.mfa_disable_code.clone();
-                let tx = self.state.tx.clone();
-                let client = self.state.http_client.clone();
-                self.rt.spawn(async move {
-                    match crate::service::mfa::disable(&client, &code).await {
-                        Ok(()) => {
-                            let _ = tx.send(AppMessage::MfaDisabled);
-                        }
-                        Err(e) => {
-                            let _ = tx.send(AppMessage::Error(e));
-                        }
-                    }
-                });
-            }
             ConfirmAction::FreezeIdentity => {
                 let reason = self.state.freeze_reason.clone();
                 let tx = self.state.tx.clone();

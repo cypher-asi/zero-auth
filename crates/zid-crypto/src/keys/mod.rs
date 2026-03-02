@@ -3,10 +3,6 @@
 //! PQ-Hybrid key generation and derivation is handled by the `zid` crate.
 //! This module provides zero-auth specific key types and re-exports zid types.
 
-mod classical;
-
-pub use classical::Ed25519KeyPair;
-
 // Re-export zid types
 pub use zid::{
     MachineKeyCapabilities, MachineKeyPair, MachinePublicKey,

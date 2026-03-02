@@ -20,7 +20,6 @@ and component composition for every key journey in the `egui` desktop app.
 │  ├─ Dashboard          (identity summary, session)      │
 │  ├─ Machines            (list, enroll, revoke)          │
 │  ├─ Linked Identities   (email, OAuth, wallet)          │
-│  ├─ MFA                 (setup, enable, disable)        │
 │  ├─ Sessions            (active sessions, revoke)       │
 │  ├─ Namespaces          (list, switch, manage)          │
 │  └─ Security            (freeze, ceremonies, shards)    │
@@ -286,52 +285,7 @@ LinkedIdentitiesPage
 
 ---
 
-## 6  Flow: MFA Setup / Management
-
-### Setup + Enable
-
-```
-[MFA Page → Setup MFA]
-  1. POST /v1/mfa/setup → secret (Base32), QR URL, backup codes
-  2. Display QR code (rendered from URL)
-  3. Display backup codes in grid
-  4. ⚠ "Save these backup codes securely. They will NOT be shown again."
-  5. Checkbox: "I have saved my backup codes"
-  6. Input: enter current TOTP code to verify
-  7. POST /v1/mfa/enable → MFA active
-```
-
-### Disable
-
-```
-[MFA Page → Disable MFA]
-  1. ConfirmDialog:
-     ⚠ "Disable multi-factor authentication?
-        Your account will be less secure without MFA."
-  2. Input: current TOTP code or backup code
-  3. POST /v1/mfa/disable
-  4. Success toast
-```
-
-### Component Composition
-
-```
-MfaPage
-  ├─ MfaStatusBadge (Enabled / Disabled)
-  ├─ SetupMfaPanel (if disabled)
-  │   ├─ QrCodeDisplay
-  │   ├─ BackupCodeGrid (10 codes)
-  │   ├─ AcknowledgeCheckbox
-  │   ├─ TotpInput (6-digit)
-  │   └─ ActionBar (Cancel, Enable)
-  └─ DisableMfaPanel (if enabled)
-      ├─ TotpInput
-      └─ ActionBar (Cancel, Disable)
-```
-
----
-
-## 7  Flow: Recovery Ceremony
+## 6  Flow: Recovery Ceremony
 
 ### Steps
 
@@ -388,7 +342,7 @@ RecoverIdentityPage
 
 ---
 
-## 8  Flow: Freeze / Unfreeze (Advanced)
+## 7  Flow: Freeze / Unfreeze (Advanced)
 
 ### Freeze
 
@@ -416,7 +370,7 @@ RecoverIdentityPage
 
 ---
 
-## 9  Guardrails for Destructive / High-Risk Operations
+## 8  Guardrails for Destructive / High-Risk Operations
 
 | Operation | Risk Level | Required Confirmation |
 |-----------|-----------|----------------------|
@@ -426,7 +380,6 @@ RecoverIdentityPage
 | Remove credential | Medium | ConfirmDialog |
 | Remove primary credential | Blocked | Error — must change primary first |
 | Remove last credential | High | ConfirmDialog with warning |
-| Disable MFA | Medium | ConfirmDialog + TOTP verification |
 | Freeze identity | High | ConfirmDialog with reason selection |
 | Unfreeze identity | High | Multi-machine approval ceremony |
 | Neural Key rotation | Critical | Multi-machine approval ceremony |
@@ -435,7 +388,7 @@ RecoverIdentityPage
 
 ---
 
-## 10  Component Inventory
+## 9  Component Inventory
 
 ### Core Primitives (reusable across all pages)
 
@@ -452,7 +405,6 @@ RecoverIdentityPage
 | `ProgressStepper` | Horizontal step indicator (numbered, active/complete states) |
 | `Spinner` | Loading indicator for async operations |
 | `StrengthBar` | Password/passphrase strength meter |
-| `QrCodeDisplay` | Renders QR code from URL string |
 | `AcknowledgeCheckbox` | Checkbox that gates a Continue button |
 
 ### Domain Components (feature-specific)
@@ -468,9 +420,6 @@ RecoverIdentityPage
 | `ShardEntryForm` | Recovery | Multi-field shard input with validation |
 | `ShardDisplay` | Backup | Shard cards + acknowledge checkbox |
 | `PassphraseInput` | Auth/Backup | Masked input with strength bar and confirm |
-| `TotpInput` | MFA | 6-digit code input with auto-submit |
-| `BackupCodeGrid` | MFA | Grid display of 10 backup codes |
-| `MfaStatusBadge` | MFA | Enabled/Disabled indicator |
 | `NamespaceSelector` | Namespaces | Dropdown for active namespace switching |
 | `FrozenBanner` | Security | Red warning bar shown when identity is frozen |
 | `PageHeader` | Layout | Page title with primary action button |

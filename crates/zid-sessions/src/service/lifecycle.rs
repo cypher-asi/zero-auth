@@ -14,7 +14,6 @@ impl<S: Storage, I: IdentityCore, E: EventPublisher> SessionService<S, I, E> {
         identity_id: Uuid,
         machine_id: Uuid,
         namespace_id: Uuid,
-        mfa_verified: bool,
         capabilities: Vec<String>,
         scope: Vec<String>,
     ) -> Result<SessionTokens> {
@@ -70,7 +69,7 @@ impl<S: Storage, I: IdentityCore, E: EventPublisher> SessionService<S, I, E> {
 
         // Generate tokens
         let access_token = self
-            .issue_access_token(&session, mfa_verified, capabilities, scope)
+            .issue_access_token(&session, capabilities, scope)
             .await?;
 
         let refresh_token = self
@@ -222,7 +221,7 @@ impl<S: Storage, I: IdentityCore, E: EventPublisher> SessionService<S, I, E> {
         ];
 
         let new_access_token = self
-            .issue_access_token(session, false, capabilities, scope)
+            .issue_access_token(session, capabilities, scope)
             .await?;
 
         let new_refresh_token = self

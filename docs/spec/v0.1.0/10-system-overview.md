@@ -136,7 +136,7 @@ graph TD
 | `zid-identity-core` | Identity, machine, and namespace lifecycle management |
 | `zid-integrations` | mTLS service auth, SSE streaming, webhook delivery |
 | `zid-sessions` | JWT issuance, token refresh, introspection, key rotation |
-| `zid-methods` | Machine, email, OAuth, wallet, and MFA authentication |
+| `zid-methods` | Machine, email, OAuth, and wallet authentication |
 | `zid-server` | HTTP API, middleware, request handling |
 | `zid-client` | CLI interface, local credential storage |
 
@@ -164,10 +164,6 @@ NeuralKey (32 bytes, client-generated, never leaves device)
 │    └── Encryption Key (X25519)
 │        ├── Derivation: HKDF(seed, "cypher:shared:machine:encrypt:v1" || machine_id)
 │        └── Purpose: ECDH key agreement, data encryption
-│
-└─── MFA KEK
-     ├── Derivation: HKDF("cypher:id:mfa-kek:v1" || identity_id)
-     └── Purpose: Encrypts MFA TOTP secrets at rest
 ```
 
 ### 3.2 Domain Separation Strings
@@ -180,7 +176,6 @@ All domain strings follow the format: `cypher:{service}:{purpose}:v{version}`
 | `cypher:shared:machine:v1` | Machine seed derivation |
 | `cypher:shared:machine:sign:v1` | Machine signing key |
 | `cypher:shared:machine:encrypt:v1` | Machine encryption key |
-| `cypher:id:mfa-kek:v1` | MFA secret encryption |
 | `cypher:shared:session:encryption:v1` | Session key encryption |
 
 ---
@@ -330,13 +325,13 @@ sequenceDiagram
 
 ### 5.1 Column Families
 
-Zero-Auth uses RocksDB with 29 column families for data isolation:
+Zero-Auth uses RocksDB with 28 column families for data isolation:
 
 | Category | Column Families | Purpose |
 |----------|-----------------|---------|
 | **Core** | `identities`, `machine_keys`, `namespaces` | Primary entities |
 | **Indexes** | `machine_keys_by_identity`, `machine_keys_by_namespace`, `namespaces_by_identity` | Efficient lookups |
-| **Auth** | `auth_credentials`, `mfa_secrets`, `challenges`, `used_nonces` | Authentication state |
+| **Auth** | `auth_credentials`, `challenges`, `used_nonces` | Authentication state |
 | **OAuth** | `oauth_states`, `oauth_links`, `oauth_links_by_identity`, `oidc_nonces`, `jwks_cache` | OAuth/OIDC |
 | **Sessions** | `sessions`, `sessions_by_identity`, `sessions_by_token_hash`, `refresh_tokens`, `refresh_tokens_by_family`, `signing_keys` | Session management |
 | **Integrations** | `integration_services`, `integration_services_by_cert`, `revocation_events`, `webhook_delivery_log` | External integrations |
@@ -428,18 +423,12 @@ graph TB
 
 ### 7.1 Supported Methods
 
-| Method | Primary Factor | Second Factor | Use Case |
-|--------|----------------|---------------|----------|
-| **Machine Key** | Ed25519 signature | Optional TOTP | Device authentication |
-| **Email/Password** | Argon2id hash | Optional TOTP | Cross-device login |
-| **OAuth** | Provider token | Optional TOTP | Social login (Google, X, Epic) |
-| **Wallet** | SECP256k1 signature | Optional TOTP | Web3 authentication |
-
-### 7.2 MFA Support
-
-- **TOTP**: RFC 6238 compliant, 6-digit codes, 30-second step
-- **Recovery Codes**: 8 single-use codes, generated at setup
-- **Enforcement**: Per-namespace policy configuration
+| Method | Primary Factor | Use Case |
+|--------|----------------|----------|
+| **Machine Key** | Ed25519 signature | Device authentication |
+| **Email/Password** | Argon2id hash | Cross-device login |
+| **OAuth** | Provider token | Social login (Google, X, Epic) |
+| **Wallet** | SECP256k1 signature | Web3 authentication |
 
 ---
 

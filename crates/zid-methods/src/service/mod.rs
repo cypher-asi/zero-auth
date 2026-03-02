@@ -17,7 +17,6 @@ mod cleanup;
 mod email;
 mod identity_creation;
 mod machine;
-mod mfa;
 mod oauth;
 mod wallet;
 
@@ -34,8 +33,6 @@ const CF_CHALLENGES: &str = "challenges";
 const CF_USED_NONCES: &str = "used_nonces";
 /// Column family name for email/password credentials
 const CF_AUTH_CREDENTIALS: &str = "auth_credentials";
-/// Column family name for MFA secrets (encrypted)
-const CF_MFA_SECRETS: &str = "mfa_secrets";
 /// Column family name for OAuth state tracking (CSRF protection)
 const CF_OAUTH_STATES: &str = "oauth_states";
 /// Column family name for OAuth provider links
@@ -46,6 +43,8 @@ const CF_OAUTH_LINKS_BY_IDENTITY: &str = "oauth_links_by_identity";
 const CF_WALLET_CREDENTIALS: &str = "wallet_credentials";
 /// Column family name for wallet credential index by identity
 const CF_WALLET_CREDENTIALS_BY_IDENTITY: &str = "wallet_credentials_by_identity";
+/// Column family name for ephemeral OPAQUE login state (60-second TTL)
+pub(crate) const CF_OPAQUE_LOGIN_STATE: &str = "opaque_login_state";
 /// OAuth provider configuration
 #[derive(Debug, Clone)]
 pub struct OAuthProviderConfig {
@@ -82,6 +81,8 @@ where
         Arc<tokio::sync::RwLock<std::collections::HashMap<OAuthProvider, JwksCacheEntry>>>,
     pub(self) oauth_configs: OAuthConfigs,
     pub(self) service_master_key: Zeroizing<[u8; 32]>,
+    /// Node-local OPAQUE `ServerSetup` shared across all email auth operations.
+    pub(self) opaque_server_setup: Arc<opaque_ke::ServerSetup<zid_crypto::ZeroAuthOpaque>>,
 }
 
 impl<I, P, S> Drop for AuthMethodsService<I, P, S>
@@ -107,6 +108,7 @@ where
         policy: Arc<P>,
         storage: Arc<S>,
         service_master_key: [u8; 32],
+        opaque_server_setup: Arc<opaque_ke::ServerSetup<zid_crypto::ZeroAuthOpaque>>,
     ) -> Self {
         Self::with_oauth_configs(
             identity_core,
@@ -114,6 +116,7 @@ where
             storage,
             service_master_key,
             OAuthConfigs::default(),
+            opaque_server_setup,
         )
     }
 
@@ -124,6 +127,7 @@ where
         storage: Arc<S>,
         service_master_key: [u8; 32],
         oauth_configs: OAuthConfigs,
+        opaque_server_setup: Arc<opaque_ke::ServerSetup<zid_crypto::ZeroAuthOpaque>>,
     ) -> Self {
         Self {
             identity_core,
@@ -132,6 +136,7 @@ where
             jwks_cache: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
             oauth_configs,
             service_master_key: Zeroizing::new(service_master_key),
+            opaque_server_setup,
         }
     }
 
@@ -144,27 +149,6 @@ where
             .map_err(AuthMethodsError::Policy)?;
 
         Ok(())
-    }
-
-    /// Derive per-user KEK for MFA secret encryption
-    ///
-    /// SECURITY: Combines service master key with identity_id to derive a unique KEK.
-    /// This ensures that MFA secrets cannot be decrypted without the service master key.
-    pub(self) fn derive_mfa_kek(&self, identity_id: Uuid) -> [u8; 32] {
-        // Combine service master key and identity_id as IKM
-        let mut ikm = Vec::with_capacity(48);
-        ikm.extend_from_slice(&*self.service_master_key);
-        ikm.extend_from_slice(identity_id.as_bytes());
-
-        let info = b"cypher:auth:mfa-kek:v1";
-
-        // SAFETY: HKDF with valid inputs should not fail.
-        // If it does, this indicates a serious cryptographic issue.
-        hkdf_derive_32(&ikm, info).unwrap_or_else(|e| {
-            // Log the error in debug builds but return a zeroed key rather than panic
-            debug_assert!(false, "HKDF derivation failed unexpectedly: {:?}", e);
-            [0u8; 32]
-        })
     }
 
     /// Create a virtual machine for email-only authentication
@@ -283,40 +267,39 @@ where
             .await
     }
 
-    async fn authenticate_email(
+    async fn email_login_init(
         &self,
-        request: EmailAuthRequest,
+        request: EmailLoginInitRequest,
+    ) -> Result<EmailLoginInitResponse> {
+        self.email_login_init(request).await
+    }
+
+    async fn email_login_finish(
+        &self,
+        request: EmailLoginFinishRequest,
         ip_address: String,
         user_agent: String,
     ) -> Result<AuthResult> {
-        self.authenticate_email(request, ip_address, user_agent)
+        self.email_login_finish(request, ip_address, user_agent)
             .await
     }
 
-    async fn attach_email_credential(
+    async fn email_credential_register_init(
         &self,
         identity_id: Uuid,
-        email: String,
-        password: String,
-    ) -> Result<()> {
-        self.attach_email_credential(identity_id, email, password)
+        request: EmailRegisterInitRequest,
+    ) -> Result<EmailRegisterInitResponse> {
+        self.email_credential_register_init(identity_id, request)
             .await
     }
 
-    async fn setup_mfa(&self, identity_id: Uuid) -> Result<MfaSetup> {
-        self.setup_mfa(identity_id).await
-    }
-
-    async fn enable_mfa(&self, identity_id: Uuid, verification_code: String) -> Result<()> {
-        self.enable_mfa(identity_id, verification_code).await
-    }
-
-    async fn disable_mfa(&self, identity_id: Uuid, mfa_code: String) -> Result<()> {
-        self.disable_mfa(identity_id, mfa_code).await
-    }
-
-    async fn verify_mfa(&self, identity_id: Uuid, code: String) -> Result<bool> {
-        self.verify_mfa(identity_id, code).await
+    async fn email_credential_register_finish(
+        &self,
+        identity_id: Uuid,
+        request: EmailRegisterFinishRequest,
+    ) -> Result<()> {
+        self.email_credential_register_finish(identity_id, request)
+            .await
     }
 
     async fn oauth_initiate(
@@ -366,11 +349,10 @@ where
     async fn authenticate_wallet_by_address(
         &self,
         wallet_address: String,
-        mfa_code: Option<String>,
         ip_address: String,
         user_agent: String,
     ) -> Result<AuthResult> {
-        self.authenticate_wallet_by_address(wallet_address, mfa_code, ip_address, user_agent)
+        self.authenticate_wallet_by_address(wallet_address, ip_address, user_agent)
             .await
     }
 

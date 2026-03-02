@@ -3,7 +3,7 @@
 use crate::{errors::*, traits::EventPublisher, types::*};
 use tracing::info;
 use uuid::Uuid;
-use zid_crypto::{canonicalize_identity_creation_message, ed25519_to_did_key, verify_signature};
+use zid_crypto::{canonicalize_identity_creation_message, ed25519_to_did_key, HybridSignature, IdentityVerifyingKey};
 use zid_policy::PolicyEngine;
 use zid_storage::{
     traits::BatchExt, Storage, CF_IDENTITIES, CF_IDENTITIES_BY_DID,
@@ -104,7 +104,6 @@ where
             machine_id: Some(request.machine_key.machine_id),
             namespace_id: request.identity_id,
             auth_method: zid_policy::AuthMethod::MachineKey,
-            mfa_verified: false,
             operation: zid_policy::Operation::CreateIdentity,
             resource: Some(zid_policy::Resource::Identity(request.identity_id)),
             ip_address: "0.0.0.0".to_string(),
@@ -145,7 +144,6 @@ where
         namespace_id: Uuid,
         operation: zid_policy::Operation,
         auth_method: zid_policy::AuthMethod,
-        mfa_verified: bool,
         ip_address: String,
         user_agent: String,
     ) -> Result<zid_policy::PolicyContext> {
@@ -180,7 +178,6 @@ where
             machine_id,
             namespace_id,
             auth_method,
-            mfa_verified,
             operation,
             resource: Some(zid_policy::Resource::Identity(identity_id)),
             ip_address,
@@ -205,15 +202,12 @@ where
             request.created_at,
         );
 
-        verify_signature(
-            &request.identity_signing_public_key,
-            &message,
-            &request
-                .authorization_signature
-                .as_slice()
-                .try_into()
-                .map_err(|_| IdentityCoreError::InvalidAuthorizationSignature)?,
-        )?;
+        let vk = IdentityVerifyingKey::from_bytes(&request.identity_signing_public_key)
+            .map_err(|_| IdentityCoreError::InvalidAuthorizationSignature)?;
+        let sig = HybridSignature::from_bytes(&request.authorization_signature)
+            .map_err(|_| IdentityCoreError::InvalidAuthorizationSignature)?;
+        vk.verify(&message, &sig)
+            .map_err(|_| IdentityCoreError::InvalidAuthorizationSignature)?;
 
         Ok(())
     }
@@ -221,13 +215,15 @@ where
     fn build_identity_entities(
         request: &CreateIdentityRequest,
     ) -> (Identity, Namespace, IdentityNamespaceMembership) {
-        // Compute DID from identity signing public key
-        let did = ed25519_to_did_key(&request.identity_signing_public_key);
+        let ed25519_bytes = IdentityVerifyingKey::from_bytes(&request.identity_signing_public_key)
+            .unwrap()
+            .ed25519_bytes();
+        let did = ed25519_to_did_key(&ed25519_bytes);
 
         let identity = Identity {
             identity_id: request.identity_id,
             did,
-            identity_signing_public_key: request.identity_signing_public_key,
+            identity_signing_public_key: request.identity_signing_public_key.clone(),
             status: IdentityStatus::Active,
             tier: IdentityTier::SelfSovereign, // Traditional creation is self-sovereign
             neural_key_commitment: None, // TODO: Accept commitment from request

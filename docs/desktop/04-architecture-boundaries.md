@@ -20,7 +20,7 @@ service modules for the `Rust + egui` desktop application.
 ├──────────────────────────────────────────────────────────┤
 │                    Service Layer                          │
 │  Domain logic modules: identity, machine, credentials,    │
-│  MFA, sessions, ceremonies, key/shard                     │
+│  sessions, ceremonies, key/shard                          │
 │  Pure functions + async operations; no UI dependencies    │
 ├──────────────────────────────────────────────────────────┤
 │                     Infra Layer                           │
@@ -53,7 +53,6 @@ Each service module owns a single domain and exposes an async trait.
 | `machine` | Enroll/list/revoke machines, capability and key-scheme display | `MachineKey`, `EnrollRequest`, `MachineListResponse` |
 | `credentials` | Link/list/revoke/set-primary for email, OAuth, wallet credentials | `AuthLinkRecord`, `LinkEmailRequest`, `OAuthFlow` |
 | `session` | Login (all methods), token refresh, introspection, revocation | `SessionTokens`, `LoginRequest`, `TokenClaims` |
-| `mfa` | Setup/enable/disable/verify TOTP, backup code management | `MfaSetup`, `TotpVerifyRequest` |
 | `ceremonies` | Multi-approval unfreeze, key rotation, recovery ceremony orchestration | `Approval`, `RotationRequest`, `RecoveryRequest` |
 
 ### 2.2  Infra Modules
@@ -73,13 +72,12 @@ ui/
 │   ├── core/           # Button, Input, Modal, Toast, Badge, DataTable,
 │   │                   # ConfirmDialog, ProgressStepper, Spinner, etc.
 │   └── domain/         # IdentityBadge, MachineCard, ShardCard,
-│                       # CredentialLinkCard, SessionCard, TotpInput, etc.
+│                       # CredentialLinkCard, SessionCard, etc.
 ├── pages/
 │   ├── onboarding/     # CreateIdentityPage, RecoverIdentityPage, LoginPage
 │   ├── dashboard/      # DashboardPage
 │   ├── machines/       # MachinesPage
 │   ├── credentials/    # LinkedIdentitiesPage
-│   ├── mfa/            # MfaPage
 │   ├── sessions/       # SessionsPage
 │   ├── namespaces/     # NamespacesPage
 │   └── security/       # SecurityPage (freeze, ceremonies)
@@ -106,9 +104,6 @@ struct AppState {
     // Credentials
     credentials: Vec<CredentialViewModel>,
     credentials_status: LoadStatus,
-
-    // MFA
-    mfa_status: MfaState,     // Disabled | SetupInProgress(MfaSetup) | Enabled
 
     // Sessions
     current_session: Option<SessionViewModel>,
@@ -257,15 +252,6 @@ User action
 | `DELETE /v1/credentials/{type}/{id}` | DELETE | `credentials::revoke()` | `()` |
 | `PUT /v1/credentials/{type}/{id}/primary` | PUT | `credentials::set_primary()` | `CredentialViewModel` |
 
-### MFA Service
-
-| Endpoint | Method | Service Function | View Model Output |
-|----------|--------|-----------------|-------------------|
-| `POST /v1/mfa/setup` | POST | `mfa::setup()` | `MfaSetup` |
-| `POST /v1/mfa/enable` | POST | `mfa::enable()` | `()` |
-| `POST /v1/mfa/disable` | POST | `mfa::disable()` | `()` |
-| `POST /v1/mfa/verify` | POST | `mfa::verify()` | `AuthResult` |
-
 ### Ceremonies Service
 
 | Endpoint | Method | Service Function | View Model Output |
@@ -303,8 +289,7 @@ zid-desktop
 ├── tracing                 (structured logging)
 ├── directories             (platform-specific paths)
 ├── arboard                 (clipboard)
-├── open                    (system browser launch)
-└── image + qrcode          (QR code rendering for MFA)
+└── open                    (system browser launch)
 ```
 
 ---
@@ -324,7 +309,6 @@ enum AppError {
     InvalidCredentials,
     SessionExpired,
     TokenFamilyRevoked,
-    MfaRequired,
     IdentityFrozen,
 
     // Validation
@@ -358,7 +342,6 @@ The UI layer only sees `AppError` — never raw HTTP status codes or JSON error 
 | Dashboard | `dashboard` | `identity`, `session` | `identity`, `current_session` |
 | Machines | `machines` | `machine` | `machines`, `machines_status` |
 | Linked Identities | `credentials` | `credentials` | `credentials`, `credentials_status` |
-| MFA | `mfa` | `mfa` | `mfa_status` |
 | Sessions | `sessions` | `session` | `active_sessions` |
 | Namespaces | `namespaces` | (namespace service, implied) | `namespaces`, `active_namespace` |
 | Security | `security` | `identity`, `ceremonies` | `frozen_state`, `identity` |

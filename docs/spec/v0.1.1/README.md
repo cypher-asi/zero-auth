@@ -10,12 +10,12 @@ The specifications are organized by dependency order, starting with the most fun
 |---|----------|-------|-------------|
 | 00 | [00-system-overview.md](./00-system-overview.md) | — | Architecture, dependency graph, security model |
 | 01 | [01-crypto.md](./01-crypto.md) | `zid-crypto` | Cryptographic primitives: key derivation, encryption, signatures, Shamir, DID |
-| 02 | [02-storage.md](./02-storage.md) | `zid-storage` | Storage abstraction: traits, 33 column families, batch operations |
+| 02 | [02-storage.md](./02-storage.md) | `zid-storage` | Storage abstraction: traits, 32 column families, batch operations |
 | 03 | [03-policy.md](./03-policy.md) | `zid-policy` | Policy engine: rate limiting, reputation, authorization decisions |
 | 04 | [04-identity-core.md](./04-identity-core.md) | `zid-identity-core` | Identity management: identities, machines, namespaces, ceremonies |
 | 05 | [05-sessions.md](./05-sessions.md) | `zid-sessions` | Session management: JWT issuance, refresh tokens, introspection |
 | 06 | [06-integrations.md](./06-integrations.md) | `zid-integrations` | External integrations: mTLS auth, SSE streaming, webhooks |
-| 07 | [07-methods.md](./07-methods.md) | `zid-methods` | Authentication methods: machine, email, OAuth, wallet, MFA |
+| 07 | [07-methods.md](./07-methods.md) | `zid-methods` | Authentication methods: machine, email, OAuth, wallet |
 | 08 | [08-server.md](./08-server.md) | `zid-server` | HTTP API server: endpoints, middleware, request handling |
 | 09 | [09-client.md](./09-client.md) | `zid-client` | CLI client: commands, local storage, user workflows |
 | 10 | [10-crypto-primitives.md](./10-crypto-primitives.md) | — | Cryptographic primitives: algorithms, binary formats, constants |
@@ -90,7 +90,7 @@ New storage schema for unified credential tracking across all auth methods:
 
 ### 33 Column Families
 
-Updated from 29 to 33 column families with new auth link tables.
+Updated from 29 to 32 column families with new auth link tables.
 
 ## Canonical Specification Structure
 

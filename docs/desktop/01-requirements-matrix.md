@@ -52,23 +52,14 @@ v0.1.1 specification and the server API surface.
 | ID | User Story | API Dependency | Security Constraints | Acceptance Criteria | Priority |
 |----|-----------|----------------|---------------------|---------------------|----------|
 | AU-01 | As a user I can log in with my machine key via challenge-response | `GET /v1/auth/challenge`, `POST /v1/auth/login/machine` | Challenge nonce 32 bytes, 60 s expiry, one-time use; signature verified against enrolled MPK | Session created; access + refresh tokens returned | `required_for_parity` |
-| AU-02 | As a user I can log in with email/password | `POST /v1/auth/login/email` | Argon2id password verification; MFA check if enabled | Session created; MFA prompt if configured | `optional_for_v1` |
+| AU-02 | As a user I can log in with email/password | `POST /v1/auth/login/email` | Argon2id password verification | Session created | `optional_for_v1` |
 | AU-03 | As a user I can log in with OAuth | `GET /v1/oauth/{provider}/initiate`, `POST /v1/oauth/callback` | PKCE, state validation | Session created after OAuth callback | `optional_for_v1` |
 | AU-04 | As a user I can log in with a wallet signature | `POST /v1/auth/login/wallet` | Challenge-response; ecrecover | Session created | `optional_for_v1` |
 | AU-05 | As a user I can refresh my access token transparently | `POST /v1/auth/refresh` | Generation tracking; reuse of old generation revokes entire token family | New access + refresh tokens issued; old refresh invalidated | `required_for_parity` |
 | AU-06 | As a user I can introspect my token to see session details | `POST /v1/auth/introspect` | Signature + expiry + audience + session revocation checks | Introspection result with active flag, claims, capabilities | `required_for_parity` |
 | AU-07 | As a user I can revoke my current session | `POST /v1/auth/revoke` (implied) | Session marked revoked; refresh tokens invalidated | Subsequent refresh/access attempts fail | `required_for_parity` |
 
-## 6  MFA (Multi-Factor Authentication)
-
-| ID | User Story | API Dependency | Security Constraints | Acceptance Criteria | Priority |
-|----|-----------|----------------|---------------------|---------------------|----------|
-| MF-01 | As a user I can set up TOTP MFA and receive a QR code | `POST /v1/mfa/setup` | TOTP HMAC-SHA1, 6 digits, 30 s period; 10 backup codes generated; secret shown as Base32 | QR code displayed; backup codes shown once and must be saved | `optional_for_v1` |
-| MF-02 | As a user I can enable MFA by verifying an initial TOTP code | `POST /v1/mfa/enable` | Code must validate (±1 period) | MFA enabled; subsequent logins require TOTP | `optional_for_v1` |
-| MF-03 | As a user I can disable MFA | `POST /v1/mfa/disable` | Requires current valid TOTP or backup code | MFA disabled; logins no longer prompt for TOTP | `optional_for_v1` |
-| MF-04 | As a user I can verify MFA during login | `POST /v1/mfa/verify` | ±1 period tolerance (90 s window); backup codes Argon2id hashed, single-use | Auth completes after valid code; backup code consumed on use | `optional_for_v1` |
-
-## 7  Recovery & Ceremonies
+## 6  Recovery & Ceremonies
 
 | ID | User Story | API Dependency | Security Constraints | Acceptance Criteria | Priority |
 |----|-----------|----------------|---------------------|---------------------|----------|
@@ -77,7 +68,7 @@ v0.1.1 specification and the server API surface.
 | RC-03 | As a user I can participate in a multi-approval unfreeze ceremony | `POST /v1/identity/unfreeze` | ≥2 machine approvals; signatures verified; timestamps within 900 s | Unfreeze succeeds with quorum; fails without | `advanced` |
 | RC-04 | As a user I can participate in a key rotation ceremony | `POST /v1/identity/rotate` | ≥2 machine approvals; old commitment replaced; new machines enrolled | Rotation completes; old keys zeroized; new shards issued | `advanced` |
 
-## 8  Namespaces & Membership
+## 7  Namespaces & Membership
 
 | ID | User Story | API Dependency | Security Constraints | Acceptance Criteria | Priority |
 |----|-----------|----------------|---------------------|---------------------|----------|
@@ -88,7 +79,7 @@ v0.1.1 specification and the server API surface.
 
 ---
 
-## 9  Non-Functional Requirements
+## 8  Non-Functional Requirements
 
 | ID | Category | Requirement | Acceptance Criteria | Priority |
 |----|----------|------------|---------------------|----------|

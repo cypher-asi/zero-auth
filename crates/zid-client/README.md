@@ -237,8 +237,6 @@ async fn auth_middleware<B>(
 4. **HTTPS** - Always use HTTPS in production
 5. **Token Expiry** - Implement automatic token refresh
 6. **Revocation** - Check token validity before sensitive operations
-7. **MFA** - Enable multi-factor authentication for high-security operations
-
 ## Troubleshooting
 
 | Error | Solution |
@@ -262,7 +260,6 @@ async fn auth_middleware<B>(
 - [ ] Configure CORS properly
 - [ ] Set up database backup and recovery
 - [ ] Test revocation scenarios
-- [ ] Implement MFA for sensitive operations
 
 ## Project Structure
 

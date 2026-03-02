@@ -10,8 +10,8 @@ into three delivery milestones: **MVP**, **V1 Parity**, and **Advanced**.
 | Milestone | Goal | Exit Criteria |
 |-----------|------|---------------|
 | **MVP** | Usable self-sovereign identity app — create, login, machine management, shard backup/recovery, session refresh | User can create an identity, log in on a machine, list/revoke machines, back up shards, recover, and maintain a session |
-| **V1 Parity** | Feature parity with current platform capabilities — linked identities, MFA, namespaces, all auth methods | All auth methods work, MFA lifecycle complete, credential linking/revocation, namespace visibility |
-| **Advanced** | Security ceremonies and operational features — freeze/unfreeze, key rotation, PQ visibility, audit views | Multi-approval ceremonies succeed, PQ key details visible, local audit log available |
+| **V1 Parity** | Feature parity with current platform capabilities — linked identities, namespaces, all auth methods | All auth methods work, credential linking/revocation, namespace visibility |
+| **Advanced** | Security ceremonies and operational features — freeze/unfreeze, key rotation, PQ visibility | Multi-approval ceremonies succeed, PQ key details visible, local audit log available |
 
 ---
 
@@ -99,14 +99,6 @@ into three delivery milestones: **MVP**, **V1 Parity**, and **Advanced**.
 | AU-03 | OAuth login |
 | AU-04 | Wallet signature login |
 
-### MFA
-| Req | Description |
-|-----|-------------|
-| MF-01 | TOTP setup with QR code |
-| MF-02 | Enable MFA with initial verification |
-| MF-03 | Disable MFA |
-| MF-04 | MFA verification during login |
-
 ### Namespaces
 | Req | Description |
 |-----|-------------|
@@ -121,7 +113,7 @@ into three delivery milestones: **MVP**, **V1 Parity**, and **Advanced**.
 | NF-03 | Local audit logging |
 | NF-04 | Graceful offline degradation |
 
-**Total V1 requirements: 21**
+**Total V1 requirements: 17**
 
 ---
 
@@ -144,9 +136,9 @@ into three delivery milestones: **MVP**, **V1 Parity**, and **Advanced**.
 | Milestone | Functional | Non-Functional | Total |
 |-----------|-----------|---------------|-------|
 | MVP | 14 | 8 | 22 |
-| V1 Parity | 19 | 2 | 21 |
+| V1 Parity | 15 | 2 | 17 |
 | Advanced | 4 | 0 | 4 |
-| **Grand Total** | **37** | **10** | **47** |
+| **Grand Total** | **33** | **10** | **43** |
 
 ---
 
@@ -175,8 +167,7 @@ V1 Phase 1 — Credentials
   LI-01..LI-06                  (Email, OAuth, wallet linking)
   AU-02, AU-03, AU-04          (Alternative login methods)
 
-V1 Phase 2 — MFA & Admin
-  MF-01..MF-04                  (Full MFA lifecycle)
+V1 Phase 2 — Admin
   ID-03, ID-04                  (Disable/freeze)
   MC-04                         (PQ key visibility)
 

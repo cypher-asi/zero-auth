@@ -90,7 +90,6 @@ pub struct PolicyContext {
     pub machine_id: Option<Uuid>,
     pub namespace_id: Uuid,
     pub auth_method: AuthMethod,
-    pub mfa_verified: bool,
 
     // Operation
     pub operation: Operation,
@@ -166,11 +165,6 @@ pub enum Operation {
     AttachEmail = 0x0502,
     AttachWallet = 0x0503,
 
-    // MFA (0x06xx)
-    EnableMfa = 0x0600,
-    DisableMfa = 0x0601,
-    VerifyMfa = 0x0602,
-
     // Sessions (0x07xx)
     RevokeSession = 0x0700,
     RevokeAllSessions = 0x0701,
@@ -179,9 +173,6 @@ pub enum Operation {
 impl Operation {
     /// Check if operation is high-risk
     pub fn is_high_risk(&self) -> bool;
-    
-    /// Check if operation requires MFA
-    pub fn requires_mfa(&self) -> bool;
     
     /// Get required approval count
     pub fn required_approvals(&self) -> u8;
@@ -209,8 +200,6 @@ pub enum AuthMethod {
 #[repr(u8)]
 pub enum AuthFactor {
     Password = 0x01,
-    MfaTotp = 0x02,
-    MfaBackupCode = 0x03,
     MachineKey = 0x04,
     WalletSignature = 0x05,
     EmailVerification = 0x06,
@@ -303,9 +292,6 @@ pub enum PolicyError {
     #[error("Rate limited")]
     RateLimited(RateLimit),
     
-    #[error("MFA required")]
-    MfaRequired(Vec<AuthFactor>),
-    
     #[error("Approval required: {0} approvals needed")]
     ApprovalRequired(u8),
     
@@ -335,10 +321,7 @@ stateDiagram-v2
     CheckEntityStates --> CheckCapabilities
     
     CheckCapabilities --> Denied: Missing required capabilities
-    CheckCapabilities --> CheckMfa
-    
-    CheckMfa --> RequireMfa: MFA required, not verified
-    CheckMfa --> CheckApprovals
+    CheckCapabilities --> CheckApprovals
     
     CheckApprovals --> RequireApproval: Multi-sig required
     CheckApprovals --> CheckReputation
@@ -348,7 +331,6 @@ stateDiagram-v2
     
     Allow --> [*]
     Denied --> [*]
-    RequireMfa --> [*]
     RequireApproval --> [*]
 ```
 
@@ -427,17 +409,12 @@ sequenceDiagram
         Evaluator-->>Engine: Deny(InsufficientCapabilities)
     end
     
-    Note over Evaluator: Step 3: Check MFA
-    alt MFA required and not verified
-        Evaluator-->>Engine: RequireAdditionalAuth([MfaTotp])
-    end
-    
-    Note over Evaluator: Step 4: Check approvals
+    Note over Evaluator: Step 3: Check approvals
     alt Multi-sig required
         Evaluator-->>Engine: RequireApproval(n)
     end
     
-    Note over Evaluator: Step 5: Allow
+    Note over Evaluator: Step 4: Allow
     Evaluator-->>Engine: Allow
     Engine-->>Caller: PolicyDecision
 ```
@@ -547,21 +524,18 @@ fn calculate_reputation(successful: u32, failed: u32) -> i32 {
 | RotateNeuralKey | `AUTHENTICATE \| SIGN \| APPROVE` |
 | RecoverNeuralKey | `AUTHENTICATE \| SIGN \| APPROVE` |
 | ChangePassword | `AUTHENTICATE \| SIGN` |
-| EnableMfa | `AUTHENTICATE \| SIGN` |
-| DisableMfa | `AUTHENTICATE \| SIGN` |
 | RevokeSession | `AUTHENTICATE \| SIGN` |
 | RevokeAllSessions | `AUTHENTICATE \| SIGN \| REVOKE` |
 
 ### 5.4 Operation Properties
 
-| Operation | High-Risk | Requires MFA | Required Approvals |
-|-----------|-----------|--------------|-------------------|
-| DisableIdentity | Yes | Yes | 0 |
-| FreezeIdentity | Yes | No | 0 |
-| RotateNeuralKey | Yes | Yes | 2 |
-| DisableMfa | Yes | Yes | 0 |
-| RevokeAllSessions | Yes | Yes | 0 |
-| UnfreezeIdentity | No | No | 2 |
+| Operation | High-Risk | Required Approvals |
+|-----------|-----------|-------------------|
+| DisableIdentity | Yes | 0 |
+| FreezeIdentity | Yes | 0 |
+| RotateNeuralKey | Yes | 2 |
+| RevokeAllSessions | Yes | 0 |
+| UnfreezeIdentity | No | 2 |
 
 ---
 
@@ -626,7 +600,6 @@ let context = PolicyContext {
     machine_id: Some(machine_id),
     namespace_id,
     auth_method: AuthMethod::MachineKey,
-    mfa_verified: false,
     operation: Operation::EnrollMachine,
     resource: None,
     ip_address: "192.168.1.1".to_string(),
@@ -645,7 +618,7 @@ let decision = policy_engine.evaluate(context).await?;
 match decision.verdict {
     Verdict::Allow => { /* proceed */ },
     Verdict::Deny => { /* return error */ },
-    Verdict::RequireAdditionalAuth => { /* request MFA */ },
+    Verdict::RequireAdditionalAuth => { /* request additional auth */ },
     Verdict::RequireApproval => { /* request multi-sig */ },
     Verdict::RateLimited => { /* return 429 */ },
 }

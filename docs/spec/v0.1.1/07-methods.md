@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The `zid-methods` crate implements all authentication methods for Zero-ID, including machine key authentication, email/password, OAuth, wallet signatures, and MFA.
+The `zid-methods` crate implements all authentication methods for Zero-ID, including machine key authentication, email/password, OAuth, and wallet signatures.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -10,7 +10,6 @@ The `zid-methods` crate implements all authentication methods for Zero-ID, inclu
 - **Email/Password Auth**: Argon2id password verification
 - **OAuth Authentication**: Google, X, and Epic Games integration
 - **Wallet Authentication**: EVM (SECP256k1) and Solana (Ed25519) signatures
-- **MFA Management**: TOTP setup, verification, and backup codes
 - **Credential Linking**: Attach multiple auth methods to identities
 
 ### 1.2 Position in Dependency Graph
@@ -76,22 +75,6 @@ pub trait AuthMethods: Send + Sync {
     ) -> Result<()>;
 
     // ===========================================
-    // MFA
-    // ===========================================
-
-    /// Setup MFA for identity
-    async fn setup_mfa(&self, identity_id: Uuid) -> Result<MfaSetup>;
-
-    /// Enable MFA after verification
-    async fn enable_mfa(&self, identity_id: Uuid, verification_code: String) -> Result<()>;
-
-    /// Disable MFA (requires MFA code)
-    async fn disable_mfa(&self, identity_id: Uuid, mfa_code: String) -> Result<()>;
-
-    /// Verify MFA code
-    async fn verify_mfa(&self, identity_id: Uuid, code: String) -> Result<bool>;
-
-    // ===========================================
     // OAuth
     // ===========================================
 
@@ -146,7 +129,6 @@ pub trait AuthMethods: Send + Sync {
     async fn authenticate_wallet_by_address(
         &self,
         wallet_address: String,
-        mfa_code: Option<String>,
         ip_address: String,
         user_agent: String,
     ) -> Result<AuthResult>;
@@ -209,7 +191,6 @@ pub struct ChallengeResponse {
     pub challenge_id: Uuid,
     pub machine_id: Uuid,
     pub signature: Vec<u8>,      // Ed25519: 64 bytes
-    pub mfa_code: Option<String>,
 }
 ```
 
@@ -220,7 +201,6 @@ pub struct AuthResult {
     pub identity_id: Uuid,
     pub machine_id: Uuid,
     pub namespace_id: Uuid,
-    pub mfa_verified: bool,
     pub auth_method: AuthMethod,
     pub warning: Option<String>,  // e.g., "Enroll real device"
 }
@@ -241,7 +221,6 @@ pub struct EmailAuthRequest {
     pub email: String,
     pub password: String,
     pub machine_id: Option<Uuid>,
-    pub mfa_code: Option<String>,
 }
 
 pub struct EmailCredential {
@@ -252,25 +231,6 @@ pub struct EmailCredential {
     pub updated_at: u64,
     pub email_verified: bool,
     pub verification_token: Option<String>,
-}
-```
-
-#### MFA Types
-
-```rust
-pub struct MfaSetup {
-    pub secret: String,             // Base32 encoded
-    pub qr_code_url: String,        // otpauth:// URL
-    pub backup_codes: Vec<String>,  // 10 codes, shown once
-}
-
-pub struct MfaSecret {
-    pub identity_id: Uuid,
-    pub encrypted_secret: Vec<u8>,  // XChaCha20-Poly1305
-    pub nonce: [u8; 24],
-    pub backup_codes: Vec<String>,  // Hashed
-    pub created_at: u64,
-    pub enabled: bool,
 }
 ```
 
@@ -337,7 +297,6 @@ pub struct WalletSignature {
     pub challenge_id: Uuid,
     pub wallet_address: String,    // 0x...
     pub signature: Vec<u8>,        // 65 bytes (r, s, v)
-    pub mfa_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -420,13 +379,6 @@ pub enum AuthMethodsError {
     EmailAlreadyExists(String),
     InvalidPassword,
     
-    // MFA errors
-    MfaNotSetup,
-    MfaAlreadyEnabled,
-    MfaNotEnabled,
-    InvalidMfaCode,
-    MfaRequired,
-    
     // OAuth errors
     OAuthStateNotFound,
     OAuthStateExpired,
@@ -483,14 +435,8 @@ stateDiagram-v2
     WalletSigned --> AddressRecovered: ecrecover()
     AddressRecovered --> Verified: Lookup identity
     
-    Verified --> MfaCheck
-    PasswordVerified --> MfaCheck
-    
-    MfaCheck --> MfaRequired: MFA enabled
-    MfaCheck --> Authenticated: MFA not required
-    
-    MfaRequired --> MfaVerified: verify_mfa()
-    MfaVerified --> Authenticated
+    Verified --> Authenticated
+    PasswordVerified --> Authenticated
     
     Authenticated --> SessionCreated: create_session()
     SessionCreated --> [*]
@@ -519,34 +465,7 @@ stateDiagram-v2
     end note
 ```
 
-### 3.3 MFA Setup Flow
-
-```mermaid
-stateDiagram-v2
-    [*] --> NotSetup
-    
-    NotSetup --> SetupPending: setup_mfa()
-    
-    SetupPending --> Enabled: enable_mfa(valid_code)
-    SetupPending --> NotSetup: Invalid code / timeout
-    
-    Enabled --> Disabled: disable_mfa(valid_code)
-    
-    Disabled --> SetupPending: setup_mfa()
-    
-    note right of SetupPending
-        Secret generated
-        Backup codes created
-        enabled = false
-    end note
-    
-    note right of Enabled
-        enabled = true
-        Required for sensitive ops
-    end note
-```
-
-### 3.4 OAuth Flow
+### 3.3 OAuth Flow
 
 ```mermaid
 stateDiagram-v2
@@ -665,12 +584,6 @@ sequenceDiagram
         end
     end
     
-    Methods->>Methods: Check MFA requirement
-    
-    alt MFA required
-        Methods-->>Client: Err(MfaRequired)
-    end
-    
     Methods->>Sessions: create_session(...)
     Sessions-->>Methods: SessionTokens
     
@@ -742,7 +655,6 @@ sequenceDiagram
 | Column Family | Key | Value | Description |
 |---------------|-----|-------|-------------|
 | `auth_credentials` | `(identity_id, "email")` | `EmailCredential` | Email credentials |
-| `mfa_secrets` | `identity_id: Uuid` | `MfaSecret` | Encrypted TOTP secrets |
 | `challenges` | `challenge_id: Uuid` | `Challenge` | Auth challenges (TTL: 5 min) |
 | `used_nonces` | `nonce_hex: String` | `expiry: u64` | Replay prevention |
 | `oauth_states` | `state_id: String` | `OAuthState` | OAuth flow state (TTL: 10 min) |
@@ -755,23 +667,6 @@ sequenceDiagram
 | `auth_links` | `(identity_id, method_type)` | `AuthLinkRecord` | Method links |
 | `auth_links_by_method` | `method_key: String` | `identity_id: Uuid` | Method index |
 | `primary_auth_method` | `identity_id: Uuid` | `AuthMethodType` | Primary method |
-
-### 5.2 TOTP Configuration
-
-| Parameter | Value |
-|-----------|-------|
-| Algorithm | HMAC-SHA1 |
-| Digits | 6 |
-| Period | 30 seconds |
-| Issuer | "Zero-ID" |
-| Window | ±1 period (90 seconds total) |
-
-### 5.3 Backup Codes
-
-- Count: 10 codes
-- Format: 8 alphanumeric characters
-- Storage: Argon2id hashed
-- Usage: Single-use, consumed on verification
 
 ---
 
@@ -805,12 +700,6 @@ sequenceDiagram
 - Recovery: ecrecover to derive address
 - Verification: Compare recovered vs claimed address
 
-### 6.5 MFA Security
-
-- Secret encryption: XChaCha20-Poly1305 with identity-derived KEK
-- Backup codes: Argon2id hashed
-- Rate limiting: Policy engine enforcement
-
 ---
 
 ## 7. Dependencies
@@ -830,7 +719,6 @@ sequenceDiagram
 |-------|---------|---------|
 | `reqwest` | 0.12 | OAuth HTTP client |
 | `jsonwebtoken` | 9.2 | OIDC token validation |
-| `totp-rs` | 5.0 | TOTP implementation |
 | `tokio` | 1.35 | Async runtime |
 | `async-trait` | 0.1 | Async trait support |
 | `serde` | 1.0 | Serialization |

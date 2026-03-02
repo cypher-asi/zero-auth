@@ -179,7 +179,7 @@ pub fn migrate_legacy_credentials(passphrase: &str) -> Result<Vec<ShamirShare>> 
     .map_err(|e| anyhow::anyhow!("Failed to derive machine keypair: {}", e))?;
 
     // Compute commitment before splitting (for verification during reconstruction)
-    let neural_key_commitment = neural_key.compute_commitment();
+    let neural_key_commitment = zid_crypto::blake3_hash(neural_key.as_bytes());
 
     // Split into 5 Neural Shards
     println!(

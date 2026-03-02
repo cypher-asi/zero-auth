@@ -101,7 +101,6 @@ where
         machine_id: Uuid,
         revoked_by: Uuid,
         reason: String,
-        mfa_verified: bool,
         ip_address: String,
         user_agent: String,
     ) -> Result<()> {
@@ -115,7 +114,6 @@ where
         self.evaluate_revocation_policy(
             &machine,
             machine_id,
-            mfa_verified,
             &ip_address,
             &user_agent,
         )
@@ -280,7 +278,6 @@ where
         &self,
         machine: &MachineKey,
         machine_id: Uuid,
-        mfa_verified: bool,
         ip_address: &str,
         user_agent: &str,
     ) -> Result<()> {
@@ -299,7 +296,6 @@ where
             machine_id: Some(machine_id),
             namespace_id: machine.namespace_id,
             auth_method: zid_policy::AuthMethod::MachineKey,
-            mfa_verified,
             operation: zid_policy::Operation::RevokeMachine,
             resource: Some(zid_policy::Resource::Machine(machine_id)),
             ip_address: ip_address.to_string(),
@@ -396,7 +392,7 @@ where
         &self,
         identity: Identity,
         identity_id: Uuid,
-        new_identity_signing_public_key: [u8; 32],
+        new_identity_signing_public_key: Vec<u8>,
         new_machines: Vec<MachineKey>,
         active_machines: Vec<MachineKey>,
     ) -> Result<()> {

@@ -17,7 +17,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75.0"
+rust-version = "1.85.0"
 authors = ["Cypher Team"]
 license = "MIT OR Apache-2.0"
 
@@ -33,6 +33,7 @@ ed25519-dalek = { version = "2.0", features = ["rand_core"] }
 blake3 = "1.5"
 argon2 = "0.5"
 password-hash = "0.5"
+opaque-ke = { version = "4", features = ["argon2", "serde", "ristretto255"] }
 zeroize = { version = "1.7", features = ["derive"] }
 rand = "0.8"
 getrandom = "0.2"

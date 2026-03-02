@@ -185,7 +185,6 @@ The request conflicts with the current state of a resource.
 | Duplicate email | `"Email already registered"` |
 | OAuth already linked | `"OAuth account already linked to another identity"` |
 | Namespace not empty | `"Namespace has other members"` |
-| MFA already enabled | `"MFA already enabled"` |
 | Member already exists | `"Identity is already a member"` |
 
 **Troubleshooting:**
@@ -292,37 +291,6 @@ The machine key used for authentication has been revoked.
 
 ---
 
-### MFA_REQUIRED
-
-**HTTP Status:** `403 Forbidden`
-
-The operation requires MFA verification, but the current session has not verified MFA.
-
-**High-Risk Operations Requiring MFA:**
-
-- Rotate Neural Key
-- Disable MFA
-- Revoke all sessions
-- Change password
-
-**Troubleshooting:**
-
-1. Re-authenticate with your MFA code included:
-
-```bash
-curl -X POST /v1/auth/login/email \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "your_password",
-    "mfa_code": "123456"
-  }'
-```
-
-2. Use the new session token (with `mfa_verified: true`) for the high-risk operation
-
----
-
 ### CHALLENGE_EXPIRED
 
 **HTTP Status:** `400 Bad Request`
@@ -420,7 +388,7 @@ An unexpected server error occurred.
 | `204` | - | Success with no body (DELETE) |
 | `400` | `INVALID_REQUEST`, `CHALLENGE_EXPIRED`, `INVALID_SIGNATURE` | Client error |
 | `401` | `UNAUTHORIZED` | Authentication required |
-| `403` | `FORBIDDEN`, `IDENTITY_FROZEN`, `MACHINE_REVOKED`, `MFA_REQUIRED` | Permission denied |
+| `403` | `FORBIDDEN`, `IDENTITY_FROZEN`, `MACHINE_REVOKED` | Permission denied |
 | `404` | `NOT_FOUND` | Resource not found |
 | `409` | `CONFLICT` | Resource conflict |
 | `429` | `RATE_LIMITED` | Too many requests |

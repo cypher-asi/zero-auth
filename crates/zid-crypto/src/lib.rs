@@ -6,7 +6,7 @@
 //! X25519 + ML-KEM-768 encryption) are provided by the `zid` crate and
 //! re-exported here. This crate adds server-specific functionality:
 //! XChaCha20-Poly1305 encryption, Argon2id password hashing, BLAKE3 hashing,
-//! Ed25519 signature utilities, managed identity derivation, and JWT/MFA
+//! Ed25519 signature utilities, managed identity derivation, and JWT
 //! key derivation.
 
 #![forbid(unsafe_code)]
@@ -19,6 +19,7 @@ pub mod encryption;
 pub mod errors;
 pub mod hashing;
 pub mod keys;
+pub mod opaque;
 pub mod signatures;
 pub mod utils;
 
@@ -28,6 +29,7 @@ pub use encryption::*;
 pub use errors::CryptoError;
 pub use hashing::*;
 pub use keys::*;
+pub use opaque::*;
 pub use signatures::*;
 pub use utils::*;
 
@@ -45,6 +47,3 @@ pub use zid::{
 // Re-export zid KEM types
 pub use zid::{SharedSecret, EncapBundle};
 
-// Re-export zid's full hybrid identity derivation (complements the
-// Ed25519-only `derive_identity_signing_keypair` wrapper in `derivation`)
-pub use zid::derive_identity_signing_key;

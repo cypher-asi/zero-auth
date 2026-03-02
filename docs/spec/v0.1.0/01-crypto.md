@@ -245,13 +245,6 @@ pub fn derive_machine_keypair(
     capabilities: MachineKeyCapabilities,
 ) -> Result<MachineKeyPair>;
 
-/// Derive MFA Key Encryption Key
-/// Domain: "cypher:id:mfa-kek:v1" || identity_id
-pub fn derive_mfa_kek(
-    neural_key: &NeuralKey,
-    identity_id: &Uuid,
-) -> Result<Zeroizing<[u8; 32]>>;
-
 /// Derive JWT signing key seed
 /// Domain: "cypher:id:jwt:v1" || key_epoch
 pub fn derive_jwt_signing_seed(
@@ -280,23 +273,6 @@ pub fn decrypt(
     ciphertext: &[u8],
     nonce: &[u8; 24],
     aad: &[u8],
-) -> Result<Vec<u8>>;
-
-/// Encrypt MFA TOTP secret
-/// AAD: "cypher:id:mfa-totp:v1" || identity_id
-pub fn encrypt_mfa_secret(
-    mfa_kek: &[u8; 32],
-    totp_secret: &[u8],
-    nonce: &[u8; 24],
-    identity_id: &Uuid,
-) -> Result<Vec<u8>>;
-
-/// Decrypt MFA TOTP secret
-pub fn decrypt_mfa_secret(
-    mfa_kek: &[u8; 32],
-    ciphertext: &[u8],
-    nonce: &[u8; 24],
-    identity_id: &Uuid,
 ) -> Result<Vec<u8>>;
 
 /// Encrypt JWT signing key private key
@@ -726,8 +702,6 @@ All domain strings follow the format: `cypher:{service}:{purpose}:v{version}`
 | `cypher:shared:machine:sign:v1` | Machine signing key derivation |
 | `cypher:shared:machine:encrypt:v1` | Machine encryption key derivation |
 | `cypher:id:jwt:v1` | JWT signing key derivation |
-| `cypher:id:mfa-kek:v1` | MFA Key Encryption Key derivation |
-| `cypher:id:mfa-totp:v1` | MFA TOTP secret AAD |
 
 ### 6.3 Validation Rules
 
@@ -819,9 +793,6 @@ pub const OPERATION_EXPIRY_SECONDS: u64 = 3600; // 1 hour
 // Shamir
 pub const SHAMIR_THRESHOLD: usize = 3;
 pub const SHAMIR_TOTAL_SHARES: usize = 5;
-
-// MFA
-pub const MFA_BACKUP_CODES_COUNT: usize = 10;
 
 // Argon2id parameters
 pub mod argon2_params {

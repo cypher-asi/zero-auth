@@ -53,6 +53,9 @@ rpassword = "7.3"
 # Argon2id for key derivation
 argon2 = "0.5"
 
+# OPAQUE PAKE (client-side)
+opaque-ke = { workspace = true }
+
 # Cryptographically secure random number generation (WASM-compatible)
 getrandom = "0.2"
 

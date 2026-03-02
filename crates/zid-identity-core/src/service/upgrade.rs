@@ -11,7 +11,7 @@
 use crate::{errors::*, traits::EventPublisher, types::*};
 use tracing::info;
 use uuid::Uuid;
-use zid_crypto::{current_timestamp, verify_signature};
+use zid_crypto::{current_timestamp, HybridSignature, IdentityVerifyingKey};
 use zid_policy::PolicyEngine;
 use zid_storage::{Storage, CF_IDENTITIES};
 
@@ -23,11 +23,11 @@ pub struct UpgradeIdentityRequest {
     /// Identity to upgrade
     pub identity_id: Uuid,
     /// New identity signing public key (derived from Neural Key)
-    pub new_identity_signing_public_key: [u8; 32],
+    pub new_identity_signing_public_key: Vec<u8>,
     /// BLAKE3 hash commitment of the Neural Key
     pub neural_key_commitment: [u8; 32],
     /// Signature of upgrade message using the OLD (managed) ISK
-    pub upgrade_signature: [u8; 64],
+    pub upgrade_signature: Vec<u8>,
 }
 
 /// Response from upgrade ceremony
@@ -170,19 +170,18 @@ where
         identity: &Identity,
         request: &UpgradeIdentityRequest,
     ) -> Result<()> {
-        // Build upgrade message: "upgrade" || identity_id || new_isk_public || commitment
-        let mut message = Vec::with_capacity(7 + 16 + 32 + 32);
+        let mut message = Vec::with_capacity(7 + 16 + request.new_identity_signing_public_key.len() + 32);
         message.extend_from_slice(b"upgrade");
         message.extend_from_slice(request.identity_id.as_bytes());
         message.extend_from_slice(&request.new_identity_signing_public_key);
         message.extend_from_slice(&request.neural_key_commitment);
 
-        // Verify with current (managed) ISK
-        verify_signature(
-            &identity.identity_signing_public_key,
-            &message,
-            &request.upgrade_signature,
-        )?;
+        let vk = IdentityVerifyingKey::from_bytes(&identity.identity_signing_public_key)
+            .map_err(|_| IdentityCoreError::InvalidAuthorizationSignature)?;
+        let sig = HybridSignature::from_bytes(&request.upgrade_signature)
+            .map_err(|_| IdentityCoreError::InvalidAuthorizationSignature)?;
+        vk.verify(&message, &sig)
+            .map_err(|_| IdentityCoreError::InvalidAuthorizationSignature)?;
 
         Ok(())
     }
@@ -193,7 +192,7 @@ where
         mut identity: Identity,
         request: &UpgradeIdentityRequest,
     ) -> Result<Identity> {
-        identity.identity_signing_public_key = request.new_identity_signing_public_key;
+        identity.identity_signing_public_key = request.new_identity_signing_public_key.clone();
         identity.tier = IdentityTier::SelfSovereign;
         identity.neural_key_commitment = Some(request.neural_key_commitment);
         identity.updated_at = current_timestamp();
@@ -209,12 +208,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zid_crypto::{derive_identity_signing_keypair, sign_message, NeuralKey};
 
-    fn create_test_managed_identity(identity_id: Uuid, isk_public: [u8; 32]) -> Identity {
+    fn create_test_managed_identity(identity_id: Uuid, isk_public: Vec<u8>) -> Identity {
         Identity {
             identity_id,
-            did: String::new(), // Empty for test
+            did: String::new(),
             identity_signing_public_key: isk_public,
             status: IdentityStatus::Active,
             tier: IdentityTier::Managed,
@@ -229,7 +227,7 @@ mod tests {
     #[test]
     fn test_upgrade_message_format() {
         let identity_id = Uuid::new_v4();
-        let new_isk = [1u8; 32];
+        let new_isk = vec![1u8; 1984];
         let commitment = [2u8; 32];
 
         let mut message = Vec::new();
@@ -238,8 +236,8 @@ mod tests {
         message.extend_from_slice(&new_isk);
         message.extend_from_slice(&commitment);
 
-        // Should be: 7 + 16 + 32 + 32 = 87 bytes
-        assert_eq!(message.len(), 87);
+        // Should be: 7 + 16 + 1984 + 32 = 2039 bytes
+        assert_eq!(message.len(), 2039);
     }
 
     #[test]

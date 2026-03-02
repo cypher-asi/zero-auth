@@ -102,7 +102,7 @@ where
         approvals: &[Approval],
         active_machines: &[MachineKey],
     ) -> Result<()> {
-        use zid_crypto::verify_signature;
+        use zid_crypto::{HybridSignature, MachinePublicKey};
 
         for approval in approvals {
             let machine = active_machines
@@ -110,15 +110,20 @@ where
                 .find(|m| m.machine_id == approval.machine_id)
                 .ok_or(IdentityCoreError::InvalidApprovingMachine)?;
 
-            verify_signature(
-                &machine.signing_public_key,
-                message,
-                &approval
-                    .signature
-                    .as_slice()
-                    .try_into()
-                    .map_err(|_| IdentityCoreError::InvalidApprovalSignature)?,
-            )?;
+            let mpk = MachinePublicKey::from_components(
+                machine.signing_public_key,
+                machine.encryption_public_key,
+                &machine.pq_signing_public_key,
+                &machine.pq_encryption_public_key,
+                machine.capabilities,
+                machine.epoch,
+            )
+            .map_err(|_| IdentityCoreError::InvalidApprovalSignature)?;
+
+            let sig = HybridSignature::from_bytes(&approval.signature)
+                .map_err(|_| IdentityCoreError::InvalidApprovalSignature)?;
+            mpk.verify(message, &sig)
+                .map_err(|_| IdentityCoreError::InvalidApprovalSignature)?;
 
             const APPROVAL_EXPIRY_SECONDS: u64 = 900;
             let current_time = current_timestamp();
@@ -196,7 +201,6 @@ where
         identity_id: Uuid,
         machine_key: MachineKey,
         authorization_signature: Vec<u8>,
-        mfa_verified: bool,
         ip_address: String,
         user_agent: String,
     ) -> Result<Uuid> {
@@ -204,7 +208,6 @@ where
             identity_id,
             machine_key,
             authorization_signature,
-            mfa_verified,
             ip_address,
             user_agent,
         )
@@ -228,7 +231,6 @@ where
         machine_id: Uuid,
         revoked_by: Uuid,
         reason: String,
-        mfa_verified: bool,
         ip_address: String,
         user_agent: String,
     ) -> Result<()> {
@@ -236,7 +238,6 @@ where
             machine_id,
             revoked_by,
             reason,
-            mfa_verified,
             ip_address,
             user_agent,
         )
@@ -365,7 +366,7 @@ mod tests {
     use crate::traits::mocks::MockEventPublisher;
     use zid_crypto::{
         canonicalize_identity_creation_message, derive_identity_signing_keypair,
-        generate_neural_key, sign_message, MachineKeyCapabilities,
+        generate_neural_key, MachineKeyCapabilities,
     };
     use zid_policy::PolicyEngineImpl;
     use zid_storage::RocksDbStorage;
@@ -379,7 +380,7 @@ mod tests {
 
         let neural_key = generate_neural_key();
         let identity_id = Uuid::new_v4();
-        let (identity_signing_public_key, identity_keypair) =
+        let (identity_signing_public_key, identity_signing_key) =
             derive_identity_signing_keypair(&neural_key, &identity_id).unwrap();
 
         let machine_id = Uuid::new_v4();
@@ -411,13 +412,13 @@ mod tests {
             machine_key.created_at,
         );
 
-        let signature = sign_message(&identity_keypair, &message);
+        let signature = identity_signing_key.sign(&message);
 
         let request = CreateIdentityRequest {
             identity_id,
             identity_signing_public_key,
             machine_key,
-            authorization_signature: signature.to_vec(),
+            authorization_signature: signature.to_bytes().to_vec(),
             namespace_name: Some("test-namespace".to_string()),
             created_at: current_timestamp(),
         };

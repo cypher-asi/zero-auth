@@ -29,9 +29,6 @@ pub const CF_NAMESPACES_BY_IDENTITY: &str = "namespaces_by_identity";
 /// Authentication credentials: (identity_id, cred_type) → Credential
 pub const CF_AUTH_CREDENTIALS: &str = "auth_credentials";
 
-/// MFA secrets: identity_id → EncryptedMfaSecret
-pub const CF_MFA_SECRETS: &str = "mfa_secrets";
-
 /// Challenges: challenge_id → Challenge (TTL: 5 min)
 pub const CF_CHALLENGES: &str = "challenges";
 
@@ -121,7 +118,6 @@ pub fn all_column_families() -> Vec<&'static str> {
         CF_IDENTITY_NAMESPACE_MEMBERSHIPS,
         CF_NAMESPACES_BY_IDENTITY,
         CF_AUTH_CREDENTIALS,
-        CF_MFA_SECRETS,
         CF_CHALLENGES,
         CF_USED_NONCES,
         CF_OAUTH_STATES,

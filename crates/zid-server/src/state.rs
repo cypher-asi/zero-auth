@@ -1,6 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
+use zid_crypto::{OpaqueServerSetup, deserialize_server_setup, generate_server_setup, serialize_server_setup};
 use zid_identity_core::IdentityCoreService;
 use zid_integrations::IntegrationsService;
 use zid_methods::AuthMethodsService;
@@ -9,6 +10,11 @@ use zid_sessions::{NoOpEventPublisher, SessionService};
 use zid_storage::RocksDbStorage;
 
 use crate::config::Config;
+
+/// RocksDB column family for the OPAQUE ServerSetup blob
+const CF_OPAQUE_SERVER_SETUP: &str = "opaque_server_setup";
+/// Key used to store the single ServerSetup record
+const OPAQUE_SETUP_KEY: &str = "setup";
 
 /// No-op event publisher for identity core (we'll use integrations for real events)
 #[derive(Clone)]
@@ -93,12 +99,17 @@ impl AppState {
             }),
         };
 
+        // Load or generate the node-local OPAQUE ServerSetup
+        let opaque_server_setup = load_or_generate_opaque_setup(&storage, &config.service_master_key)?;
+        let opaque_server_setup = Arc::new(opaque_server_setup);
+
         let auth_service = Arc::new(AuthMethodsService::with_oauth_configs(
             identity_service.clone(),
             policy_engine.clone(),
             storage.clone(),
             config.service_master_key,
             oauth_configs,
+            opaque_server_setup,
         ));
 
         let session_service = Arc::new(SessionService::with_event_publisher(
@@ -140,4 +151,55 @@ impl AppState {
             policy_engine,
         })
     }
+}
+
+/// Load the OPAQUE `ServerSetup` from storage, or generate a new one on first boot.
+///
+/// The serialised blob is stored encrypted with XChaCha20-Poly1305 using a
+/// key derived from the service master key.
+fn load_or_generate_opaque_setup(
+    storage: &RocksDbStorage,
+    smk: &[u8; 32],
+) -> Result<OpaqueServerSetup> {
+    use zid_crypto::{decrypt, encrypt, hkdf_derive_32};
+
+    let enc_key = hkdf_derive_32(smk, b"cypher:opaque:server-setup-kek:v1")?;
+
+    let existing: Option<Vec<u8>> = tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(async {
+            zid_storage::Storage::get::<String, Vec<u8>>(storage, CF_OPAQUE_SERVER_SETUP, &OPAQUE_SETUP_KEY.to_string()).await
+        })
+    })?;
+
+    if let Some(blob) = existing {
+        if blob.len() > 24 {
+            let (nonce_bytes, ciphertext) = blob.split_at(24);
+            let mut nonce = [0u8; 24];
+            nonce.copy_from_slice(nonce_bytes);
+            let plaintext = decrypt(&enc_key, ciphertext, &nonce, b"")?;
+            let setup = deserialize_server_setup(&plaintext)?;
+            tracing::info!("Loaded existing OPAQUE ServerSetup");
+            return Ok(setup);
+        }
+    }
+
+    let setup = generate_server_setup();
+    let serialised = serialize_server_setup(&setup)?;
+
+    let mut nonce = [0u8; 24];
+    rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut nonce);
+    let ciphertext = encrypt(&enc_key, &serialised, &nonce, b"")?;
+
+    let mut blob = Vec::with_capacity(24 + ciphertext.len());
+    blob.extend_from_slice(&nonce);
+    blob.extend_from_slice(&ciphertext);
+
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(async {
+            zid_storage::Storage::put(storage, CF_OPAQUE_SERVER_SETUP, &OPAQUE_SETUP_KEY.to_string(), &blob).await
+        })
+    })?;
+
+    tracing::info!("Generated and stored new OPAQUE ServerSetup");
+    Ok(setup)
 }

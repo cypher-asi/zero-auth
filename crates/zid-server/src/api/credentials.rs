@@ -3,9 +3,12 @@ use axum::{
     http::StatusCode,
     response::Json,
 };
+use base64::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use zid_methods::{traits::CredentialType, AuthMethods};
+use zid_methods::{
+    traits::CredentialType, AuthMethods, EmailRegisterFinishRequest, EmailRegisterInitRequest,
+};
 
 use crate::{
     api::helpers::{format_timestamp_rfc3339, hash_for_log, parse_oauth_provider},
@@ -18,10 +21,27 @@ use crate::{
 // Request/Response Types
 // ============================================================================
 
+/// OPAQUE credential attachment – step 1 API request
 #[derive(Debug, Deserialize)]
-pub struct AddEmailCredentialRequest {
+pub struct AddEmailCredentialInitRequest {
     pub email: String,
-    pub password: String,
+    /// base64-encoded OPAQUE `RegistrationRequest`
+    pub registration_request: String,
+}
+
+/// OPAQUE credential attachment – step 1 API response
+#[derive(Debug, Serialize)]
+pub struct AddEmailCredentialInitResponse {
+    /// base64-encoded OPAQUE `RegistrationResponse`
+    pub registration_response: String,
+}
+
+/// OPAQUE credential attachment – step 2 API request
+#[derive(Debug, Deserialize)]
+pub struct AddEmailCredentialFinishRequest {
+    pub email: String,
+    /// base64-encoded OPAQUE `RegistrationUpload`
+    pub registration_upload: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -45,32 +65,84 @@ pub struct OAuthCompleteRequest {
 // Handlers
 // ============================================================================
 
-/// POST /v1/credentials/email
-/// Add an email/password credential to the authenticated user's identity
-pub async fn add_email_credential(
+/// POST /v1/credentials/email/register/init — OPAQUE step 1 (authenticated)
+pub async fn add_email_credential_init(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedUser,
-    Json(req): Json<AddEmailCredentialRequest>,
-) -> Result<Json<AddCredentialResponse>, ApiError> {
+    Json(req): Json<AddEmailCredentialInitRequest>,
+) -> Result<Json<AddEmailCredentialInitResponse>, ApiError> {
     let identity_id = auth.claims.identity_id()?;
 
     tracing::info!(
         identity_id = %identity_id,
         email_hash = %hash_for_log(&req.email),
-        "Adding email credential"
+        "OPAQUE email credential attachment init"
     );
 
-    // Attach email credential
-    state
+    let registration_request = BASE64_STANDARD
+        .decode(&req.registration_request)
+        .map_err(|_| ApiError::InvalidRequest("Invalid base64 for registration_request".into()))?;
+
+    let result = state
         .auth_service
-        .attach_email_credential(identity_id, req.email.clone(), req.password)
+        .email_credential_register_init(
+            identity_id,
+            EmailRegisterInitRequest {
+                email: req.email.clone(),
+                registration_request,
+            },
+        )
         .await
         .map_err(|e| {
             tracing::warn!(
                 identity_id = %identity_id,
                 email_hash = %hash_for_log(&req.email),
                 error = %e,
-                "Failed to add email credential"
+                "OPAQUE email credential init failed"
+            );
+            map_service_error(anyhow::anyhow!(e))
+        })?;
+
+    Ok(Json(AddEmailCredentialInitResponse {
+        registration_response: BASE64_STANDARD.encode(&result.registration_response),
+    }))
+}
+
+/// POST /v1/credentials/email/register/finish — OPAQUE step 2 (authenticated)
+pub async fn add_email_credential_finish(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedUser,
+    Json(req): Json<AddEmailCredentialFinishRequest>,
+) -> Result<Json<AddCredentialResponse>, ApiError> {
+    let identity_id = auth.claims.identity_id()?;
+
+    tracing::info!(
+        identity_id = %identity_id,
+        email_hash = %hash_for_log(&req.email),
+        "OPAQUE email credential attachment finish"
+    );
+
+    let registration_upload = BASE64_STANDARD
+        .decode(&req.registration_upload)
+        .map_err(|_| ApiError::InvalidRequest("Invalid base64 for registration_upload".into()))?;
+
+    state
+        .auth_service
+        .email_credential_register_finish(
+            identity_id,
+            EmailRegisterFinishRequest {
+                email: req.email.clone(),
+                registration_upload,
+                namespace_name: None,
+            },
+        )
+        .await
+        .map_err(|e| {
+            tracing::warn!(
+                identity_id = %identity_id,
+                email_hash = %hash_for_log(&req.email),
+                error = %e,
+                "OPAQUE email credential finish failed"
             );
             map_service_error(anyhow::anyhow!(e))
         })?;
@@ -87,7 +159,6 @@ pub async fn add_email_credential(
 }
 
 /// POST /v1/credentials/oauth/:provider
-/// Initiate OAuth link flow for the authenticated user's identity
 pub async fn initiate_oauth_link(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedUser,
@@ -109,7 +180,6 @@ pub async fn initiate_oauth_link(
 }
 
 /// POST /v1/credentials/oauth/:provider/callback
-/// Complete OAuth link flow for the authenticated user's identity
 pub async fn complete_oauth_link(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedUser,

@@ -65,10 +65,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/v1/identity/:identity_id",
             get(api::identity::get_identity),
         )
-        // Identity creation (managed tier)
+        // Identity creation (managed tier) — OPAQUE 2-step email registration
         .route(
-            "/v1/identity/email",
-            post(api::identity_creation::create_email_identity),
+            "/v1/identity/email/register/init",
+            post(api::identity_creation::create_email_identity_init),
+        )
+        .route(
+            "/v1/identity/email/register/finish",
+            post(api::identity_creation::create_email_identity_finish),
         )
         .route(
             "/v1/identity/oauth/:provider",
@@ -159,7 +163,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Authentication
         .route("/v1/auth/challenge", get(api::auth::get_challenge))
         .route("/v1/auth/login/machine", post(api::auth::login_machine))
-        .route("/v1/auth/login/email", post(api::auth::login_email))
+        .route("/v1/auth/login/email/init", post(api::auth::login_email_init))
+        .route("/v1/auth/login/email/finish", post(api::auth::login_email_finish))
         .route(
             "/v1/auth/login/wallet",
             post(api::auth_wallet::login_wallet),
@@ -169,19 +174,18 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/v1/auth/oauth/:provider/callback",
             post(api::auth::oauth_complete),
         )
-        // MFA
-        .route("/v1/mfa/setup", post(api::mfa::setup_mfa))
-        .route("/v1/mfa/enable", post(api::mfa::enable_mfa))
-        .route("/v1/mfa/disable", post(api::mfa::disable_mfa_post))
-        .route("/v1/mfa", delete(api::mfa::disable_mfa))
         // Credentials
         .route(
             "/v1/credentials",
             get(api::credentials::list_credentials),
         )
         .route(
-            "/v1/credentials/email",
-            post(api::credentials::add_email_credential),
+            "/v1/credentials/email/register/init",
+            post(api::credentials::add_email_credential_init),
+        )
+        .route(
+            "/v1/credentials/email/register/finish",
+            post(api::credentials::add_email_credential_finish),
         )
         .route(
             "/v1/credentials/wallet",

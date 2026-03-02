@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The `zid-policy` crate provides the Policy Engine for authorization decisions, rate limiting, and approval requirements. It evaluates operation contexts against a set of rules to produce allow/deny verdicts with optional requirements for MFA or approvals.
+The `zid-policy` crate provides the Policy Engine for authorization decisions, rate limiting, and approval requirements. It evaluates operation contexts against a set of rules to produce allow/deny verdicts with optional requirements for approvals.
 
 ### 1.1 Purpose and Responsibilities
 
@@ -10,7 +10,6 @@ The `zid-policy` crate provides the Policy Engine for authorization decisions, r
 - **Rate Limiting**: Track and enforce per-IP and per-identity request limits
 - **Reputation Tracking**: Maintain identity reputation scores based on success/failure history
 - **Capability Checking**: Verify machine keys have required capabilities for operations
-- **MFA Requirements**: Determine when multi-factor authentication is required
 - **Approval Requirements**: Determine when multi-party approval is required
 
 ### 1.2 Key Design Decisions
@@ -155,7 +154,6 @@ pub struct PolicyContext {
     pub machine_id: Option<Uuid>,
     pub namespace_id: Uuid,
     pub auth_method: AuthMethod,
-    pub mfa_verified: bool,
 
     // Operation
     pub operation: Operation,
@@ -200,9 +198,8 @@ pub struct PolicyDecision {
 pub enum Verdict {
     Allow = 0x01,
     Deny = 0x02,
-    RequireAdditionalAuth = 0x03,
-    RequireApproval = 0x04,
-    RateLimited = 0x05,
+    RequireApproval = 0x03,
+    RateLimited = 0x04,
 }
 ```
 
@@ -238,11 +235,6 @@ pub enum Operation {
     AttachEmail = 0x0502,
     AttachWallet = 0x0503,
 
-    // MFA (0x06xx)
-    EnableMfa = 0x0600,
-    DisableMfa = 0x0601,
-    VerifyMfa = 0x0602,
-
     // Sessions (0x07xx)
     RevokeSession = 0x0700,
     RevokeAllSessions = 0x0701,
@@ -271,11 +263,9 @@ pub enum AuthMethod {
 #[repr(u8)]
 pub enum AuthFactor {
     Password = 0x01,
-    MfaTotp = 0x02,
-    MfaBackupCode = 0x03,
-    MachineKey = 0x04,
-    WalletSignature = 0x05,
-    EmailVerification = 0x06,
+    MachineKey = 0x02,
+    WalletSignature = 0x03,
+    EmailVerification = 0x04,
 }
 
 pub enum Resource {
@@ -335,7 +325,6 @@ pub enum PolicyError {
     IdentityFrozen(String),
     MachineRevoked,
     RateLimitExceeded(String),
-    MfaRequired,
     InsufficientCapabilities(Vec<String>),
     ApprovalRequired { required: u8, provided: u8 },
     Internal(String),
@@ -466,22 +455,17 @@ sequenceDiagram
         Evaluator-->>Engine: Deny (capabilities)
     end
     
-    Note over Evaluator: 6. MFA Requirement
-    alt MFA required & not verified
-        Evaluator-->>Engine: RequireAdditionalAuth
-    end
-    
-    Note over Evaluator: 7. Approval Requirement
+    Note over Evaluator: 6. Approval Requirement
     alt Approvals required
         Evaluator-->>Engine: RequireApproval
     end
     
-    Note over Evaluator: 8. Reputation Check
+    Note over Evaluator: 7. Reputation Check
     alt reputation < -50
         Evaluator-->>Engine: Deny (reputation)
     end
     
-    Note over Evaluator: 9. Rate Limit Check
+    Note over Evaluator: 8. Rate Limit Check
     alt recent_failed_attempts >= 5
         Evaluator-->>Engine: RateLimited
     end
@@ -594,18 +578,17 @@ struct LimitState {
 
 ### 6.1 Operation Risk Levels
 
-| Operation | High Risk | Requires MFA | Required Approvals |
-|-----------|-----------|--------------|-------------------|
-| `Login` | No | No | 0 |
-| `DisableIdentity` | Yes | Yes | 0 |
-| `FreezeIdentity` | Yes | No | 0 |
-| `UnfreezeIdentity` | No | No | 2 |
-| `RotateNeuralKey` | Yes | Yes | 2 |
-| `DisableMfa` | Yes | Yes | 0 |
-| `ChangePassword` | No | Yes | 0 |
-| `RevokeAllSessions` | Yes | Yes | 0 |
-| `EnrollMachine` | No | No | 0 |
-| `RevokeMachine` | No | No | 0 |
+| Operation | High Risk | Required Approvals |
+|-----------|-----------|-------------------|
+| `Login` | No | 0 |
+| `DisableIdentity` | Yes | 0 |
+| `FreezeIdentity` | Yes | 0 |
+| `UnfreezeIdentity` | No | 2 |
+| `RotateNeuralKey` | Yes | 2 |
+| `ChangePassword` | No | 0 |
+| `RevokeAllSessions` | Yes | 0 |
+| `EnrollMachine` | No | 0 |
+| `RevokeMachine` | No | 0 |
 
 ### 6.2 Capability Requirements by Operation
 
@@ -649,10 +632,9 @@ Checks are ordered by security criticality:
 3. **Machine Revoked** — Compromised keys blocked
 4. **Namespace Active** — Organizational control
 5. **Capabilities** — Permission enforcement
-6. **MFA** — Step-up authentication
-7. **Approvals** — Multi-party authorization
-8. **Reputation** — Historical behavior
-9. **Rate Limits** — Abuse prevention
+6. **Approvals** — Multi-party authorization
+7. **Reputation** — Historical behavior
+8. **Rate Limits** — Abuse prevention
 
 ---
 

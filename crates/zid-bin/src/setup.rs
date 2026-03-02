@@ -287,14 +287,22 @@ async fn login_with_machine_seed(
         &nonce,
         &creds.identity_id,
     )?;
-    let seed: [u8; 32] = seed_bytes
-        .try_into()
-        .map_err(|_| AppError::CryptoError("Invalid seed length".into()))?;
-    let keypair = zid_crypto::Ed25519KeyPair::from_seed(&seed)
-        .map_err(|e| AppError::CryptoError(e.to_string()))?;
+    let signing_key = if seed_bytes.len() == 64 {
+        let ed_seed: [u8; 32] = seed_bytes[..32].try_into()
+            .map_err(|_| AppError::CryptoError("Invalid seed length".into()))?;
+        let pq_seed: [u8; 32] = seed_bytes[32..].try_into()
+            .map_err(|_| AppError::CryptoError("Invalid seed length".into()))?;
+        zid_crypto::IdentitySigningKey::from_seeds(ed_seed, pq_seed)
+    } else if seed_bytes.len() == 32 {
+        let ed_seed: [u8; 32] = seed_bytes.try_into()
+            .map_err(|_| AppError::CryptoError("Invalid seed length".into()))?;
+        zid_crypto::IdentitySigningKey::from_seeds(ed_seed, [0u8; 32])
+    } else {
+        return Err(AppError::CryptoError("Invalid seed length".into()));
+    };
 
     let session =
-        crate::service::session::login_machine(client, &creds.machine_id, &keypair).await?;
+        crate::service::session::login_machine(client, &creds.machine_id, &signing_key).await?;
 
     let mut auth_client = client.clone();
     auth_client.set_access_token(Some(session.access_token.clone()));
@@ -342,12 +350,8 @@ async fn login_with_shard(
         0,
     )?;
 
-    let signing_seed = crate::infra::crypto_adapter::machine_signing_seed(&keys.machine_keypair);
-    let keypair = zid_crypto::Ed25519KeyPair::from_seed(&signing_seed)
-        .map_err(|e| AppError::CryptoError(e.to_string()))?;
-
     let session =
-        crate::service::session::login_machine(client, &creds.machine_id, &keypair).await?;
+        crate::service::session::login_machine(client, &creds.machine_id, &keys.isk_keypair).await?;
 
     let mut auth_client = client.clone();
     auth_client.set_access_token(Some(session.access_token.clone()));
@@ -797,19 +801,10 @@ fn start_recovery(state: &mut AppState, rt: &tokio::runtime::Handle) {
                     device_platform: std::env::consts::OS.into(),
                 };
 
-                let seed = crypto_adapter::machine_signing_seed(&keys.machine_keypair);
-                let keypair = match zid_crypto::Ed25519KeyPair::from_seed(&seed) {
-                    Ok(kp) => kp,
-                    Err(e) => {
-                        let _ = tx.send(AppMessage::Error(AppError::CryptoError(e.to_string())));
-                        return;
-                    }
-                };
-
                 match crate::service::session::login_machine(
                     &client,
                     &response.machine_id,
-                    &keypair,
+                    &keys.isk_keypair,
                 )
                 .await
                 {

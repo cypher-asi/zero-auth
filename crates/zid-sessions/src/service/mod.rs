@@ -169,7 +169,6 @@ impl<S: Storage, I: IdentityCore, E: EventPublisher> SessionManager for SessionS
         identity_id: Uuid,
         machine_id: Uuid,
         namespace_id: Uuid,
-        mfa_verified: bool,
         capabilities: Vec<String>,
         scope: Vec<String>,
     ) -> Result<SessionTokens> {
@@ -177,7 +176,6 @@ impl<S: Storage, I: IdentityCore, E: EventPublisher> SessionManager for SessionS
             identity_id,
             machine_id,
             namespace_id,
-            mfa_verified,
             capabilities,
             scope,
         )

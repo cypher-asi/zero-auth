@@ -14,7 +14,7 @@ The specifications are organized by dependency order, starting with the most fun
 | 04 | [04-identity-core.md](./04-identity-core.md) | `zid-identity-core` | Identity management: identities, machines, namespaces, revocation |
 | 05 | [05-integrations.md](./05-integrations.md) | `zid-integrations` | External integrations: mTLS auth, SSE streaming, webhooks |
 | 06 | [06-sessions.md](./06-sessions.md) | `zid-sessions` | Session management: JWT issuance, refresh tokens, introspection |
-| 07 | [07-methods.md](./07-methods.md) | `zid-methods` | Authentication methods: machine, email, OAuth, wallet, MFA |
+| 07 | [07-methods.md](./07-methods.md) | `zid-methods` | Authentication methods: machine, email, OAuth, wallet |
 | 08 | [08-server.md](./08-server.md) | `zid-server` | HTTP API server: endpoints, middleware, request handling |
 | 09 | [09-client.md](./09-client.md) | `zid-client` | CLI client: commands, local storage, user workflows |
 | 10 | [10-system-overview.md](./10-system-overview.md) | — | System architecture: dependency graph, data flows, security model |

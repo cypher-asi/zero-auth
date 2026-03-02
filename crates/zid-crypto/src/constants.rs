@@ -11,6 +11,18 @@ pub const PUBLIC_KEY_SIZE: usize = 32;
 /// Size of Ed25519 signatures in bytes
 pub const SIGNATURE_SIZE: usize = 64;
 
+/// Size of PQ-hybrid signatures in bytes (Ed25519 64 + ML-DSA-65 3309)
+pub const HYBRID_SIGNATURE_SIZE: usize = 3_373;
+
+/// Size of serialized IdentityVerifyingKey (Ed25519 32 + ML-DSA-65 1952)
+pub const IDENTITY_VERIFYING_KEY_SIZE: usize = 1_984;
+
+/// Size of Ed25519 public keys in bytes (for wallet verification and machine Ed25519 component)
+pub const ED25519_PUBLIC_KEY_SIZE: usize = 32;
+
+/// Size of Ed25519 signatures in bytes (for wallet verification)
+pub const ED25519_SIGNATURE_SIZE: usize = 64;
+
 /// Size of XChaCha20-Poly1305 nonces in bytes (192 bits)
 pub const NONCE_SIZE: usize = 24;
 
@@ -58,9 +70,6 @@ pub const ML_DSA_65_PUBLIC_KEY_SIZE: usize = 1952;
 /// ML-KEM-768 public key size in bytes (NIST FIPS 203)
 pub const ML_KEM_768_PUBLIC_KEY_SIZE: usize = 1184;
 
-/// Number of MFA backup codes
-pub const MFA_BACKUP_CODES_COUNT: usize = 10;
-
 // =============================================================================
 // Domain Separation Strings (as specified in cryptographic-constants.md § 11)
 //
@@ -82,12 +91,6 @@ pub const DOMAIN_IDENTITY_SIGNING: &str = "cypher:id:identity:v1";
 
 /// Domain separation for JWT signing key seed derivation
 pub const DOMAIN_JWT_SIGNING: &str = "cypher:id:jwt:v1";
-
-/// Domain separation for MFA KEK derivation
-pub const DOMAIN_MFA_KEK: &str = "cypher:id:mfa-kek:v1";
-
-/// Domain separation for MFA TOTP AAD
-pub const DOMAIN_MFA_TOTP_AAD: &str = "cypher:id:mfa-totp:v1";
 
 /// Domain separation for recovery share backup KEK
 pub const DOMAIN_SHARE_BACKUP_KEK: &str = "cypher:share-backup-kek:v1";
@@ -150,8 +153,6 @@ mod tests {
         let domains = [
             DOMAIN_IDENTITY_SIGNING,
             DOMAIN_JWT_SIGNING,
-            DOMAIN_MFA_KEK,
-            DOMAIN_MFA_TOTP_AAD,
             DOMAIN_MANAGED_IDENTITY,
             DOMAIN_SHARE_BACKUP_KEK,
             DOMAIN_SHARE_BACKUP_AAD,

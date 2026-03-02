@@ -3,7 +3,7 @@
 use crate::{challenge::*, errors::*, types::*};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
-use zid_crypto::{current_timestamp, verify_signature};
+use zid_crypto::{current_timestamp, HybridSignature, MachinePublicKey};
 use zid_identity_core::{IdentityCore, IdentityStatus};
 use zid_policy::{Operation, PolicyContext, PolicyEngine, Verdict};
 use zid_storage::Storage;
@@ -96,14 +96,7 @@ where
         // Step 4: Verify signature
         self.verify_challenge_signature(&machine, &challenge, &response)?;
 
-        // Step 5: Check MFA if provided
-        let mfa_verified = if let Some(mfa_code) = response.mfa_code {
-            self.verify_mfa(machine.identity_id, mfa_code).await?
-        } else {
-            false
-        };
-
-        // Step 6: Evaluate policy
+        // Step 5: Evaluate policy
         let reputation_score = self
             .policy
             .get_reputation(machine.identity_id)
@@ -117,7 +110,6 @@ where
                 machine_id: Some(response.machine_id),
                 namespace_id: machine.namespace_id,
                 auth_method: zid_policy::AuthMethod::MachineKey,
-                mfa_verified,
                 operation: Operation::Login,
                 resource: None,
                 ip_address,
@@ -137,7 +129,7 @@ where
             return Err(AuthMethodsError::PolicyDenied(decision.reason));
         }
 
-        // Step 7: Record successful attempt
+        // Step 6: Record successful attempt
         self.policy
             .record_attempt(machine.identity_id, Operation::Login, true)
             .await?;
@@ -151,7 +143,6 @@ where
             identity_id: machine.identity_id,
             machine_id: response.machine_id,
             namespace_id: machine.namespace_id,
-            mfa_verified,
             auth_method: AuthMethod::MachineKey,
             warning: None,
         })
@@ -269,31 +260,42 @@ where
     ) -> Result<()> {
         let canonical_message = canonicalize_challenge(challenge);
 
-        // Debug logging to diagnose signature mismatches
         debug!(
             machine_id = %response.machine_id,
             stored_public_key = %hex::encode(&machine.signing_public_key),
             signature_len = response.signature.len(),
-            canonical_message_hex = %hex::encode(&canonical_message[..32]), // First 32 bytes
+            canonical_message_hex = %hex::encode(&canonical_message[..32]),
             "Verifying challenge signature"
         );
 
-        verify_signature(
-            &machine.signing_public_key,
-            &canonical_message,
-            &response
-                .signature
-                .as_slice()
-                .try_into()
-                .map_err(|_| {
-                    warn!(
-                        signature_len = response.signature.len(),
-                        "Invalid signature length (expected 64 bytes)"
-                    );
-                    AuthMethodsError::InvalidSignature
-                })?,
+        let mpk = MachinePublicKey::from_components(
+            machine.signing_public_key,
+            machine.encryption_public_key,
+            &machine.pq_signing_public_key,
+            &machine.pq_encryption_public_key,
+            machine.capabilities,
+            machine.epoch,
         )
         .map_err(|e| {
+            warn!(
+                machine_id = %response.machine_id,
+                error = %e,
+                "Failed to reconstruct MachinePublicKey"
+            );
+            AuthMethodsError::InvalidSignature
+        })?;
+
+        let sig = HybridSignature::from_bytes(&response.signature).map_err(|e| {
+            warn!(
+                machine_id = %response.machine_id,
+                signature_len = response.signature.len(),
+                error = %e,
+                "Invalid hybrid signature"
+            );
+            AuthMethodsError::InvalidSignature
+        })?;
+
+        mpk.verify(&canonical_message, &sig).map_err(|e| {
             warn!(
                 machine_id = %response.machine_id,
                 error = %e,

@@ -1,20 +1,16 @@
-//! Email/password authentication methods.
+//! OPAQUE-based email authentication and credential attachment.
 
-use crate::{
-    errors::*,
-    types::*,
-    validation::{validate_email, validate_password},
-};
+use crate::{errors::*, types::*};
 use tracing::info;
 use uuid::Uuid;
 use zid_crypto::{
-    blake3_hash, current_timestamp, generate_salt, hash_password, verify_password,
+    blake3_hash, current_timestamp, OpaqueLoginState, ZeroAuthOpaque, OPAQUE_LOGIN_STATE_TTL_SECS,
 };
 use zid_identity_core::{IdentityCore, IdentityStatus};
 use zid_policy::{Operation, PolicyContext, PolicyEngine, Verdict};
 use zid_storage::Storage;
 
-use super::{AuthMethodsService, CF_AUTH_CREDENTIALS, CF_MFA_SECRETS};
+use super::{AuthMethodsService, CF_AUTH_CREDENTIALS, CF_OPAQUE_LOGIN_STATE};
 
 impl<I, P, S> AuthMethodsService<I, P, S>
 where
@@ -22,49 +18,123 @@ where
     P: PolicyEngine,
     S: Storage,
 {
-    /// Authenticate using email and password.
+    /// OPAQUE login step 1: evaluate the blinded credential request.
     ///
-    /// # Arguments
-    ///
-    /// * `request` - Email authentication request with email, password, and optional MFA code
-    /// * `ip_address` - Client IP address for policy evaluation
-    /// * `user_agent` - Client user agent for policy evaluation
-    ///
-    /// # Returns
-    ///
-    /// Authentication result with identity and machine information
-    pub(super) async fn authenticate_email(
+    /// Returns a `CredentialResponse` (and persists ephemeral server state)
+    /// regardless of whether the email exists, to prevent user enumeration.
+    pub(super) async fn email_login_init(
         &self,
-        request: EmailAuthRequest,
-        ip_address: String,
-        user_agent: String,
-    ) -> Result<AuthResult> {
+        request: EmailLoginInitRequest,
+    ) -> Result<EmailLoginInitResponse> {
         info!(
-            "Authenticating with email hash: {}",
+            "OPAQUE login init for email hash: {}",
             email_hash_for_log(&request.email)
         );
 
-        // Validate email format
-        validate_email(&request.email)?;
+        let email_lower = request.email.to_lowercase();
+        let credential: Option<EmailCredential> =
+            self.storage.get(CF_AUTH_CREDENTIALS, &email_lower).await?;
 
-        // Step 1: Get and verify credential
-        let credential = self.verify_email_credential(&request).await?;
+        let password_file = credential
+            .as_ref()
+            .map(|c| {
+                opaque_ke::ServerRegistration::<ZeroAuthOpaque>::deserialize(&c.opaque_record)
+            })
+            .transpose()
+            .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))?;
 
-        // Step 2: Check identity and MFA
-        let (identity, mfa_verified) = self.check_identity_and_mfa(&request, &credential).await?;
+        let credential_request =
+            opaque_ke::CredentialRequest::<ZeroAuthOpaque>::deserialize(&request.credential_request)
+                .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))?;
 
-        // Step 3: Determine or create machine_id
+        let mut rng = rand::rngs::OsRng;
+        let server_login_result = opaque_ke::ServerLogin::start(
+            &mut rng,
+            &self.opaque_server_setup,
+            password_file,
+            credential_request,
+            email_lower.as_bytes(),
+            opaque_ke::ServerLoginParameters::default(),
+        )
+        .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))?;
+
+        let login_state_id = Uuid::new_v4();
+        let state = OpaqueLoginState {
+            server_login_bytes: serde_json::to_vec(&server_login_result.state)
+                .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))?,
+            email: email_lower,
+            created_at: current_timestamp(),
+        };
+
+        self.storage
+            .put(CF_OPAQUE_LOGIN_STATE, &login_state_id, &state)
+            .await?;
+
+        let response_bytes = serde_json::to_vec(&server_login_result.message)
+            .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))?;
+
+        Ok(EmailLoginInitResponse {
+            credential_response: response_bytes,
+            login_state_id,
+        })
+    }
+
+    /// OPAQUE login step 2: verify the credential finalisation.
+    pub(super) async fn email_login_finish(
+        &self,
+        request: EmailLoginFinishRequest,
+        ip_address: String,
+        user_agent: String,
+    ) -> Result<AuthResult> {
+        let state: OpaqueLoginState = self
+            .storage
+            .get(CF_OPAQUE_LOGIN_STATE, &request.login_state_id)
+            .await?
+            .ok_or(AuthMethodsError::OpaqueLoginStateNotFound(
+                request.login_state_id,
+            ))?;
+
+        self.storage
+            .delete(CF_OPAQUE_LOGIN_STATE, &request.login_state_id)
+            .await?;
+
+        if current_timestamp() > state.created_at + OPAQUE_LOGIN_STATE_TTL_SECS {
+            return Err(AuthMethodsError::OpaqueLoginStateNotFound(
+                request.login_state_id,
+            ));
+        }
+
+        let server_login: opaque_ke::ServerLogin<ZeroAuthOpaque> =
+            serde_json::from_slice(&state.server_login_bytes)
+                .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))?;
+
+        let finalization =
+            opaque_ke::CredentialFinalization::<ZeroAuthOpaque>::deserialize(
+                &request.credential_finalization,
+            )
+            .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))?;
+
+        server_login
+            .finish(finalization, opaque_ke::ServerLoginParameters::default())
+            .map_err(|_| AuthMethodsError::InvalidCredentials)?;
+
+        let credential: EmailCredential = self
+            .storage
+            .get(CF_AUTH_CREDENTIALS, &state.email)
+            .await?
+            .ok_or(AuthMethodsError::InvalidCredentials)?;
+
+        let identity = self.check_identity_status_opaque(&credential).await?;
+
         let (final_machine_id, warning) = self
             .resolve_machine_id(credential.identity_id, request.machine_id)
             .await?;
 
-        // Step 4: Evaluate policy
         let auth_result = self
             .evaluate_email_auth_policy(
                 credential.identity_id,
                 identity.identity_id,
                 final_machine_id,
-                mfa_verified,
                 ip_address,
                 user_agent,
                 warning,
@@ -72,43 +142,22 @@ where
             .await?;
 
         info!(
-            "Email authentication successful for identity {}",
+            "OPAQUE email login succeeded for identity {}",
             credential.identity_id
         );
 
         Ok(auth_result)
     }
 
-    /// Attach an email/password credential to an identity.
-    ///
-    /// # Arguments
-    ///
-    /// * `identity_id` - The identity to attach the credential to
-    /// * `email` - The email address
-    /// * `password` - The password (will be hashed with Argon2id)
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` if successful, error otherwise
-    pub(super) async fn attach_email_credential(
+    /// Attach an email credential via OPAQUE registration – step 1.
+    pub(super) async fn email_credential_register_init(
         &self,
         identity_id: Uuid,
-        email: String,
-        password: String,
-    ) -> Result<()> {
-        info!("Attaching email credential for identity {}", identity_id);
-
-        // Validate email format
-        validate_email(&email)?;
-
-        // Validate password strength
-        validate_password(&password)?;
-
-        // Verify identity exists
+        request: EmailRegisterInitRequest,
+    ) -> Result<EmailRegisterInitResponse> {
         let _identity = self.identity_core.get_identity(identity_id).await?;
+        let email_lower = request.email.to_lowercase();
 
-        // Check if email already exists
-        let email_lower = email.to_lowercase();
         if self
             .storage
             .exists(CF_AUTH_CREDENTIALS, &email_lower)
@@ -119,82 +168,105 @@ where
             ));
         }
 
-        // Hash password with Argon2id
-        let salt = generate_salt();
-        let password_hash = hash_password(password.as_bytes(), &salt)
-            .map_err(|e| AuthMethodsError::PasswordHash(e.to_string()))?;
+        self.opaque_register_init(&email_lower, &request.registration_request)
+    }
 
-        // Create credential
+    /// Attach an email credential via OPAQUE registration – step 2.
+    pub(super) async fn email_credential_register_finish(
+        &self,
+        identity_id: Uuid,
+        request: EmailRegisterFinishRequest,
+    ) -> Result<()> {
+        let _identity = self.identity_core.get_identity(identity_id).await?;
+        let email_lower = request.email.to_lowercase();
+
+        if self
+            .storage
+            .exists(CF_AUTH_CREDENTIALS, &email_lower)
+            .await?
+        {
+            return Err(AuthMethodsError::Other(
+                "Email already registered".to_string(),
+            ));
+        }
+
+        let opaque_record = self.opaque_register_finish(&request.registration_upload)?;
+
         let credential = EmailCredential {
             identity_id,
             email: email_lower.clone(),
-            password_hash,
+            opaque_record,
             created_at: current_timestamp(),
             updated_at: current_timestamp(),
             email_verified: false,
             verification_token: None,
         };
 
-        // Store credential
         self.storage
             .put(CF_AUTH_CREDENTIALS, &email_lower, &credential)
             .await?;
 
         info!("Email credential attached for identity {}", identity_id);
-
         Ok(())
     }
 
-    /// Verify email credential with constant-time password check (helper for authenticate_email).
-    async fn verify_email_credential(&self, request: &EmailAuthRequest) -> Result<EmailCredential> {
-        // Get credential
-        let email_lower = request.email.to_lowercase();
-        let credential_opt: Option<EmailCredential> =
-            self.storage.get(CF_AUTH_CREDENTIALS, &email_lower).await?;
+    // ========================================================================
+    // OPAQUE helpers
+    // ========================================================================
 
-        // SECURITY: Constant-time authentication to prevent timing attacks
-        // We always perform password verification, even if the email doesn't exist
-        let (password_valid, credential) = if let Some(cred) = credential_opt {
-            // Email exists - verify actual password
-            let valid = verify_password(request.password.as_bytes(), &cred.password_hash).is_ok();
-            (valid, Some(cred))
-        } else {
-            // Email doesn't exist - perform dummy password verification
-            let dummy_hash =
-                "$argon2id$v=19$m=19456,t=2,p=1$aGVsbG93b3JsZA$0123456789abcdef0123456789abcdef";
-            let _ = verify_password(request.password.as_bytes(), dummy_hash);
-            (false, None)
-        };
+    /// Run the server side of OPAQUE registration step 1.
+    pub(crate) fn opaque_register_init(
+        &self,
+        email: &str,
+        registration_request_bytes: &[u8],
+    ) -> Result<EmailRegisterInitResponse> {
+        let reg_request =
+            opaque_ke::RegistrationRequest::<ZeroAuthOpaque>::deserialize(registration_request_bytes)
+                .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))?;
 
-        // Check authentication result
-        match (password_valid, credential) {
-            (true, Some(cred)) => Ok(cred),
-            (_, Some(cred)) => {
-                // Password invalid but email exists - record failed attempt
-                self.record_failed_attempt(cred.identity_id).await?;
-                // Return generic error (don't reveal if email exists)
-                Err(AuthMethodsError::InvalidCredentials)
-            }
-            (_, None) => {
-                // Email doesn't exist - return generic error
-                Err(AuthMethodsError::InvalidCredentials)
-            }
-        }
+        let result = opaque_ke::ServerRegistration::<ZeroAuthOpaque>::start(
+            &self.opaque_server_setup,
+            reg_request,
+            email.as_bytes(),
+        )
+        .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))?;
+
+        let response_bytes = serde_json::to_vec(&result.message)
+            .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))?;
+
+        Ok(EmailRegisterInitResponse {
+            registration_response: response_bytes,
+        })
     }
 
-    /// Check identity status and MFA requirement (helper for authenticate_email).
-    async fn check_identity_and_mfa(
+    /// Run the server side of OPAQUE registration finish — returns serialised password file.
+    pub(crate) fn opaque_register_finish(
         &self,
-        request: &EmailAuthRequest,
+        registration_upload_bytes: &[u8],
+    ) -> Result<Vec<u8>> {
+        let upload =
+            opaque_ke::RegistrationUpload::<ZeroAuthOpaque>::deserialize(registration_upload_bytes)
+                .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))?;
+
+        let record = opaque_ke::ServerRegistration::<ZeroAuthOpaque>::finish(upload);
+
+        serde_json::to_vec(&record)
+            .map_err(|e| AuthMethodsError::OpaqueProtocol(format!("{e}")))
+    }
+
+    // ========================================================================
+    // Auth-flow helpers
+    // ========================================================================
+
+    async fn check_identity_status_opaque(
+        &self,
         credential: &EmailCredential,
-    ) -> Result<(zid_identity_core::Identity, bool)> {
-        // Get identity
+    ) -> Result<zid_identity_core::Identity> {
         let identity = self
             .identity_core
             .get_identity(credential.identity_id)
             .await?;
 
-        // Check identity not frozen
         if identity.status == IdentityStatus::Frozen {
             return Err(AuthMethodsError::IdentityFrozen {
                 identity_id: identity.identity_id,
@@ -202,42 +274,16 @@ where
             });
         }
 
-        // Verify MFA if enabled
-        let mfa_verified = if let Some(mfa_secret) = self
-            .storage
-            .get::<Uuid, crate::MfaSecret>(CF_MFA_SECRETS, &credential.identity_id)
-            .await?
-        {
-            if mfa_secret.enabled {
-                let code = request
-                    .mfa_code
-                    .as_ref()
-                    .ok_or(AuthMethodsError::MfaRequired)?;
-                if !self
-                    .verify_mfa(credential.identity_id, code.clone())
-                    .await?
-                {
-                    return Err(AuthMethodsError::InvalidMfaCode);
-                }
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
-        Ok((identity, mfa_verified))
+        Ok(identity)
     }
 
-    /// Resolve machine ID - verify provided or create virtual (helper for authenticate_email).
-    async fn resolve_machine_id(
+    /// Resolve machine ID – verify provided or create virtual.
+    pub(crate) async fn resolve_machine_id(
         &self,
         identity_id: Uuid,
         machine_id: Option<Uuid>,
     ) -> Result<(Uuid, Option<String>)> {
         if let Some(mid) = machine_id {
-            // Primary flow: Verify machine belongs to identity
             let machine = self
                 .identity_core
                 .get_machine_key(mid)
@@ -250,21 +296,16 @@ where
                     identity_id,
                 });
             }
-
             if machine.revoked {
                 return Err(AuthMethodsError::MachineRevoked(mid));
             }
-
             Ok((mid, None))
         } else {
-            // No machine_id provided - create or reuse virtual machine
             let virtual_machine_id = self.create_virtual_machine(identity_id).await?;
-
             info!(
                 "Using virtual machine {} for email auth (identity {})",
                 virtual_machine_id, identity_id
             );
-
             Ok((
                 virtual_machine_id,
                 Some("Consider enrolling a real device for enhanced security".to_string()),
@@ -272,19 +313,17 @@ where
         }
     }
 
-    /// Evaluate policy for email authentication (helper for authenticate_email).
+    /// Evaluate policy for email authentication.
     #[allow(clippy::too_many_arguments)]
-    async fn evaluate_email_auth_policy(
+    pub(crate) async fn evaluate_email_auth_policy(
         &self,
         identity_id: Uuid,
         namespace_id: Uuid,
         machine_id: Uuid,
-        mfa_verified: bool,
         ip_address: String,
         user_agent: String,
         warning: Option<String>,
     ) -> Result<AuthResult> {
-        // Get reputation score
         let reputation_score = self.policy.get_reputation(identity_id).await.unwrap_or(50);
 
         let decision = self
@@ -294,7 +333,6 @@ where
                 machine_id: Some(machine_id),
                 namespace_id,
                 auth_method: zid_policy::AuthMethod::EmailPassword,
-                mfa_verified,
                 operation: Operation::Login,
                 resource: None,
                 ip_address,
@@ -302,7 +340,6 @@ where
                 timestamp: current_timestamp(),
                 reputation_score,
                 recent_failed_attempts: 0,
-                // Entity states checked separately in auth flow
                 identity_status: None,
                 machine_revoked: None,
                 machine_capabilities: None,
@@ -314,7 +351,6 @@ where
             return Err(AuthMethodsError::PolicyDenied(decision.reason));
         }
 
-        // Record successful attempt
         self.policy
             .record_attempt(identity_id, Operation::Login, true)
             .await?;
@@ -323,7 +359,6 @@ where
             identity_id,
             machine_id,
             namespace_id,
-            mfa_verified,
             auth_method: AuthMethod::EmailPassword,
             warning,
         })

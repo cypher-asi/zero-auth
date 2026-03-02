@@ -5,16 +5,14 @@
 //! - Email + password (traditional)
 //! - OAuth providers (Google, X, Epic Games)
 //! - EVM wallet signatures (blockchain-based)
-//! - Multi-factor authentication (TOTP)
 //!
-//! All authentication methods enforce MFA when enabled and integrate
-//! with the Policy Engine for authorization decisions.
+//! All authentication methods integrate with the Policy Engine for
+//! authorization decisions.
 
 #![warn(missing_docs)]
 
 pub mod challenge;
 pub mod errors;
-pub mod mfa;
 pub mod oauth;
 pub mod service;
 pub mod traits;

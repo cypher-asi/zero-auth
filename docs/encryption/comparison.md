@@ -147,9 +147,6 @@ NeuralKey (32 bytes, client CSPRNG)
 │   │   HKDF("cypher:shared:machine:pq-sign:v1" || machine_id)
 │   └── PQ Encryption Key (ML-KEM-768)
 │       HKDF("cypher:shared:machine:pq-kem:v1" || machine_id)
-│
-└── MFA KEK (for TOTP secret encryption)
-    HKDF("cypher:id:mfa-kek:v1" || identity_id)
 ```
 
 **Design Choice**: Zero-Auth separates signing and encryption keys using domain separation strings, preventing cross-protocol attacks while maintaining deterministic derivation from a single root secret. The versioned domain strings (`:v1`) enable graceful algorithm migration to post-quantum cryptography.
@@ -822,7 +819,6 @@ Standardized algorithms for future blockchain/messaging migration:
 - [**RFC 8439**](https://datatracker.ietf.org/doc/html/rfc8439): ChaCha20 and Poly1305 for IETF Protocols
 - [**RFC 5869**](https://datatracker.ietf.org/doc/html/rfc5869): HMAC-based Extract-and-Expand Key Derivation Function (HKDF)
 - [**RFC 9106**](https://datatracker.ietf.org/doc/html/rfc9106): Argon2 Memory-Hard Function
-- [**RFC 6238**](https://datatracker.ietf.org/doc/html/rfc6238): TOTP: Time-Based One-Time Password Algorithm
 - [**FIPS 180-4**](https://csrc.nist.gov/publications/detail/fips/180/4/final): Secure Hash Standard (SHA-2)
 - [**FIPS 186-5**](https://csrc.nist.gov/publications/detail/fips/186/5/final): Digital Signature Standard (DSS)
 - [**FIPS 203**](https://csrc.nist.gov/publications/detail/fips/203/final): Module-Lattice-Based Key-Encapsulation Mechanism (ML-KEM)

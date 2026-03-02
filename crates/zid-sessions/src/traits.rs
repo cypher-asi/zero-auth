@@ -11,7 +11,6 @@ pub trait SessionManager: Send + Sync {
         identity_id: Uuid,
         machine_id: Uuid,
         namespace_id: Uuid,
-        mfa_verified: bool,
         capabilities: Vec<String>,
         scope: Vec<String>,
     ) -> Result<SessionTokens>;

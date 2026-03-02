@@ -366,7 +366,6 @@ mod tests {
             machine_id: Some(uuid::Uuid::new_v4()),
             namespace_id: uuid::Uuid::new_v4(),
             auth_method: AuthMethod::MachineKey,
-            mfa_verified: true,
             operation: Operation::Login,
             resource: None,
             ip_address: "127.0.0.1".to_string(),

@@ -94,20 +94,7 @@ security-sensitive test scenarios, interoperability checks, and release gates.
 | AU-06 | Introspection of revoked session | Integration | Active=false |
 | AU-07 | Session revocation | Integration | Subsequent refresh fails; introspection returns inactive |
 
-### 2.5  MFA
-
-| Req | Test Case | Type | Pass Criteria |
-|-----|----------|------|---------------|
-| MF-01 | MFA setup returns secret, QR URL, backup codes | Integration | All fields populated; 10 backup codes |
-| MF-02 | Enable MFA with valid TOTP code | Integration | MFA active; logins require TOTP |
-| MF-02 | Enable MFA with invalid code | Integration | Rejected — code incorrect |
-| MF-03 | Disable MFA with valid code | Integration | MFA disabled |
-| MF-04 | Login with MFA: valid TOTP code | Integration | Auth completes |
-| MF-04 | Login with MFA: code from wrong period | Integration | Rejected (unless ±1 tolerance) |
-| MF-04 | Login with MFA: backup code | Integration | Auth completes; code consumed |
-| MF-04 | Login with MFA: reused backup code | Integration | Rejected — already consumed |
-
-### 2.6  Recovery & Ceremonies
+### 2.5  Recovery & Ceremonies
 
 | Req | Test Case | Type | Pass Criteria |
 |-----|----------|------|---------------|
@@ -118,7 +105,7 @@ security-sensitive test scenarios, interoperability checks, and release gates.
 | RC-03 | Multi-approval unfreeze with quorum | Integration | Identity unfrozen |
 | RC-04 | Key rotation with quorum | Integration | New commitment; old machines revoked |
 
-### 2.7  Linked Identities
+### 2.6  Linked Identities
 
 | Req | Test Case | Type | Pass Criteria |
 |-----|----------|------|---------------|
@@ -130,7 +117,7 @@ security-sensitive test scenarios, interoperability checks, and release gates.
 | LI-05 | Revoke primary credential | Integration | Rejected — must change primary first |
 | LI-06 | Set credential as primary | Integration | Primary flag updated |
 
-### 2.8  Namespaces
+### 2.7  Namespaces
 
 | Req | Test Case | Type | Pass Criteria |
 |-----|----------|------|---------------|
@@ -231,19 +218,17 @@ security-sensitive test scenarios, interoperability checks, and release gates.
 | Gate | Requirement | Verification |
 |------|------------|-------------|
 | **G-17** | Email/OAuth/wallet login flows pass | AU-02, AU-03, AU-04 pass |
-| **G-18** | MFA full lifecycle (setup → enable → verify → disable) | MF-01 through MF-04 pass |
-| **G-19** | Credential link/revoke/primary management | LI-01 through LI-06 pass |
-| **G-20** | Namespace visibility and switching | NS-01, NS-02 pass |
-| **G-21** | Freeze identity blocks auth | ID-04, SEC tests for frozen state |
-| **G-22** | Backup code single-use enforcement | MF-04 reused backup test passes |
+| **G-18** | Credential link/revoke/primary management | LI-01 through LI-06 pass |
+| **G-19** | Namespace visibility and switching | NS-01, NS-02 pass |
+| **G-20** | Freeze identity blocks auth | ID-04, SEC tests for frozen state |
 
 ### 5.3  Advanced Release Gate Additions
 
 | Gate | Requirement | Verification |
 |------|------------|-------------|
-| **G-23** | Multi-approval unfreeze ceremony | RC-03, ID-05 pass |
-| **G-24** | Key rotation ceremony | RC-04, NK-05 pass |
-| **G-25** | Approval expiry enforcement (900 s) | ID-05 expired approval test |
+| **G-21** | Multi-approval unfreeze ceremony | RC-03, ID-05 pass |
+| **G-22** | Key rotation ceremony | RC-04, NK-05 pass |
+| **G-23** | Approval expiry enforcement (900 s) | ID-05 expired approval test |
 
 ---
 

@@ -1,27 +1,9 @@
-//! Session-related key derivations (MFA, JWT).
+//! Session-related key derivations (JWT).
 
-use crate::{constants::*, errors::*, keys::NeuralKey};
+use crate::{constants::*, errors::*};
 use zeroize::Zeroizing;
 
 use super::hkdf_derive_32;
-
-/// Derive MFA KEK from Neural Key
-///
-/// As specified in cryptographic-constants.md § 10.1
-///
-/// Formula: mfa_kek = HKDF(neural_key, "cypher:auth:mfa-kek:v1" || identity_id)
-pub fn derive_mfa_kek(
-    neural_key: &NeuralKey,
-    identity_id: &uuid::Uuid,
-) -> Result<Zeroizing<[u8; 32]>> {
-    // Build info: "cypher:auth:mfa-kek:v1" || identity_id
-    let mut info = Vec::with_capacity(DOMAIN_MFA_KEK.len() + 16);
-    info.extend_from_slice(DOMAIN_MFA_KEK.as_bytes());
-    info.extend_from_slice(identity_id.as_bytes());
-
-    let kek = hkdf_derive_32(neural_key.as_bytes(), &info)?;
-    Ok(Zeroizing::new(kek))
-}
 
 /// Derive JWT signing key seed from service master key
 ///
@@ -44,15 +26,6 @@ pub fn derive_jwt_signing_seed(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_derive_mfa_kek() {
-        let neural_key = NeuralKey::generate(&mut rand::thread_rng());
-        let identity_id = uuid::Uuid::new_v4();
-
-        let kek = derive_mfa_kek(&neural_key, &identity_id).unwrap();
-        assert_eq!(kek.len(), 32);
-    }
 
     #[test]
     fn test_derive_jwt_signing_seed() {

@@ -53,10 +53,6 @@ pub enum IdentityCoreError {
     #[error("Policy denied: {0}")]
     PolicyDenied(String),
 
-    /// MFA required
-    #[error("MFA required: {0:?}")]
-    MfaRequired(Vec<zid_policy::AuthFactor>),
-
     /// Not a namespace member
     #[error("Identity {identity_id} is not a member of namespace {namespace_id}")]
     NotNamespaceMember {

@@ -4,9 +4,10 @@ use axum::{
     extract::{Path, State},
     response::Json,
 };
+use base64::prelude::*;
 use std::sync::Arc;
 use zid_identity_core::IdentityCore;
-use zid_methods::AuthMethods;
+use zid_methods::{AuthMethods, EmailRegisterFinishRequest, EmailRegisterInitRequest};
 use zid_sessions::SessionManager;
 
 use super::helpers::{
@@ -14,7 +15,8 @@ use super::helpers::{
     provider_display_name, truncate_wallet_address,
 };
 use super::types::{
-    CompleteWalletIdentityRequest, CreateEmailIdentityRequest, IdentityCreationResponse,
+    CompleteWalletIdentityRequest, CreateEmailIdentityFinishRequest,
+    CreateEmailIdentityInitRequest, CreateEmailIdentityInitResponse, IdentityCreationResponse,
     InitiateWalletIdentityRequest, InitiateWalletResponse, OAuthIdentityCallbackRequest,
     OAuthIdentityInitiateResponse, TierStatusResponse, UpgradeIdentityRequest,
     UpgradeIdentityResponse,
@@ -24,51 +26,81 @@ use crate::{
     extractors::JsonWithErrors,
     request_context::RequestContext,
     state::AppState,
-    validation::{validate_email, validate_password_strength},
+    validation::validate_email,
 };
 
-/// POST /v1/identity/email - Create identity via email (auto-login)
-pub async fn create_email_identity(
+/// POST /v1/identity/email/register/init — OPAQUE registration step 1
+pub async fn create_email_identity_init(
     State(state): State<Arc<AppState>>,
     ctx: RequestContext,
-    JsonWithErrors(req): JsonWithErrors<CreateEmailIdentityRequest>,
+    JsonWithErrors(req): JsonWithErrors<CreateEmailIdentityInitRequest>,
+) -> Result<Json<CreateEmailIdentityInitResponse>, ApiError> {
+    tracing::info!(
+        ip = %ctx.ip_address,
+        user_agent = %ctx.user_agent,
+        "OPAQUE email identity registration init"
+    );
+
+    let email = validate_email(&req.email)?;
+
+    let registration_request = BASE64_STANDARD
+        .decode(&req.registration_request)
+        .map_err(|_| ApiError::InvalidRequest("Invalid base64 for registration_request".into()))?;
+
+    let result = state
+        .auth_service
+        .create_identity_via_email_init(EmailRegisterInitRequest {
+            email,
+            registration_request,
+        })
+        .await
+        .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
+
+    Ok(Json(CreateEmailIdentityInitResponse {
+        registration_response: BASE64_STANDARD.encode(&result.registration_response),
+    }))
+}
+
+/// POST /v1/identity/email/register/finish — OPAQUE registration step 2 (auto-login)
+pub async fn create_email_identity_finish(
+    State(state): State<Arc<AppState>>,
+    ctx: RequestContext,
+    JsonWithErrors(req): JsonWithErrors<CreateEmailIdentityFinishRequest>,
 ) -> Result<Json<IdentityCreationResponse>, ApiError> {
     tracing::info!(
         ip = %ctx.ip_address,
         user_agent = %ctx.user_agent,
-        "Email identity creation attempt"
+        "OPAQUE email identity registration finish"
     );
 
-    // Validate email format using RFC 5322 compliant validation
     let email = validate_email(&req.email)?;
 
-    // Validate password strength using entropy-based analysis
-    // Pass email username as user input to detect weak passwords containing the email
-    let email_username = email.split('@').next().unwrap_or("");
-    validate_password_strength(&req.password, Some(&[email_username]))?;
+    let registration_upload = BASE64_STANDARD
+        .decode(&req.registration_upload)
+        .map_err(|_| ApiError::InvalidRequest("Invalid base64 for registration_upload".into()))?;
 
-    // Create the identity (use normalized email)
     let response = state
         .auth_service
-        .create_identity_via_email(email.clone(), req.password, req.namespace_name)
+        .create_identity_via_email_finish(EmailRegisterFinishRequest {
+            email: email.clone(),
+            registration_upload,
+            namespace_name: req.namespace_name,
+        })
         .await
         .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
 
-    // Get machine key to extract capabilities
     let machine = state
         .identity_service
         .get_machine_key(response.machine_id)
         .await
         .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
 
-    // Create session for auto-login
     let session = state
         .session_service
         .create_session(
             response.identity_id,
             response.machine_id,
             response.namespace_id,
-            false, // MFA not verified on signup
             machine.capabilities.to_string_vec(),
             vec!["default".to_string()],
         )
@@ -130,12 +162,9 @@ pub async fn complete_oauth_identity(
         "OAuth identity creation attempt"
     );
 
-    // Store provider info for response
     let auth_method = format!("oauth:{}", provider_str.to_lowercase());
     let primary_identifier = format!("{} Account", provider_display_name(provider));
 
-    // This would normally call create_identity_via_oauth after verifying the OAuth callback
-    // For now, we'll use the existing authenticate_oauth which handles both login and signup
     let oauth_request = zid_methods::types::OAuthCompleteRequest {
         provider,
         code: req.code,
@@ -148,21 +177,18 @@ pub async fn complete_oauth_identity(
         .await
         .map_err(|e: zid_methods::errors::AuthMethodsError| map_service_error(anyhow::anyhow!(e)))?;
 
-    // Get machine key to extract capabilities
     let machine = state
         .identity_service
         .get_machine_key(result.machine_id)
         .await
         .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
 
-    // Create session for auto-login
     let session = state
         .session_service
         .create_session(
             result.identity_id,
             result.machine_id,
             result.namespace_id,
-            false, // MFA not verified on signup
             machine.capabilities.to_string_vec(),
             vec!["default".to_string()],
         )
@@ -179,7 +205,7 @@ pub async fn complete_oauth_identity(
         identity_id: result.identity_id,
         machine_id: result.machine_id,
         namespace_id: result.namespace_id,
-        tier: "managed".to_string(), // OAuth always creates managed identities
+        tier: "managed".to_string(),
         auth_method,
         primary_identifier,
         access_token: session.access_token,
@@ -223,7 +249,6 @@ pub async fn complete_wallet_identity(
         "Wallet identity creation attempt"
     );
 
-    // Store wallet info for response
     let auth_method = format!("wallet:{}", req.wallet_type.to_lowercase());
     let wallet_address = req.address.clone();
 
@@ -242,21 +267,18 @@ pub async fn complete_wallet_identity(
         .await
         .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
 
-    // Get machine key to extract capabilities
     let machine = state
         .identity_service
         .get_machine_key(response.machine_id)
         .await
         .map_err(|e| map_service_error(anyhow::anyhow!(e)))?;
 
-    // Create session for auto-login
     let session = state
         .session_service
         .create_session(
             response.identity_id,
             response.machine_id,
             response.namespace_id,
-            false, // MFA not verified on signup
             machine.capabilities.to_string_vec(),
             vec!["default".to_string()],
         )
@@ -269,7 +291,6 @@ pub async fn complete_wallet_identity(
         "Wallet identity created successfully"
     );
 
-    // Format wallet address for display (truncate middle for long addresses)
     let primary_identifier = truncate_wallet_address(&wallet_address);
 
     Ok(Json(IdentityCreationResponse {
@@ -294,7 +315,6 @@ pub async fn get_tier_status(
 ) -> Result<Json<TierStatusResponse>, ApiError> {
     let identity_id = auth.claims.identity_id()?;
 
-    // Get auth method count
     let auth_methods_count = state
         .auth_service
         .get_auth_method_count(identity_id)
@@ -329,9 +349,9 @@ pub async fn upgrade_identity(
 
     let upgrade_request = zid_identity_core::UpgradeIdentityRequest {
         identity_id,
-        new_identity_signing_public_key: new_isk,
+        new_identity_signing_public_key: new_isk.to_vec(),
         neural_key_commitment: commitment,
-        upgrade_signature: signature,
+        upgrade_signature: signature.to_vec(),
     };
 
     let result = state

@@ -3,7 +3,7 @@ use zeroize::Zeroizing;
 use zid_crypto::{
     canonicalize_enrollment_message, canonicalize_identity_creation_message,
     derive_identity_signing_keypair, derive_machine_keypair, generate_neural_key,
-    sign_message, Ed25519KeyPair, MachineKeyCapabilities, MachineKeyPair, NeuralKey, ShamirShare,
+    IdentitySigningKey, MachineKeyCapabilities, MachineKeyPair, NeuralKey, ShamirShare,
 };
 
 use crate::error::AppError;
@@ -33,7 +33,7 @@ pub fn combine_shards(shares: &[ShamirShare]) -> Result<NeuralKey, AppError> {
 pub fn derive_isk(
     neural_key: &NeuralKey,
     identity_id: &Uuid,
-) -> Result<([u8; 32], Ed25519KeyPair), AppError> {
+) -> Result<(Vec<u8>, IdentitySigningKey), AppError> {
     derive_identity_signing_keypair(neural_key, identity_id)
         .map_err(|e| AppError::CryptoError(format!("ISK derivation failed: {e}")))
 }
@@ -66,18 +66,18 @@ pub fn extract_machine_public_keys(keypair: &MachineKeyPair) -> MachinePublicKey
     }
 }
 
-pub fn machine_signing_seed(keypair: &MachineKeyPair) -> [u8; 32] {
-    keypair.ed25519_signing_key().to_bytes()
+pub fn machine_signing_seeds(keypair: &MachineKeyPair) -> ([u8; 32], [u8; 32]) {
+    (keypair.ed25519_signing_key().to_bytes(), keypair.pq_signing_seed())
 }
 
 pub fn sign_creation_message(
-    keypair: &Ed25519KeyPair,
+    keypair: &IdentitySigningKey,
     identity_id: &Uuid,
     machine_id: &Uuid,
-    isk_pub: &[u8; 32],
+    isk_pub: &[u8],
     machine_signing_pub: &[u8; 32],
     machine_encryption_pub: &[u8; 32],
-) -> ([u8; 64], u64) {
+) -> (Vec<u8>, u64) {
     let created_at = chrono::Utc::now().timestamp() as u64;
     let message = canonicalize_identity_creation_message(
         identity_id,
@@ -87,17 +87,17 @@ pub fn sign_creation_message(
         machine_encryption_pub,
         created_at,
     );
-    let sig = sign_message(keypair, &message);
-    (sig, created_at)
+    let sig = keypair.sign(&message);
+    (sig.to_bytes().to_vec(), created_at)
 }
 
 pub fn sign_enrollment_message(
-    keypair: &Ed25519KeyPair,
+    keypair: &IdentitySigningKey,
     identity_id: &Uuid,
     machine_id: &Uuid,
     machine_signing_pub: &[u8; 32],
     machine_encryption_pub: &[u8; 32],
-) -> ([u8; 64], Vec<u8>) {
+) -> (Vec<u8>, Vec<u8>) {
     let created_at = chrono::Utc::now().timestamp() as u64;
     let caps = MachineKeyCapabilities::all().bits();
     let message = canonicalize_enrollment_message(
@@ -108,12 +108,12 @@ pub fn sign_enrollment_message(
         caps,
         created_at,
     );
-    let sig = sign_message(keypair, &message);
-    (sig, message.to_vec())
+    let sig = keypair.sign(&message);
+    (sig.to_bytes().to_vec(), message.to_vec())
 }
 
-pub fn sign_bytes(keypair: &Ed25519KeyPair, data: &[u8]) -> [u8; 64] {
-    sign_message(keypair, data)
+pub fn sign_bytes(keypair: &IdentitySigningKey, data: &[u8]) -> Vec<u8> {
+    keypair.sign(data).to_bytes().to_vec()
 }
 
 pub fn neural_key_commitment(neural_key: &NeuralKey) -> [u8; 32] {

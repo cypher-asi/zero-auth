@@ -36,7 +36,6 @@ impl<S: Storage, I: IdentityCore, E: EventPublisher> SessionService<S, I, E> {
     pub(super) async fn issue_access_token(
         &self,
         session: &Session,
-        mfa_verified: bool,
         capabilities: Vec<String>,
         scope: Vec<String>,
     ) -> Result<String> {
@@ -47,7 +46,7 @@ impl<S: Storage, I: IdentityCore, E: EventPublisher> SessionService<S, I, E> {
             .await?;
 
         let claims =
-            self.build_token_claims(session, mfa_verified, capabilities, scope, machine.epoch);
+            self.build_token_claims(session, capabilities, scope, machine.epoch);
 
         self.sign_jwt_with_key(&claims).await
     }
@@ -156,7 +155,6 @@ impl<S: Storage, I: IdentityCore, E: EventPublisher> SessionService<S, I, E> {
     fn build_token_claims(
         &self,
         session: &Session,
-        mfa_verified: bool,
         capabilities: Vec<String>,
         scope: Vec<String>,
         revocation_epoch: u64,
@@ -175,7 +173,6 @@ impl<S: Storage, I: IdentityCore, E: EventPublisher> SessionService<S, I, E> {
             machine_id: session.machine_id.to_string(),
             namespace_id: session.namespace_id.to_string(),
             session_id: session.session_id.to_string(),
-            mfa_verified,
             capabilities,
             scope,
             revocation_epoch,

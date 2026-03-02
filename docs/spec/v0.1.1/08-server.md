@@ -93,16 +93,7 @@ graph TD
 | POST | `/v1/oauth/callback` | Complete OAuth flow | No |
 | DELETE | `/v1/oauth/{provider}` | Revoke OAuth link | Yes |
 
-### 2.7 MFA Endpoints
-
-| Method | Path | Purpose | Auth Required |
-|--------|------|---------|---------------|
-| POST | `/v1/mfa/setup` | Setup MFA | Yes |
-| POST | `/v1/mfa/enable` | Enable MFA (verify code) | Yes |
-| POST | `/v1/mfa/disable` | Disable MFA | Yes |
-| POST | `/v1/mfa/verify` | Verify MFA code | Yes |
-
-### 2.8 Session Endpoints
+### 2.7 Session Endpoints
 
 | Method | Path | Purpose | Auth Required |
 |--------|------|---------|---------------|
@@ -110,7 +101,7 @@ graph TD
 | DELETE | `/v1/sessions/{id}` | Revoke session | Yes |
 | DELETE | `/v1/sessions` | Revoke all sessions | Yes |
 
-### 2.9 Namespace Endpoints
+### 2.8 Namespace Endpoints
 
 | Method | Path | Purpose | Auth Required |
 |--------|------|---------|---------------|
@@ -124,7 +115,7 @@ graph TD
 | PATCH | `/v1/namespaces/{id}/members/{identity_id}` | Update member | Yes |
 | DELETE | `/v1/namespaces/{id}/members/{identity_id}` | Remove member | Yes |
 
-### 2.10 Integration Endpoints
+### 2.9 Integration Endpoints
 
 | Method | Path | Purpose | Auth Required |
 |--------|------|---------|---------------|
@@ -169,8 +160,7 @@ Content-Type: application/json
 {
   "challenge_id": "660f9511-e29b-41d4-a716-446655440001",
   "machine_id": "550e8400-e29b-41d4-a716-446655440000",
-  "signature": "base64_encoded_64_bytes",
-  "mfa_code": "123456"
+  "signature": "base64_encoded_64_bytes"
 }
 ```
 
@@ -196,8 +186,7 @@ Content-Type: application/json
 {
   "email": "user@example.com",
   "password": "secure_password",
-  "machine_id": "550e8400-e29b-41d4-a716-446655440000",
-  "mfa_code": "123456"
+  "machine_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -260,7 +249,6 @@ Response:
   "machine_id": "660f9511-e29b-41d4-a716-446655440001",
   "namespace_id": "770g0622-e29b-41d4-a716-446655440002",
   "session_id": "880h1733-e29b-41d4-a716-446655440003",
-  "mfa_verified": true,
   "capabilities": ["authenticate", "sign"],
   "scopes": ["read", "write"],
   "issued_at": 1704067200,
@@ -297,7 +285,6 @@ Response:
 | 401 | `TOKEN_EXPIRED` | Token has expired |
 | 401 | `TOKEN_INVALID` | Invalid token |
 | 403 | `FORBIDDEN` | Insufficient permissions |
-| 403 | `MFA_REQUIRED` | MFA verification needed |
 | 403 | `IDENTITY_FROZEN` | Identity is frozen |
 | 404 | `NOT_FOUND` | Resource not found |
 | 409 | `CONFLICT` | Resource already exists |

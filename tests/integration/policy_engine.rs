@@ -10,7 +10,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 use zid_crypto::{
     canonicalize_identity_creation_message, derive_identity_signing_keypair, generate_neural_key,
-    sign_message, MachineKeyCapabilities, NeuralKey,
+    MachineKeyCapabilities, NeuralKey,
 };
 use zid_identity_core::{
     CreateIdentityRequest, IdentityCore, IdentityCoreService, IdentityStatus, MachineKey,
@@ -88,13 +88,13 @@ async fn create_test_identity(service: &TestService) -> (Uuid, Uuid, NeuralKey) 
         now,
     );
 
-    let signature = sign_message(&identity_keypair, &message);
+    let signature = identity_keypair.sign(&message);
 
     let request = CreateIdentityRequest {
         identity_id,
         identity_signing_public_key,
         machine_key,
-        authorization_signature: signature.to_vec(),
+        authorization_signature: signature.to_bytes().to_vec(),
         namespace_name: Some("test-namespace".to_string()),
         created_at: now,
     };
@@ -118,7 +118,6 @@ async fn test_policy_blocks_frozen_identity() {
         machine_id: Some(machine_id),
         namespace_id: identity_id,
         auth_method: zid_policy::AuthMethod::MachineKey,
-        mfa_verified: false,
         operation: Operation::Login,
         resource: None,
         ip_address: "127.0.0.1".to_string(),
@@ -146,7 +145,6 @@ async fn test_policy_blocks_disabled_identity() {
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
         auth_method: zid_policy::AuthMethod::MachineKey,
-        mfa_verified: false,
         operation: Operation::Login,
         resource: None,
         ip_address: "127.0.0.1".to_string(),
@@ -174,7 +172,6 @@ async fn test_policy_blocks_revoked_machine() {
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
         auth_method: zid_policy::AuthMethod::MachineKey,
-        mfa_verified: false,
         operation: Operation::Login,
         resource: None,
         ip_address: "127.0.0.1".to_string(),
@@ -204,7 +201,6 @@ async fn test_policy_blocks_insufficient_capabilities() {
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
         auth_method: zid_policy::AuthMethod::MachineKey,
-        mfa_verified: false,
         operation: Operation::EnrollMachine,
         resource: None,
         ip_address: "127.0.0.1".to_string(),
@@ -233,7 +229,6 @@ async fn test_policy_allows_sufficient_capabilities() {
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
         auth_method: zid_policy::AuthMethod::MachineKey,
-        mfa_verified: false,
         operation: Operation::EnrollMachine,
         resource: None,
         ip_address: "127.0.0.1".to_string(),
@@ -262,7 +257,6 @@ async fn test_policy_blocks_inactive_namespace() {
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
         auth_method: zid_policy::AuthMethod::MachineKey,
-        mfa_verified: false,
         operation: Operation::Login,
         resource: None,
         ip_address: "127.0.0.1".to_string(),
@@ -300,7 +294,6 @@ async fn test_rate_limit_after_failures() {
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
         auth_method: zid_policy::AuthMethod::MachineKey,
-        mfa_verified: false,
         operation: Operation::Login,
         resource: None,
         ip_address: "127.0.0.1".to_string(),
@@ -388,7 +381,6 @@ async fn test_evaluation_priority_frozen_over_others() {
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
         auth_method: zid_policy::AuthMethod::MachineKey,
-        mfa_verified: false,
         operation: Operation::Login,
         resource: None,
         ip_address: "127.0.0.1".to_string(),
@@ -409,35 +401,6 @@ async fn test_evaluation_priority_frozen_over_others() {
 }
 
 #[tokio::test]
-async fn test_mfa_required_for_sensitive_operations() {
-    let (_storage, policy, _service) = create_test_infrastructure();
-
-    // ChangePassword requires MFA
-    let context = PolicyContext {
-        identity_id: Uuid::new_v4(),
-        machine_id: Some(Uuid::new_v4()),
-        namespace_id: Uuid::new_v4(),
-        auth_method: zid_policy::AuthMethod::MachineKey,
-        mfa_verified: false, // MFA not verified
-        operation: Operation::ChangePassword,
-        resource: None,
-        ip_address: "127.0.0.1".to_string(),
-        user_agent: "test".to_string(),
-        timestamp: 0,
-        reputation_score: 50,
-        recent_failed_attempts: 0,
-        identity_status: Some(PolicyIdentityStatus::Active),
-        machine_revoked: Some(false),
-        machine_capabilities: Some(capabilities::AUTHENTICATE | capabilities::SIGN),
-        namespace_active: Some(true),
-    };
-
-    let decision = policy.evaluate(context).await.unwrap();
-    assert_eq!(decision.verdict, Verdict::RequireAdditionalAuth);
-    assert!(decision.reason.contains("MFA"));
-}
-
-#[tokio::test]
 async fn test_approvals_required_for_critical_operations() {
     let (_storage, policy, _service) = create_test_infrastructure();
 
@@ -447,7 +410,6 @@ async fn test_approvals_required_for_critical_operations() {
         machine_id: Some(Uuid::new_v4()),
         namespace_id: Uuid::new_v4(),
         auth_method: zid_policy::AuthMethod::MachineKey,
-        mfa_verified: true,
         operation: Operation::UnfreezeIdentity,
         resource: None,
         ip_address: "127.0.0.1".to_string(),

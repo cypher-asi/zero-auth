@@ -64,7 +64,7 @@ pub async fn create_test_session_service(
 pub async fn create_test_identity_with_machine(
     identity_core: &TestIdentityService,
 ) -> (Uuid, Uuid, Uuid) {
-    use zid_crypto::{canonicalize_identity_creation_message, sign_message, Ed25519KeyPair};
+    use zid_crypto::{canonicalize_identity_creation_message, derive_identity_signing_keypair};
     use zid_identity_core::{CreateIdentityRequest, MachineKey};
 
     let now = crate::current_timestamp();
@@ -72,9 +72,9 @@ pub async fn create_test_identity_with_machine(
     let machine_id = Uuid::new_v4();
     let namespace_id = identity_id; // Personal namespace has same ID as identity
 
-    // Create Ed25519 keypair for identity
-    let identity_keypair = Ed25519KeyPair::from_seed(&[42u8; 32]).unwrap();
-    let identity_signing_public_key = identity_keypair.public_key_bytes();
+    let neural_key = zid_crypto::NeuralKey::from_bytes([42u8; 32]);
+    let (identity_signing_public_key, identity_signing_key) =
+        derive_identity_signing_keypair(&neural_key, &identity_id).unwrap();
 
     let signing_public_key = [2u8; 32];
     let encryption_public_key = [3u8; 32];
@@ -110,14 +110,14 @@ pub async fn create_test_identity_with_machine(
     );
 
     // Sign the message
-    let signature = sign_message(&identity_keypair, &message);
+    let signature = identity_signing_key.sign(&message);
 
     // Create identity request
     let request = CreateIdentityRequest {
         identity_id,
         identity_signing_public_key,
         machine_key,
-        authorization_signature: signature.to_vec(),
+        authorization_signature: signature.to_bytes().to_vec(),
         namespace_name: Some("test-namespace".to_string()),
         created_at: now,
     };

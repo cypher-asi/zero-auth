@@ -12,7 +12,9 @@ use zid_identity_core::IdentityCore;
 use zid_policy::PolicyEngine;
 use zid_storage::Storage;
 
-use super::{AuthMethodsService, CF_CHALLENGES, CF_OAUTH_STATES, CF_USED_NONCES};
+use super::{
+    AuthMethodsService, CF_CHALLENGES, CF_OAUTH_STATES, CF_OPAQUE_LOGIN_STATE, CF_USED_NONCES,
+};
 
 /// Default cleanup interval in seconds (5 minutes)
 pub const DEFAULT_CLEANUP_INTERVAL_SECS: u64 = 300;
@@ -29,6 +31,8 @@ pub struct CleanupStats {
     pub challenges_removed: usize,
     /// Number of expired OAuth states removed
     pub oauth_states_removed: usize,
+    /// Number of expired OPAQUE login states removed
+    pub opaque_login_states_removed: usize,
     /// Total duration of cleanup in milliseconds
     pub duration_ms: u64,
 }
@@ -59,6 +63,8 @@ where
         let nonces_removed = self.cleanup_expired_nonces(current_time).await?;
         let challenges_removed = self.cleanup_expired_challenges(current_time).await?;
         let oauth_states_removed = self.cleanup_expired_oauth_states(current_time).await?;
+        let opaque_login_states_removed =
+            self.cleanup_expired_opaque_login_states(current_time).await?;
 
         let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -66,15 +72,21 @@ where
             nonces_removed,
             challenges_removed,
             oauth_states_removed,
+            opaque_login_states_removed,
             duration_ms,
         };
 
-        if stats.nonces_removed > 0 || stats.challenges_removed > 0 || stats.oauth_states_removed > 0
-        {
+        let has_removals = stats.nonces_removed > 0
+            || stats.challenges_removed > 0
+            || stats.oauth_states_removed > 0
+            || stats.opaque_login_states_removed > 0;
+
+        if has_removals {
             info!(
                 nonces = stats.nonces_removed,
                 challenges = stats.challenges_removed,
                 oauth_states = stats.oauth_states_removed,
+                opaque_login_states = stats.opaque_login_states_removed,
                 duration_ms = stats.duration_ms,
                 "Cleanup completed"
             );
@@ -185,6 +197,39 @@ where
         if removed > 0 {
             batch.commit().await.map_err(AuthMethodsError::Storage)?;
             debug!("Removed {} expired OAuth states", removed);
+        } else {
+            batch.rollback();
+        }
+
+        Ok(removed)
+    }
+
+    /// Clean up expired OPAQUE login states (60-second TTL).
+    async fn cleanup_expired_opaque_login_states(&self, current_time: u64) -> Result<usize> {
+        use zid_crypto::{OpaqueLoginState, OPAQUE_LOGIN_STATE_TTL_SECS};
+
+        let entries: Vec<(Vec<u8>, OpaqueLoginState)> = self
+            .storage
+            .scan_all(CF_OPAQUE_LOGIN_STATE)
+            .await
+            .map_err(AuthMethodsError::Storage)?;
+
+        let mut removed = 0;
+        let mut batch = self.storage.batch();
+
+        for (key, state) in entries.into_iter().take(MAX_ENTRIES_PER_RUN) {
+            if current_time > state.created_at + OPAQUE_LOGIN_STATE_TTL_SECS {
+                if let Err(e) = batch.delete_raw(CF_OPAQUE_LOGIN_STATE, key.clone()) {
+                    warn!("Failed to queue OPAQUE login state deletion: {}", e);
+                    continue;
+                }
+                removed += 1;
+            }
+        }
+
+        if removed > 0 {
+            batch.commit().await.map_err(AuthMethodsError::Storage)?;
+            debug!("Removed {} expired OPAQUE login states", removed);
         } else {
             batch.rollback();
         }

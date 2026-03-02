@@ -1,7 +1,7 @@
 //! Digital signature operations using Ed25519.
 
-use crate::{constants::*, errors::*, keys::Ed25519KeyPair};
-use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use crate::{constants::*, errors::*};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -123,21 +123,6 @@ impl Challenge {
     }
 }
 
-/// Sign a message with Ed25519
-///
-/// # Arguments
-///
-/// * `keypair` - The Ed25519 key pair to sign with
-/// * `message` - The message to sign
-///
-/// # Returns
-///
-/// 64-byte Ed25519 signature
-pub fn sign_message(keypair: &Ed25519KeyPair, message: &[u8]) -> [u8; SIGNATURE_SIZE] {
-    let signature = keypair.private_key().sign(message);
-    signature.to_bytes()
-}
-
 /// Verify an Ed25519 signature
 ///
 /// # Arguments
@@ -149,7 +134,7 @@ pub fn sign_message(keypair: &Ed25519KeyPair, message: &[u8]) -> [u8; SIGNATURE_
 /// # Returns
 ///
 /// `Ok(())` if signature is valid, `Err` otherwise
-pub fn verify_signature(
+pub fn verify_ed25519_signature(
     public_key: &[u8; PUBLIC_KEY_SIZE],
     message: &[u8],
     signature: &[u8; SIGNATURE_SIZE],
@@ -168,28 +153,29 @@ pub fn verify_signature(
 ///
 /// As specified in 03-identity-core.md § 3.3
 ///
-/// Format: version(1) || identity_id(16) || identity_signing_public_key(32) ||
-///         first_machine_id(16) || machine_signing_key(32) ||
-///         machine_encryption_key(32) || created_at(8)
-///
-/// Total: 137 bytes
+/// Format: version(1) || identity_id(16) || isk_len(2 BE u16) ||
+///         identity_signing_public_key(var) || first_machine_id(16) ||
+///         machine_signing_key(32) || machine_encryption_key(32) || created_at(8)
 pub fn canonicalize_identity_creation_message(
     identity_id: &uuid::Uuid,
-    identity_signing_public_key: &[u8; 32],
+    identity_signing_public_key: &[u8],
     first_machine_id: &uuid::Uuid,
     machine_signing_key: &[u8; 32],
     machine_encryption_key: &[u8; 32],
     created_at: u64,
-) -> [u8; 137] {
-    let mut message = [0u8; 137];
+) -> Vec<u8> {
+    let isk_len = identity_signing_public_key.len() as u16;
+    let total = 1 + 16 + 2 + identity_signing_public_key.len() + 16 + 32 + 32 + 8;
+    let mut message = Vec::with_capacity(total);
 
-    message[0] = 0x01; // Version
-    message[1..17].copy_from_slice(identity_id.as_bytes());
-    message[17..49].copy_from_slice(identity_signing_public_key);
-    message[49..65].copy_from_slice(first_machine_id.as_bytes());
-    message[65..97].copy_from_slice(machine_signing_key);
-    message[97..129].copy_from_slice(machine_encryption_key);
-    message[129..137].copy_from_slice(&created_at.to_be_bytes());
+    message.push(0x01); // Version
+    message.extend_from_slice(identity_id.as_bytes());
+    message.extend_from_slice(&isk_len.to_be_bytes());
+    message.extend_from_slice(identity_signing_public_key);
+    message.extend_from_slice(first_machine_id.as_bytes());
+    message.extend_from_slice(machine_signing_key);
+    message.extend_from_slice(machine_encryption_key);
+    message.extend_from_slice(&created_at.to_be_bytes());
 
     message
 }
@@ -253,21 +239,22 @@ pub fn canonicalize_recovery_approval_message(
 ///
 /// As specified in 03-identity-core.md § 7.3
 ///
-/// Format: version(1) || identity_id(16) || new_identity_signing_public_key(32) ||
-///         timestamp(8)
-///
-/// Total: 57 bytes
+/// Format: version(1) || identity_id(16) || isk_len(2 BE u16) ||
+///         new_identity_signing_public_key(var) || timestamp(8)
 pub fn canonicalize_rotation_approval_message(
     identity_id: &uuid::Uuid,
-    new_identity_signing_public_key: &[u8; 32],
+    new_identity_signing_public_key: &[u8],
     timestamp: u64,
-) -> [u8; 57] {
-    let mut message = [0u8; 57];
+) -> Vec<u8> {
+    let isk_len = new_identity_signing_public_key.len() as u16;
+    let total = 1 + 16 + 2 + new_identity_signing_public_key.len() + 8;
+    let mut message = Vec::with_capacity(total);
 
-    message[0] = 0x01; // Version
-    message[1..17].copy_from_slice(identity_id.as_bytes());
-    message[17..49].copy_from_slice(new_identity_signing_public_key);
-    message[49..57].copy_from_slice(&timestamp.to_be_bytes());
+    message.push(0x01); // Version
+    message.extend_from_slice(identity_id.as_bytes());
+    message.extend_from_slice(&isk_len.to_be_bytes());
+    message.extend_from_slice(new_identity_signing_public_key);
+    message.extend_from_slice(&timestamp.to_be_bytes());
 
     message
 }
@@ -324,48 +311,54 @@ pub fn canonicalize_challenge(challenge: &Challenge) -> [u8; 130] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::keys::Ed25519KeyPair;
 
     #[test]
-    fn test_sign_and_verify() {
+    fn test_verify_ed25519_signature() {
         let seed = [42u8; 32];
-        let keypair = Ed25519KeyPair::from_seed(&seed).unwrap();
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
+        let verifying_key = signing_key.verifying_key();
         let message = b"test message";
 
-        let signature = sign_message(&keypair, message);
-        let public_key = keypair.public_key_bytes();
+        use ed25519_dalek::Signer;
+        let signature = signing_key.sign(message);
+        let pk_bytes = verifying_key.to_bytes();
+        let sig_bytes = signature.to_bytes();
 
-        assert!(verify_signature(&public_key, message, &signature).is_ok());
+        assert!(verify_ed25519_signature(&pk_bytes, message, &sig_bytes).is_ok());
     }
 
     #[test]
     fn test_verify_invalid_signature() {
         let seed = [42u8; 32];
-        let keypair = Ed25519KeyPair::from_seed(&seed).unwrap();
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
+        let verifying_key = signing_key.verifying_key();
         let message = b"test message";
-        let public_key = keypair.public_key_bytes();
+        let pk_bytes = verifying_key.to_bytes();
 
         let wrong_signature = [0u8; SIGNATURE_SIZE];
-        assert!(verify_signature(&public_key, message, &wrong_signature).is_err());
+        assert!(verify_ed25519_signature(&pk_bytes, message, &wrong_signature).is_err());
     }
 
     #[test]
     fn test_verify_wrong_message() {
         let seed = [42u8; 32];
-        let keypair = Ed25519KeyPair::from_seed(&seed).unwrap();
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
+        let verifying_key = signing_key.verifying_key();
         let message = b"original message";
         let wrong_message = b"tampered message";
 
-        let signature = sign_message(&keypair, message);
-        let public_key = keypair.public_key_bytes();
+        use ed25519_dalek::Signer;
+        let signature = signing_key.sign(message);
+        let pk_bytes = verifying_key.to_bytes();
+        let sig_bytes = signature.to_bytes();
 
-        assert!(verify_signature(&public_key, wrong_message, &signature).is_err());
+        assert!(verify_ed25519_signature(&pk_bytes, wrong_message, &sig_bytes).is_err());
     }
 
     #[test]
     fn test_canonicalize_identity_creation() {
         let identity_id = uuid::Uuid::new_v4();
-        let identity_signing_public_key = [1u8; 32];
+        let identity_signing_public_key = vec![1u8; 1984];
         let first_machine_id = uuid::Uuid::new_v4();
         let machine_signing_key = [2u8; 32];
         let machine_encryption_key = [3u8; 32];
@@ -380,7 +373,8 @@ mod tests {
             created_at,
         );
 
-        assert_eq!(message.len(), 137);
+        // 1 + 16 + 2 + 1984 + 16 + 32 + 32 + 8 = 2091
+        assert_eq!(message.len(), 2091);
         assert_eq!(message[0], 0x01); // Version
     }
 
@@ -407,9 +401,26 @@ mod tests {
     }
 
     #[test]
+    fn test_canonicalize_rotation_approval() {
+        let identity_id = uuid::Uuid::new_v4();
+        let new_isk = vec![5u8; 1984];
+        let timestamp = 1705320000u64;
+
+        let message = canonicalize_rotation_approval_message(
+            &identity_id,
+            &new_isk,
+            timestamp,
+        );
+
+        // 1 + 16 + 2 + 1984 + 8 = 2011
+        assert_eq!(message.len(), 2011);
+        assert_eq!(message[0], 0x01); // Version
+    }
+
+    #[test]
     fn test_canonical_messages_are_deterministic() {
         let identity_id = uuid::Uuid::new_v4();
-        let identity_signing_public_key = [1u8; 32];
+        let identity_signing_public_key = vec![1u8; 1984];
         let first_machine_id = uuid::Uuid::new_v4();
         let machine_signing_key = [2u8; 32];
         let machine_encryption_key = [3u8; 32];

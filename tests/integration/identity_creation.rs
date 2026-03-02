@@ -2,7 +2,7 @@ use serde_json::json;
 use uuid::Uuid;
 use zid_crypto::{
     canonicalize_identity_creation_message, derive_identity_signing_keypair, derive_machine_keypair,
-    generate_neural_key, sign_message, MachineKeyCapabilities,
+    generate_neural_key, MachineKeyCapabilities,
 };
 
 #[path = "../common/mod.rs"]
@@ -37,7 +37,7 @@ async fn test_identity_creation_flow() -> Result<(), Box<dyn std::error::Error>>
     println!("✓ Derived Identity Signing Public Key");
     println!(
         "  Identity Signing Public Key: {}\n",
-        hex::encode(identity_signing_public_key)
+        hex::encode(&identity_signing_public_key)
     );
 
     // 4. Derive machine key pair from the neural key
@@ -74,17 +74,17 @@ async fn test_identity_creation_flow() -> Result<(), Box<dyn std::error::Error>>
     );
 
     // 6. Sign the message with the identity signing key
-    let signature = sign_message(&identity_signing_keypair, &message);
+    let signature = identity_signing_keypair.sign(&message);
 
     println!("✓ Created Authorization Signature");
     println!("  Message length: {} bytes", message.len());
-    println!("  Signature: {}\n", hex::encode(signature));
+    println!("  Signature: {}\n", hex::encode(signature.to_bytes()));
 
     // 7. Build the JSON request
     let request = json!({
         "identity_id": identity_id,
-        "identity_signing_public_key": hex::encode(identity_signing_public_key),
-        "authorization_signature": hex::encode(signature),
+        "identity_signing_public_key": hex::encode(&identity_signing_public_key),
+        "authorization_signature": hex::encode(signature.to_bytes()),
         "machine_key": {
             "machine_id": machine_id,
             "signing_public_key": hex::encode(&machine_signing_pk),

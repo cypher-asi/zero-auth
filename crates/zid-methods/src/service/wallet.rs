@@ -51,9 +51,9 @@ where
             .get_wallet_credential(&signature.wallet_address)
             .await?;
 
-        // Step 4: Check identity status and MFA
-        let (identity, mfa_verified) = self
-            .check_wallet_identity_and_mfa(credential.identity_id, signature.mfa_code)
+        // Step 4: Check identity status
+        let identity = self
+            .check_wallet_identity_status(credential.identity_id)
             .await?;
 
         // Step 5: Create virtual machine
@@ -65,7 +65,6 @@ where
                 credential.identity_id,
                 identity.identity_id,
                 machine_id,
-                mfa_verified,
                 ip_address,
                 user_agent,
             )
@@ -298,13 +297,11 @@ where
         Ok(credential)
     }
 
-    /// Check identity status and MFA for wallet auth (helper for authenticate_wallet).
-    async fn check_wallet_identity_and_mfa(
+    /// Check identity status for wallet auth (helper for authenticate_wallet).
+    async fn check_wallet_identity_status(
         &self,
         identity_id: Uuid,
-        mfa_code: Option<String>,
-    ) -> Result<(zid_identity_core::Identity, bool)> {
-        // Check identity frozen status
+    ) -> Result<zid_identity_core::Identity> {
         let identity = self.identity_core.get_identity(identity_id).await?;
         if identity.status == IdentityStatus::Frozen {
             return Err(AuthMethodsError::IdentityFrozen {
@@ -313,14 +310,7 @@ where
             });
         }
 
-        // Check MFA if provided
-        let mfa_verified = if let Some(mfa_code) = mfa_code {
-            self.verify_mfa(identity_id, mfa_code).await?
-        } else {
-            false
-        };
-
-        Ok((identity, mfa_verified))
+        Ok(identity)
     }
 
     /// Evaluate policy for wallet authentication (helper for authenticate_wallet).
@@ -329,7 +319,6 @@ where
         identity_id: Uuid,
         namespace_id: Uuid,
         machine_id: Uuid,
-        mfa_verified: bool,
         ip_address: String,
         user_agent: String,
     ) -> Result<AuthResult> {
@@ -343,7 +332,6 @@ where
                 machine_id: Some(machine_id),
                 namespace_id,
                 auth_method: zid_policy::AuthMethod::EvmWallet,
-                mfa_verified,
                 operation: Operation::Login,
                 resource: None,
                 ip_address,
@@ -372,7 +360,6 @@ where
             identity_id,
             machine_id,
             namespace_id,
-            mfa_verified,
             auth_method: AuthMethod::EvmWallet,
             warning: Some("Consider enrolling a real device for enhanced security".to_string()),
         })
@@ -406,7 +393,6 @@ where
     /// # Arguments
     ///
     /// * `wallet_address` - Verified wallet address
-    /// * `mfa_code` - Optional MFA code
     /// * `ip_address` - Client IP address for policy evaluation
     /// * `user_agent` - Client user agent for policy evaluation
     ///
@@ -416,7 +402,6 @@ where
     pub async fn authenticate_wallet_by_address(
         &self,
         wallet_address: String,
-        mfa_code: Option<String>,
         ip_address: String,
         user_agent: String,
     ) -> Result<AuthResult> {
@@ -425,9 +410,9 @@ where
         // Step 1: Get wallet credential
         let credential = self.get_wallet_credential(&wallet_address).await?;
 
-        // Step 2: Check identity status and MFA
-        let (identity, mfa_verified) = self
-            .check_wallet_identity_and_mfa(credential.identity_id, mfa_code)
+        // Step 2: Check identity status
+        let identity = self
+            .check_wallet_identity_status(credential.identity_id)
             .await?;
 
         // Step 3: Create virtual machine
@@ -439,7 +424,6 @@ where
                 credential.identity_id,
                 identity.identity_id,
                 machine_id,
-                mfa_verified,
                 ip_address,
                 user_agent,
             )

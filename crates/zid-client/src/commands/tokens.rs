@@ -82,9 +82,6 @@ fn print_validation_result(result: &IntrospectResponse) {
         if let Some(machine_id) = result.machine_id {
             println!("  Machine ID: {}", machine_id);
         }
-        if let Some(mfa_verified) = result.mfa_verified {
-            println!("  MFA Verified: {}", mfa_verified);
-        }
         if let Some(capabilities) = &result.capabilities {
             println!("  Capabilities: {}", capabilities.join(", "));
         }

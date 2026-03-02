@@ -151,7 +151,6 @@ pub struct IntrospectResponse {
     pub active: bool,
     pub identity_id: Option<Uuid>,
     pub machine_id: Option<Uuid>,
-    pub mfa_verified: Option<bool>,
     pub capabilities: Option<Vec<String>>,
     pub revocation_epoch: Option<u32>,
     pub exp: Option<i64>,

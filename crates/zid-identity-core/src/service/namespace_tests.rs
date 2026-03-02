@@ -7,7 +7,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 use zid_crypto::{
     canonicalize_identity_creation_message, derive_identity_signing_keypair, generate_neural_key,
-    sign_message, MachineKeyCapabilities,
+    MachineKeyCapabilities,
 };
 use zid_policy::PolicyEngineImpl;
 use zid_storage::RocksDbStorage;
@@ -30,7 +30,7 @@ async fn create_test_identity(
 ) -> Uuid {
     let neural_key = generate_neural_key();
     let identity_id = Uuid::new_v4();
-    let (identity_signing_public_key, identity_keypair) =
+    let (identity_signing_public_key, identity_signing_key) =
         derive_identity_signing_keypair(&neural_key, &identity_id).unwrap();
 
     let machine_id = Uuid::new_v4();
@@ -62,13 +62,13 @@ async fn create_test_identity(
         machine_key.created_at,
     );
 
-    let signature = sign_message(&identity_keypair, &message);
+    let signature = identity_signing_key.sign(&message);
 
     let request = CreateIdentityRequest {
         identity_id,
         identity_signing_public_key,
         machine_key,
-        authorization_signature: signature.to_vec(),
+        authorization_signature: signature.to_bytes().to_vec(),
         namespace_name: Some("test-namespace".to_string()),
         created_at: current_timestamp(),
     };

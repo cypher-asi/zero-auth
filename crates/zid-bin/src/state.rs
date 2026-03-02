@@ -7,7 +7,6 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::infra::http_client::HttpClient;
 use crate::infra::local_storage::LocalStorage;
-use crate::service::mfa::MfaSetupResponse;
 use crate::service::session::SessionTokens;
 
 // ---------------------------------------------------------------------------
@@ -28,7 +27,6 @@ pub enum Page {
     Dashboard,
     Machines,
     Credentials,
-    Mfa,
     Sessions,
     Namespaces,
     Security,
@@ -127,20 +125,6 @@ pub struct NamespaceViewModel {
 pub struct FrozenInfo {
     pub reason: String,
     pub frozen_at: String,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum MfaState {
-    Disabled,
-    SetupInProgress(MfaSetupInfo),
-    Enabled,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct MfaSetupInfo {
-    pub secret: String,
-    pub qr_url: String,
-    pub backup_codes: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -311,11 +295,6 @@ pub enum AppMessage {
         method_id: String,
     },
 
-    // MFA
-    MfaSetupStarted(MfaSetupResponse),
-    MfaEnabled,
-    MfaDisabled,
-
     // Recovery
     RecoveryComplete {
         identity: IdentityViewModel,
@@ -355,7 +334,6 @@ pub enum NavSection {
     Dashboard,
     Machines,
     Credentials,
-    Mfa,
     Sessions,
     Namespaces,
     Security,
@@ -363,11 +341,10 @@ pub enum NavSection {
 }
 
 impl NavSection {
-    pub const ALL: [NavSection; 8] = [
+    pub const ALL: [NavSection; 7] = [
         NavSection::Dashboard,
         NavSection::Machines,
         NavSection::Credentials,
-        NavSection::Mfa,
         NavSection::Sessions,
         NavSection::Namespaces,
         NavSection::Security,
@@ -379,7 +356,6 @@ impl NavSection {
             NavSection::Dashboard => "Dashboard",
             NavSection::Machines => "Machines",
             NavSection::Credentials => "Credentials",
-            NavSection::Mfa => "MFA",
             NavSection::Sessions => "Sessions",
             NavSection::Namespaces => "Namespaces",
             NavSection::Security => "Security",
@@ -392,7 +368,6 @@ impl NavSection {
             NavSection::Dashboard => Page::Dashboard,
             NavSection::Machines => Page::Machines,
             NavSection::Credentials => Page::Credentials,
-            NavSection::Mfa => Page::Mfa,
             NavSection::Sessions => Page::Sessions,
             NavSection::Namespaces => Page::Namespaces,
             NavSection::Security => Page::Security,
@@ -422,9 +397,6 @@ pub struct AppState {
     // Credentials
     pub credentials: Vec<CredentialViewModel>,
     pub credentials_status: LoadStatus,
-
-    // MFA
-    pub mfa_status: MfaState,
 
     // Sessions
     pub current_session: Option<SessionViewModel>,
@@ -483,11 +455,6 @@ pub struct AppState {
     pub add_wallet_address: String,
     pub add_wallet_signature: String,
 
-    // MFA transient
-    pub mfa_setup_code: String,
-    pub mfa_disable_code: String,
-    pub mfa_backup_acknowledged: bool,
-
     // Freeze dialog
     pub show_freeze_dialog: bool,
     pub freeze_reason: FreezeReason,
@@ -519,7 +486,6 @@ pub struct ConfirmDialogState {
 pub enum ConfirmAction {
     RevokeMachine(uuid::Uuid),
     RevokeCredential(String, String),
-    DisableMfa,
     FreezeIdentity,
     RevokeSession(uuid::Uuid),
     DeleteProfile(String),
@@ -558,7 +524,6 @@ impl AppState {
             machines_status: LoadStatus::Idle,
             credentials: vec![],
             credentials_status: LoadStatus::Idle,
-            mfa_status: MfaState::Disabled,
             current_session: None,
             active_sessions: vec![],
             namespaces: vec![],
@@ -592,9 +557,6 @@ impl AppState {
             add_email_password: String::new(),
             add_wallet_address: String::new(),
             add_wallet_signature: String::new(),
-            mfa_setup_code: String::new(),
-            mfa_disable_code: String::new(),
-            mfa_backup_acknowledged: false,
             show_freeze_dialog: false,
             freeze_reason: FreezeReason::UserRequested,
             settings,
@@ -788,27 +750,6 @@ impl AppState {
                     c.primary = c.method_type == method_type && c.method_id == method_id;
                 }
                 self.add_toast(ToastLevel::Success, "Primary credential updated".into());
-            }
-
-            AppMessage::MfaSetupStarted(setup) => {
-                self.mfa_status = MfaState::SetupInProgress(MfaSetupInfo {
-                    secret: setup.secret,
-                    qr_url: setup.qr_url,
-                    backup_codes: setup.backup_codes,
-                });
-            }
-
-            AppMessage::MfaEnabled => {
-                self.mfa_status = MfaState::Enabled;
-                self.mfa_setup_code.clear();
-                self.add_toast(ToastLevel::Success, "MFA enabled".into());
-            }
-
-            AppMessage::MfaDisabled => {
-                self.mfa_status = MfaState::Disabled;
-                self.mfa_disable_code.clear();
-                self.confirm_dialog = None;
-                self.add_toast(ToastLevel::Info, "MFA disabled".into());
             }
 
             AppMessage::IdentityFrozen => {

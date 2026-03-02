@@ -332,7 +332,7 @@ sequenceDiagram
 
 ### 5.1 Column Families
 
-The storage layer defines 30 column families organized by domain.
+The storage layer defines 29 column families organized by domain.
 
 #### Core Identity (3)
 
@@ -351,12 +351,11 @@ The storage layer defines 30 column families organized by domain.
 | `namespaces_by_identity` | `(identity_id, namespace_id)` | `()` | Namespaces per identity |
 | `identity_namespace_memberships` | `(identity_id, namespace_id)` | `Membership` | Membership records |
 
-#### Authentication (4)
+#### Authentication (3)
 
 | Column Family | Key Format | Value Type | TTL | Description |
 |---------------|------------|------------|-----|-------------|
 | `auth_credentials` | `(identity_id, cred_type)` | `Credential` | — | Auth credentials |
-| `mfa_secrets` | `identity_id: Uuid` | `EncryptedMfaSecret` | — | MFA TOTP secrets |
 | `challenges` | `challenge_id: Uuid` | `Challenge` | 5 min | Auth challenges |
 | `used_nonces` | `nonce_hex: String` | `u64` (expiry) | ~6 min | Replay protection |
 
@@ -448,7 +447,7 @@ Values are serialized using **bincode** with default configuration:
 |---------|------------|
 | Data at rest | RocksDB supports encryption (not enabled by default) |
 | Sensitive values | Encrypted at application layer before storage |
-| Key material | Never stored in plaintext (MFA secrets encrypted) |
+| Key material | Never stored in plaintext |
 
 ### 6.2 Atomicity Guarantees
 
@@ -515,7 +514,6 @@ pub const CF_IDENTITY_NAMESPACE_MEMBERSHIPS: &str = "identity_namespace_membersh
 
 // Authentication
 pub const CF_AUTH_CREDENTIALS: &str = "auth_credentials";
-pub const CF_MFA_SECRETS: &str = "mfa_secrets";
 pub const CF_CHALLENGES: &str = "challenges";
 pub const CF_USED_NONCES: &str = "used_nonces";
 
@@ -548,7 +546,7 @@ pub const CF_WEBHOOK_DELIVERY_LOG: &str = "webhook_delivery_log";
 // Policy
 pub const CF_REPUTATION: &str = "reputation";
 
-/// Get all column family names (29 total)
+/// Get all column family names (28 total)
 pub fn all_column_families() -> Vec<&'static str>;
 ```
 

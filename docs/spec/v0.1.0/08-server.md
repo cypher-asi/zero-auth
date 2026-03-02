@@ -113,13 +113,11 @@ pub struct AuthenticatedUser {
 pub struct JwtClaims {
     pub sub: String,           // identity_id
     pub machine_id: String,
-    pub mfa_verified: bool,
 }
 
 impl JwtClaims {
     pub fn identity_id(&self) -> Result<Uuid, ApiError>;
     pub fn machine_id(&self) -> Result<Uuid, ApiError>;
-    pub fn require_mfa(&self) -> Result<(), ApiError>;
 }
 ```
 
@@ -149,7 +147,6 @@ pub enum ApiError {
     RateLimited,                // 429
     IdentityFrozen,             // 403 IDENTITY_FROZEN
     MachineRevoked,             // 403 MACHINE_REVOKED
-    MfaRequired,                // 403 MFA_REQUIRED
     ChallengeExpired,           // 400 CHALLENGE_EXPIRED
     InvalidSignature,           // 400 INVALID_SIGNATURE
     Internal(anyhow::Error),    // 500
@@ -241,8 +238,7 @@ Request:
 {
   "email": "user@example.com",
   "password": "SecurePass123!",
-  "machine_id": "660f9511-...",  // Optional
-  "mfa_code": "123456"           // If MFA enabled
+  "machine_id": "660f9511-..."   // Optional
 }
 
 Response:
@@ -273,7 +269,7 @@ Request:
 | POST | `/v1/identity/freeze` | JWT | Freeze identity |
 | POST | `/v1/identity/unfreeze` | JWT | Unfreeze identity |
 | POST | `/v1/identity/recovery` | JWT | Neural key recovery |
-| POST | `/v1/identity/rotation` | JWT+MFA | Neural key rotation |
+| POST | `/v1/identity/rotation` | JWT | Neural key rotation |
 
 #### Request/Response Examples
 
@@ -392,14 +388,7 @@ Response: 204 No Content
 | PATCH | `/v1/namespaces/:namespace_id/members/:identity_id` | JWT | Update member |
 | DELETE | `/v1/namespaces/:namespace_id/members/:identity_id` | JWT | Remove member |
 
-### 3.6 MFA Endpoints
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/v1/mfa/setup` | JWT | Setup MFA (returns QR code) |
-| DELETE | `/v1/mfa` | JWT | Disable MFA |
-
-### 3.7 Credential Endpoints
+### 3.6 Credential Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -407,12 +396,12 @@ Response: 204 No Content
 | POST | `/v1/credentials/oauth/:provider` | JWT | Initiate OAuth link |
 | POST | `/v1/credentials/oauth/:provider/callback` | JWT | Complete OAuth link |
 
-### 3.8 Session Endpoints
+### 3.7 Session Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | POST | `/v1/session/revoke` | JWT | Revoke session |
-| POST | `/v1/session/revoke-all` | JWT+MFA | Revoke all sessions |
+| POST | `/v1/session/revoke-all` | JWT | Revoke all sessions |
 | GET | `/.well-known/jwks.json` | None | JWKS endpoint |
 
 #### JWKS Response
@@ -432,7 +421,7 @@ Response: 204 No Content
 }
 ```
 
-### 3.9 Integration Endpoints
+### 3.8 Integration Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -601,7 +590,6 @@ flowchart TD
 |--------|----------------|
 | JWT Verification | Full signature verification via session service |
 | Token Binding | Machine ID in claims, verified against session |
-| MFA Requirement | `require_mfa()` check for sensitive operations |
 | Revocation Check | Token introspection validates session state |
 
 ### 6.2 Request Security
@@ -621,14 +609,7 @@ flowchart TD
 | Fingerprint Validation | BLAKE3 hash of certificate |
 | Service Binding | Fingerprint must match registered service |
 
-### 6.4 Operations Requiring MFA
-
-| Endpoint | Reason |
-|----------|--------|
-| POST /v1/identity/rotation | Neural key rotation |
-| POST /v1/session/revoke-all | Mass session revocation |
-
-### 6.5 Error Information Disclosure
+### 6.4 Error Information Disclosure
 
 ```rust
 // Internal errors never expose details to client
@@ -744,10 +725,6 @@ Router::new()
     .route("/v1/auth/login/wallet", post(login_wallet))
     .route("/v1/auth/oauth/:provider", get(oauth_initiate))
     .route("/v1/auth/oauth/:provider/callback", post(oauth_complete))
-    
-    // MFA
-    .route("/v1/mfa/setup", post(setup_mfa))
-    .route("/v1/mfa", delete(disable_mfa))
     
     // Credentials
     .route("/v1/credentials/email", post(add_email_credential))

@@ -6,7 +6,7 @@ use crate::error::{map_service_error, ApiError, MapServiceErr};
 use crate::state::AppState;
 use super::auth::LoginResponse;
 use uuid::Uuid;
-use zid_crypto::{blake3_hash, MachineKeyCapabilities, ML_DSA_65_PUBLIC_KEY_SIZE, ML_KEM_768_PUBLIC_KEY_SIZE};
+use zid_crypto::{blake3_hash, MachineKeyCapabilities, ML_DSA_65_PUBLIC_KEY_SIZE, ML_KEM_768_PUBLIC_KEY_SIZE, HYBRID_SIGNATURE_SIZE, IDENTITY_VERIFYING_KEY_SIZE};
 use zid_identity_core::{Approval, Identity, IdentityCore, IdentityTier};
 use zid_methods::{AuthResult, OAuthProvider};
 use zid_sessions::SessionManager;
@@ -33,6 +33,29 @@ pub fn parse_hex_64(hex_str: &str) -> Result<[u8; 64], ApiError> {
     let mut array = [0u8; 64];
     array.copy_from_slice(&bytes);
     Ok(array)
+}
+
+/// Parse a hex string into a variable-length byte vector with expected size
+pub fn parse_hex_bytes(hex_str: &str, expected_size: usize, name: &str) -> Result<Vec<u8>, ApiError> {
+    let bytes = hex::decode(hex_str)
+        .map_err(|_| ApiError::InvalidRequest(format!("Invalid hex encoding for {}", name)))?;
+    if bytes.len() != expected_size {
+        return Err(ApiError::InvalidRequest(format!(
+            "Invalid {} size: expected {} bytes, got {}",
+            name, expected_size, bytes.len()
+        )));
+    }
+    Ok(bytes)
+}
+
+/// Parse a hex-encoded hybrid signature (3373 bytes)
+pub fn parse_hex_hybrid_signature(hex_str: &str) -> Result<Vec<u8>, ApiError> {
+    parse_hex_bytes(hex_str, HYBRID_SIGNATURE_SIZE, "hybrid signature")
+}
+
+/// Parse a hex-encoded identity verifying key (1984 bytes)
+pub fn parse_hex_verifying_key(hex_str: &str) -> Result<Vec<u8>, ApiError> {
+    parse_hex_bytes(hex_str, IDENTITY_VERIFYING_KEY_SIZE, "identity verifying key")
 }
 
 /// Parse capability strings into MachineKeyCapabilities bitflags
@@ -188,7 +211,6 @@ pub async fn create_login_session(
             auth_result.identity_id,
             auth_result.machine_id,
             auth_result.namespace_id,
-            auth_result.mfa_verified,
             machine.capabilities.to_string_vec(),
             vec!["default".to_string()],
         )
