@@ -1,7 +1,7 @@
 use egui::{RichText, Ui};
 use uuid::Uuid;
 
-use crate::state::types::*;
+use crate::state::*;
 use super::tokens::{self, colors, font_size, spacing};
 use super::{buttons, labels, layout, data_display, feedback, inputs};
 

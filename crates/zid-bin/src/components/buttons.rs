@@ -213,7 +213,7 @@ pub fn square_icon_button(ui: &mut Ui, icon: &str) -> bool {
 pub fn title_bar_icon(ui: &mut Ui, icon: &str, active: bool) -> egui::Response {
     let font_id = egui::FontId::proportional(ICON_SIZE);
     let galley =
-        ui.fonts(|f| f.layout_no_wrap(icon.to_string(), font_id, Color32::PLACEHOLDER));
+        ui.fonts_mut(|f| f.layout_no_wrap(icon.to_string(), font_id, Color32::PLACEHOLDER));
     let bp = ui.spacing().button_padding;
     let desired = Vec2::new(galley.size().x + bp.x * 2.0, ui.spacing().interact_size.y);
     let (rect, resp) = ui.allocate_exact_size(desired, egui::Sense::click());
@@ -227,7 +227,7 @@ pub fn title_bar_icon(ui: &mut Ui, icon: &str, active: bool) -> egui::Response {
     } else {
         vis.text_color()
     };
-    let galley = ui.fonts(|f| {
+    let galley = ui.fonts_mut(|f| {
         f.layout_no_wrap(
             icon.to_string(),
             egui::FontId::proportional(ICON_SIZE),

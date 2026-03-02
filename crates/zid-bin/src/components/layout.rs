@@ -54,7 +54,7 @@ pub fn section_with_action(
         prev_clip.top()..=prev_clip.bottom(),
     )));
 
-    let mut clicked;
+    let clicked;
     let mut prepared = egui::Frame::new()
         .fill(colors::SURFACE)
         .corner_radius(0.0)
@@ -250,7 +250,7 @@ pub fn title_bar_frame() -> egui::Frame {
         .stroke(egui::Stroke::NONE)
 }
 
-pub fn toast_area(ctx: &egui::Context, toasts: &[crate::state::types::ToastMessage]) {
+pub fn toast_area(ctx: &egui::Context, toasts: &[crate::state::ToastMessage]) {
     if toasts.is_empty() {
         return;
     }
@@ -261,10 +261,10 @@ pub fn toast_area(ctx: &egui::Context, toasts: &[crate::state::types::ToastMessa
             ui.set_max_width(320.0);
             for toast in toasts {
                 let color = match toast.level {
-                    crate::state::types::ToastLevel::Success => super::tokens::SUCCESS,
-                    crate::state::types::ToastLevel::Error => super::tokens::DANGER,
-                    crate::state::types::ToastLevel::Warning => super::tokens::WARNING,
-                    crate::state::types::ToastLevel::Info => super::tokens::INFO,
+                    crate::state::ToastLevel::Success => super::tokens::SUCCESS,
+                    crate::state::ToastLevel::Error => super::tokens::DANGER,
+                    crate::state::ToastLevel::Warning => super::tokens::WARNING,
+                    crate::state::ToastLevel::Info => super::tokens::INFO,
                 };
                 let frame = egui::Frame::new()
                     .fill(colors::SURFACE_DARK)

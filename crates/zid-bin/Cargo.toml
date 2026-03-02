@@ -19,10 +19,10 @@ zid-crypto = { path = "../zid-crypto" }
 zid-server = { path = "../zid-server" }
 
 # UI
-eframe = "0.31"
-egui = "0.31"
-egui_extras = { version = "0.31", features = ["image"] }
-egui-phosphor = "0.9"
+eframe = "0.33"
+egui = "0.33"
+egui_extras = { version = "0.33", features = ["image"] }
+egui-phosphor = "0.11"
 
 # Async runtime
 tokio = { workspace = true }

@@ -4,9 +4,7 @@ use crate::components::tokens::{self, colors, font_size, spacing};
 use crate::components::{buttons, domain, feedback, inputs, labels, layout};
 use crate::error::AppError;
 use crate::infra::crypto_adapter;
-use crate::state::actions::AppMessage;
-use crate::state::types::*;
-use crate::state::AppState;
+use crate::state::*;
 
 pub fn render(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Handle) {
     match &state.current_page {

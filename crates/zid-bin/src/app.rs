@@ -5,9 +5,7 @@ use crate::components::buttons::title_bar_icon;
 use crate::components::layout as comp_layout;
 use crate::components::tokens::{colors, font_size, spacing};
 use crate::infra::local_storage::LocalStorage;
-use crate::state::actions::AppMessage;
-use crate::state::types::*;
-use crate::state::{AppState, NavSection};
+use crate::state::*;
 
 pub struct ZeroIdApp {
     pub state: AppState,
@@ -234,7 +232,7 @@ impl ZeroIdApp {
 
     fn handle_resize_edges(ctx: &egui::Context) -> bool {
         const BORDER: f32 = 6.0;
-        let screen = ctx.screen_rect();
+        let screen = ctx.viewport_rect();
         let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) else {
             return false;
         };
@@ -285,7 +283,7 @@ impl ZeroIdApp {
                 egui::Id::new("window_border"),
             ));
             fg.rect_stroke(
-                ctx.screen_rect(),
+                ctx.viewport_rect(),
                 0.0,
                 egui::Stroke::new(1.0, colors::BORDER),
                 egui::StrokeKind::Outside,

@@ -5,7 +5,7 @@ use zid_crypto::NeuralKey;
 use crate::error::AppError;
 use crate::infra::{crypto_adapter, http_client::HttpClient};
 use crate::service::key_shard;
-use crate::state::types::MachineViewModel;
+use crate::state::MachineViewModel;
 
 #[derive(Serialize)]
 struct EnrollBody {

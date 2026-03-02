@@ -5,7 +5,7 @@ use crate::error::AppError;
 use crate::infra::crypto_adapter;
 use crate::infra::http_client::HttpClient;
 use crate::service::key_shard::{self, ShardSet};
-use crate::state::types::{FreezeReason, IdentityViewModel};
+use crate::state::{FreezeReason, IdentityViewModel};
 
 #[derive(Serialize)]
 struct CreateIdentityBody {

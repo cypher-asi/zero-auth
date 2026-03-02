@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::infra::{crypto_adapter, http_client::HttpClient};
-use crate::state::types::SessionViewModel;
+use crate::state::SessionViewModel;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct SessionTokens {
@@ -189,7 +189,7 @@ pub async fn login_machine_after_create(
     client: &HttpClient,
     machine_id: &Uuid,
     passphrase: &str,
-    creds: &crate::state::types::StoredCredentials,
+    creds: &crate::state::StoredCredentials,
 ) -> Result<SessionTokens, AppError> {
     let kek = crypto_adapter::derive_kek(passphrase, &creds.kek_salt)?;
     let nonce: [u8; 24] = creds

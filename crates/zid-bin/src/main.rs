@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 
 use crate::components::tokens::{colors, font_size, spacing};
 use crate::infra::local_storage::LocalStorage;
-use crate::state::types::AppSettings;
+use crate::state::AppSettings;
 
 fn main() -> eframe::Result<()> {
     tracing_subscriber::fmt()

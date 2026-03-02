@@ -2,9 +2,7 @@ use egui::{RichText, Ui};
 
 use crate::components::tokens::{self, colors, font_size, spacing};
 use crate::components::{buttons, data_display, domain, feedback, inputs, labels, layout};
-use crate::state::actions::AppMessage;
-use crate::state::types::*;
-use crate::state::{AppState, ConfirmAction, ConfirmDialogState};
+use crate::state::*;
 
 pub fn render_page(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Handle) {
     match &state.current_page {

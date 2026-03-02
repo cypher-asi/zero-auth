@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::infra::http_client::HttpClient;
-use crate::state::types::CredentialViewModel;
+use crate::state::CredentialViewModel;
 
 #[derive(Deserialize, Debug)]
 pub struct CredentialRecord {
