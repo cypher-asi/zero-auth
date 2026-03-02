@@ -21,6 +21,7 @@ struct EnrollBody {
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct EnrollResponse {
     pub machine_id: Uuid,
     pub namespace_id: Uuid,

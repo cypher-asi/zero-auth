@@ -30,6 +30,7 @@ struct MachineKeyBody {
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct CreateIdentityResponse {
     pub identity_id: Uuid,
     pub did: String,
@@ -154,20 +155,6 @@ pub async fn freeze(client: &HttpClient, reason: FreezeReason) -> Result<(), App
         reason: reason.as_str().to_string(),
     };
     let _: serde_json::Value = client.post("/v1/identity/freeze", &body).await?;
-    Ok(())
-}
-
-pub async fn disable(client: &HttpClient) -> Result<(), AppError> {
-    let _: serde_json::Value = client
-        .post("/v1/identity/disable", &serde_json::json!({}))
-        .await?;
-    Ok(())
-}
-
-pub async fn enable(client: &HttpClient) -> Result<(), AppError> {
-    let _: serde_json::Value = client
-        .post("/v1/identity/enable", &serde_json::json!({}))
-        .await?;
     Ok(())
 }
 

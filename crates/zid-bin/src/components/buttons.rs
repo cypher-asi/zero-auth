@@ -110,18 +110,6 @@ pub fn ghost_button(ui: &mut Ui, label: &str) -> bool {
     .clicked()
 }
 
-pub fn link_button(ui: &mut Ui, label: &str) -> bool {
-    ui.add(
-        egui::Button::new(
-            RichText::new(label)
-                .size(font_size::ACTION)
-                .color(colors::TEXT_SECONDARY),
-        )
-        .frame(false),
-    )
-    .clicked()
-}
-
 pub fn icon_button(ui: &mut Ui, icon: &str) -> egui::Response {
     ui.add(egui::Button::new(RichText::new(icon).size(ICON_SIZE)).frame(false))
 }
@@ -171,37 +159,6 @@ pub fn section_add_button(ui: &mut Ui, rect: egui::Rect, enabled: bool) -> bool 
         ui.disable();
         ui.put(rect, button)
     };
-
-    let wv = &mut ui.visuals_mut().widgets;
-    wv.inactive.weak_bg_fill = saved.0;
-    wv.hovered.weak_bg_fill = saved.1;
-    wv.active.weak_bg_fill = saved.2;
-    r.clicked()
-}
-
-pub fn square_icon_button(ui: &mut Ui, icon: &str) -> bool {
-    let size = Vec2::new(WIDGET_HEIGHT, WIDGET_HEIGHT);
-
-    let wv = &mut ui.visuals_mut().widgets;
-    let saved = (
-        wv.inactive.weak_bg_fill,
-        wv.hovered.weak_bg_fill,
-        wv.active.weak_bg_fill,
-    );
-    wv.inactive.weak_bg_fill = Color32::BLACK;
-    wv.hovered.weak_bg_fill = colors::SURFACE_INTERACTIVE;
-    wv.active.weak_bg_fill = colors::BORDER;
-
-    let r = ui.add(
-        egui::Button::new(
-            RichText::new(icon)
-                .size(ICON_SIZE)
-                .color(Color32::WHITE),
-        )
-        .stroke(tokens::default_stroke())
-        .corner_radius(0.0)
-        .min_size(size),
-    );
 
     let wv = &mut ui.visuals_mut().widgets;
     wv.inactive.weak_bg_fill = saved.0;

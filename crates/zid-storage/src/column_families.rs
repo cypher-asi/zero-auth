@@ -106,6 +106,9 @@ pub const CF_REPUTATION: &str = "reputation";
 /// Keys are prefixed (e.g., "ip:192.168.1.1", "identity:uuid")
 pub const CF_RATE_LIMITS: &str = "rate_limits";
 
+/// OPAQUE ServerSetup blob: "setup" → encrypted ServerSetup
+pub const CF_OPAQUE_SERVER_SETUP: &str = "opaque_server_setup";
+
 /// Get all column family names
 pub fn all_column_families() -> Vec<&'static str> {
     vec![
@@ -143,6 +146,7 @@ pub fn all_column_families() -> Vec<&'static str> {
         CF_WEBHOOK_DELIVERY_LOG,
         CF_REPUTATION,
         CF_RATE_LIMITS,
+        CF_OPAQUE_SERVER_SETUP,
     ]
 }
 

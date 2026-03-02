@@ -122,15 +122,6 @@ pub fn auth_screen_panel(ui: &mut Ui, max_width: f32, content: impl FnOnce(&mut 
     });
 }
 
-pub fn form_grid(ui: &mut Ui, id: &str, content: impl FnOnce(&mut Ui)) {
-    egui::Grid::new(id)
-        .num_columns(2)
-        .spacing([spacing::XL, spacing::MD])
-        .show(ui, |ui| {
-            content(ui);
-        });
-}
-
 pub fn warning_frame(ui: &mut Ui, text: &str) {
     let color = super::tokens::WARNING;
     let frame = egui::Frame::new()

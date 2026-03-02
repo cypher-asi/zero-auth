@@ -11,6 +11,7 @@ pub enum AppError {
     // Auth
     InvalidCredentials,
     SessionExpired,
+    #[allow(dead_code)]
     TokenFamilyRevoked,
     IdentityFrozen,
 
@@ -76,4 +77,3 @@ impl From<reqwest::Error> for AppError {
     }
 }
 
-pub type Result<T> = std::result::Result<T, AppError>;

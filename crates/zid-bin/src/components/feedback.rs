@@ -9,25 +9,6 @@ pub fn loading_state(ui: &mut Ui, text: &str) {
     });
 }
 
-pub fn status_dot(ui: &mut Ui, connected: bool) {
-    let color = if connected {
-        colors::CONNECTED
-    } else {
-        colors::DISCONNECTED
-    };
-    let (rect, _) = ui.allocate_exact_size(Vec2::splat(8.0), egui::Sense::hover());
-    ui.painter()
-        .circle_filled(rect.center(), 3.0, color);
-}
-
-pub fn verified_icon(ui: &mut Ui) {
-    ui.label(RichText::new("✓").color(tokens::SUCCESS).size(font_size::BODY));
-}
-
-pub fn failed_icon(ui: &mut Ui) {
-    ui.label(RichText::new("✗").color(tokens::DANGER).size(font_size::BODY));
-}
-
 pub fn strength_bar(ui: &mut Ui, passphrase: &str) {
     if passphrase.is_empty() {
         return;

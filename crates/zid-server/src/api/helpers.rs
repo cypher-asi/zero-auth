@@ -23,18 +23,6 @@ pub fn parse_hex_32(hex_str: &str) -> Result<[u8; 32], ApiError> {
     Ok(array)
 }
 
-/// Parse a hex string into a 64-byte array
-pub fn parse_hex_64(hex_str: &str) -> Result<[u8; 64], ApiError> {
-    let bytes = hex::decode(hex_str)
-        .map_err(|_| ApiError::InvalidRequest("Invalid hex encoding".to_string()))?;
-    if bytes.len() != 64 {
-        return Err(ApiError::InvalidRequest("Expected 64 bytes".to_string()));
-    }
-    let mut array = [0u8; 64];
-    array.copy_from_slice(&bytes);
-    Ok(array)
-}
-
 /// Parse a hex string into a variable-length byte vector with expected size
 pub fn parse_hex_bytes(hex_str: &str, expected_size: usize, name: &str) -> Result<Vec<u8>, ApiError> {
     let bytes = hex::decode(hex_str)

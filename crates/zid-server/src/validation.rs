@@ -9,15 +9,13 @@ use crate::error::ApiError;
 use validator::ValidateEmail;
 use zxcvbn::Score;
 
-/// Minimum password entropy score (0-4 scale from zxcvbn)
-/// Score::Two = "somewhat guessable" - provides reasonable protection
-/// Score::Three = "safely unguessable" (~10^10 guesses) - recommended for high-value accounts
+#[allow(dead_code)]
 pub const MIN_PASSWORD_SCORE: Score = Score::Two;
 
-/// Minimum password length
+#[allow(dead_code)]
 pub const MIN_PASSWORD_LENGTH: usize = 8;
 
-/// Maximum password length (prevent DoS via hashing)
+#[allow(dead_code)]
 pub const MAX_PASSWORD_LENGTH: usize = 128;
 
 /// Validate email address using RFC 5322 compliant validation.
@@ -67,6 +65,7 @@ pub fn validate_email(email: &str) -> Result<String, ApiError> {
 ///
 /// # Returns
 /// Ok(()) if password meets strength requirements, Err(ApiError) with feedback if not
+#[allow(dead_code)]
 pub fn validate_password_strength(
     password: &str,
     user_inputs: Option<&[&str]>,

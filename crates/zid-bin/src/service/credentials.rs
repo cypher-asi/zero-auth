@@ -84,28 +84,6 @@ pub async fn initiate_oauth(
     Ok(resp.authorization_url)
 }
 
-pub async fn complete_oauth(
-    client: &HttpClient,
-    provider: &str,
-    code: &str,
-    state: &str,
-) -> Result<CredentialViewModel, AppError> {
-    let body = serde_json::json!({ "code": code, "state": state });
-    let _: serde_json::Value = client
-        .post(
-            &format!("/v1/credentials/oauth/{provider}/callback"),
-            &body,
-        )
-        .await?;
-    Ok(CredentialViewModel {
-        method_type: "oauth".into(),
-        method_id: provider.to_string(),
-        primary: false,
-        verified: true,
-        created_at: String::new(),
-    })
-}
-
 pub async fn list(client: &HttpClient) -> Result<Vec<CredentialViewModel>, AppError> {
     let resp: CredentialListResponse = client.get("/v1/credentials").await?;
     Ok(resp

@@ -56,18 +56,6 @@ impl LocalStorage {
         })
     }
 
-    pub fn with_dir(base_dir: PathBuf) -> Result<Self, AppError> {
-        fs::create_dir_all(&base_dir)
-            .map_err(|e| AppError::StorageError(format!("Cannot create data directory: {e}")))?;
-        let root_dir = root_data_dir();
-        let config = read_profile_config(&root_dir);
-        Ok(Self {
-            base_dir,
-            root_dir,
-            active_profile: config.active_profile,
-        })
-    }
-
     pub fn active_profile_name(&self) -> &str {
         &self.active_profile
     }
@@ -146,10 +134,6 @@ impl LocalStorage {
 
     pub fn server_data_dir(&self) -> PathBuf {
         self.root_dir.join("server")
-    }
-
-    pub fn config_path(&self) -> PathBuf {
-        self.root_dir.join("config.json")
     }
 
     pub fn credentials_path(&self) -> PathBuf {

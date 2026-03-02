@@ -6,6 +6,7 @@ use crate::infra::{crypto_adapter, http_client::HttpClient};
 use crate::state::SessionViewModel;
 
 #[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)]
 pub struct SessionTokens {
     pub access_token: String,
     pub refresh_token: String,
@@ -18,6 +19,7 @@ pub struct SessionTokens {
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct ChallengeResponse {
     pub challenge_id: Uuid,
     pub challenge: String,
@@ -32,14 +34,6 @@ struct MachineLoginBody {
 }
 
 #[derive(Serialize)]
-struct EmailLoginBody {
-    email: String,
-    password: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    machine_id: Option<Uuid>,
-}
-
-#[derive(Serialize)]
 struct RefreshBody {
     refresh_token: String,
     session_id: Uuid,
@@ -51,24 +45,6 @@ pub struct RefreshResponse {
     pub access_token: String,
     pub refresh_token: String,
     pub expires_at: String,
-}
-
-#[derive(Serialize)]
-struct IntrospectBody {
-    token: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct TokenIntrospection {
-    pub active: bool,
-    pub identity_id: Option<Uuid>,
-    pub machine_id: Option<Uuid>,
-    pub capabilities: Option<Vec<String>>,
-    pub exp: Option<i64>,
-}
-
-pub async fn request_challenge(client: &HttpClient) -> Result<ChallengeResponse, AppError> {
-    client.get("/v1/auth/challenge").await
 }
 
 pub async fn login_machine(

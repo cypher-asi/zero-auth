@@ -7,12 +7,10 @@ use zid_integrations::IntegrationsService;
 use zid_methods::AuthMethodsService;
 use zid_policy::PolicyEngineImpl;
 use zid_sessions::{NoOpEventPublisher, SessionService};
-use zid_storage::RocksDbStorage;
+use zid_storage::{column_families::CF_OPAQUE_SERVER_SETUP, RocksDbStorage};
 
 use crate::config::Config;
 
-/// RocksDB column family for the OPAQUE ServerSetup blob
-const CF_OPAQUE_SERVER_SETUP: &str = "opaque_server_setup";
 /// Key used to store the single ServerSetup record
 const OPAQUE_SETUP_KEY: &str = "setup";
 

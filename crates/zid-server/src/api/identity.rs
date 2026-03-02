@@ -379,7 +379,7 @@ pub async fn recovery_ceremony(
         ));
     }
 
-    let new_identity_signing_public_key = parse_hex_verifying_key(&req.new_identity_signing_public_key)?;
+    let _new_identity_signing_public_key = parse_hex_verifying_key(&req.new_identity_signing_public_key)?;
 
     // Parse approvals
     let approvals = parse_approvals(&req.approver_machine_ids, &req.approval_signatures)?;

@@ -11,16 +11,12 @@ pub mod colors {
 
     pub const BORDER: Color32 = Color32::from_rgb(48, 48, 52);
     pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(55, 55, 60);
-    pub const BORDER_DIM: Color32 = Color32::from_rgb(50, 50, 55);
 
     pub const TEXT_HEADING: Color32 = Color32::from_rgb(140, 140, 145);
     pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(100, 100, 108);
     pub const TEXT_MUTED: Color32 = Color32::from_rgb(160, 160, 165);
 
     pub const ERROR: Color32 = Color32::from_rgb(255, 80, 80);
-    pub const WARN: Color32 = Color32::from_rgb(255, 200, 100);
-    pub const CONNECTED: Color32 = Color32::from_rgb(46, 230, 176);
-    pub const DISCONNECTED: Color32 = Color32::from_rgb(255, 80, 80);
 
     pub const ACCENT: Color32 = Color32::from_rgb(0, 180, 255);
 }
@@ -46,7 +42,6 @@ pub mod font_size {
 
 pub const WIDGET_HEIGHT: f32 = 24.0;
 pub const NAV_WIDTH: f32 = 168.0;
-pub const TITLE_BAR_HEIGHT: f32 = 32.0;
 pub const ICON_SIZE: f32 = 16.0;
 pub const STROKE_DEFAULT: f32 = 1.0;
 

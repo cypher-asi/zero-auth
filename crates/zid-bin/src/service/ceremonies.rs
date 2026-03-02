@@ -5,18 +5,6 @@ use crate::error::AppError;
 use crate::infra::{crypto_adapter, http_client::HttpClient};
 
 #[derive(Serialize)]
-struct Approval {
-    machine_id: Uuid,
-    signature: String,
-    timestamp: String,
-}
-
-#[derive(Serialize)]
-struct UnfreezeBody {
-    approvals: Vec<Approval>,
-}
-
-#[derive(Serialize)]
 struct RecoveryBody {
     identity_id: Uuid,
     machine_id: Uuid,
@@ -37,24 +25,6 @@ pub struct RecoveryResponse {
     pub identity_id: Uuid,
     pub machine_id: Uuid,
     pub created_at: String,
-}
-
-pub async fn unfreeze(
-    client: &HttpClient,
-    approvals: Vec<(Uuid, String, String)>,
-) -> Result<(), AppError> {
-    let body = UnfreezeBody {
-        approvals: approvals
-            .into_iter()
-            .map(|(mid, sig, ts)| Approval {
-                machine_id: mid,
-                signature: sig,
-                timestamp: ts,
-            })
-            .collect(),
-    };
-    let _: serde_json::Value = client.post("/v1/identity/unfreeze", &body).await?;
-    Ok(())
 }
 
 pub async fn recover(
@@ -93,13 +63,6 @@ pub async fn recover(
     };
 
     client.post("/v1/identity/recovery", &body).await
-}
-
-pub async fn rotate_key(client: &HttpClient) -> Result<(), AppError> {
-    let _: serde_json::Value = client
-        .post("/v1/identity/rotation", &serde_json::json!({}))
-        .await?;
-    Ok(())
 }
 
 #[cfg(test)]

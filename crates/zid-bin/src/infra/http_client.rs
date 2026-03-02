@@ -54,10 +54,6 @@ impl HttpClient {
         self.access_token = token;
     }
 
-    pub fn base_url(&self) -> &str {
-        &self.base_url
-    }
-
     fn url(&self, path: &str) -> String {
         format!("{}{}", self.base_url, path)
     }
@@ -136,15 +132,6 @@ impl HttpClient {
         body: &B,
     ) -> Result<T, AppError> {
         let mut req = self.client.put(self.url(path)).json(body);
-        if let Some(token) = &self.access_token {
-            req = req.bearer_auth(token);
-        }
-        let resp = req.send().await?;
-        self.handle_response(resp).await
-    }
-
-    pub async fn delete<T: DeserializeOwned>(&self, path: &str) -> Result<T, AppError> {
-        let mut req = self.client.delete(self.url(path));
         if let Some(token) = &self.access_token {
             req = req.bearer_auth(token);
         }

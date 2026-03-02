@@ -140,17 +140,6 @@ where
         }
     }
 
-    /// Record a failed authentication attempt
-    pub(self) async fn record_failed_attempt(&self, identity_id: Uuid) -> Result<()> {
-        // Record the attempt with the policy engine for rate limiting
-        self.policy
-            .record_attempt(identity_id, Operation::Login, false)
-            .await
-            .map_err(AuthMethodsError::Policy)?;
-
-        Ok(())
-    }
-
     /// Create a virtual machine for email-only authentication
     ///
     /// SECURITY NOTE: Virtual machines are a convenience feature for non-device-based auth.
