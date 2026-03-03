@@ -30,12 +30,9 @@ struct MachineKeyBody {
 }
 
 #[derive(Deserialize, Debug)]
-#[allow(dead_code)]
 pub struct CreateIdentityResponse {
     pub identity_id: Uuid,
-    pub did: String,
     pub machine_id: Uuid,
-    pub namespace_id: Uuid,
     pub created_at: String,
 }
 
@@ -50,8 +47,6 @@ pub struct IdentityResponse {
     pub status: Option<String>,
     #[serde(default)]
     pub created_at: Option<String>,
-    #[serde(default)]
-    pub updated_at: Option<String>,
     #[serde(default)]
     pub frozen: Option<bool>,
     #[serde(default)]
@@ -144,7 +139,6 @@ pub async fn get_current(client: &HttpClient) -> Result<IdentityViewModel, AppEr
         tier: resp.tier.unwrap_or_else(|| "SelfSovereign".into()),
         status: resp.status.unwrap_or_else(|| "Active".into()),
         created_at: resp.created_at.unwrap_or_default(),
-        updated_at: resp.updated_at.unwrap_or_default(),
         frozen: resp.frozen.unwrap_or(false),
         freeze_reason: resp.freeze_reason,
     })

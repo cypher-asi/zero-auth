@@ -13,8 +13,6 @@ pub struct CredentialRecord {
     pub primary: bool,
     #[serde(default)]
     pub verified: bool,
-    #[serde(default)]
-    pub created_at: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -43,7 +41,6 @@ pub async fn link_email(
         method_id: email.to_string(),
         primary: false,
         verified: false,
-        created_at: String::new(),
     })
 }
 
@@ -63,7 +60,6 @@ pub async fn link_wallet(
         method_id: wallet_address.to_string(),
         primary: false,
         verified: true,
-        created_at: String::new(),
     })
 }
 
@@ -123,6 +119,5 @@ fn record_to_view_model(r: CredentialRecord) -> CredentialViewModel {
         method_id: r.method_id,
         primary: r.primary,
         verified: r.verified,
-        created_at: r.created_at.unwrap_or_default(),
     }
 }

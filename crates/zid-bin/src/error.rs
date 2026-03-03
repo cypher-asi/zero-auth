@@ -11,8 +11,6 @@ pub enum AppError {
     // Auth
     InvalidCredentials,
     SessionExpired,
-    #[allow(dead_code)]
-    TokenFamilyRevoked,
     IdentityFrozen,
 
     // Validation
@@ -38,7 +36,6 @@ impl fmt::Display for AppError {
             Self::RateLimited { retry_after } => write!(f, "Too many requests. Please wait {} seconds.", retry_after.as_secs()),
             Self::InvalidCredentials => write!(f, "Invalid credentials. Please check and try again."),
             Self::SessionExpired => write!(f, "Your session has expired. Please log in again."),
-            Self::TokenFamilyRevoked => write!(f, "Session invalidated — possible unauthorized access detected. Log in again to secure your identity."),
             Self::IdentityFrozen => write!(f, "Your identity is frozen. Authentication is not available until unfreezing is completed."),
             Self::InvalidInput(msg) => write!(f, "Invalid input: {msg}"),
             Self::ShardCombineFailed => write!(f, "Could not reconstruct key. Verify your shards are correct and you have at least 3."),

@@ -6,7 +6,6 @@ use crate::infra::{crypto_adapter, http_client::HttpClient};
 use crate::state::SessionViewModel;
 
 #[derive(Deserialize, Debug, Clone)]
-#[allow(dead_code)]
 pub struct SessionTokens {
     pub access_token: String,
     pub refresh_token: String,
@@ -14,16 +13,12 @@ pub struct SessionTokens {
     #[serde(default)]
     pub machine_id: Option<Uuid>,
     pub expires_at: String,
-    #[serde(default)]
-    pub warning: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
-#[allow(dead_code)]
 pub struct ChallengeResponse {
     pub challenge_id: Uuid,
     pub challenge: String,
-    pub expires_at: String,
 }
 
 #[derive(Serialize)]

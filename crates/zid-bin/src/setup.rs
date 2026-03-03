@@ -1,6 +1,6 @@
 use egui::{RichText, Ui};
 
-use crate::components::tokens::{self, colors, font_size, spacing};
+use crate::components::tokens::{colors, font_size, spacing};
 use crate::components::{buttons, domain, feedback, inputs, labels, layout};
 use crate::error::AppError;
 use crate::infra::crypto_adapter;
@@ -378,16 +378,14 @@ fn render_create(
             CreateStep::Generating => 0,
             CreateStep::Passphrase => 1,
             CreateStep::ShardBackup => 2,
-            CreateStep::Done => 3,
         };
-        feedback::progress_stepper(ui, &["Generate", "Passphrase", "Backup", "Done"], step_idx);
+        feedback::progress_stepper(ui, &["Generate", "Passphrase", "Backup"], step_idx);
         ui.add_space(spacing::XXL);
 
         match step {
             CreateStep::Passphrase => render_create_passphrase(ui, state, rt),
             CreateStep::Generating => render_creating(ui),
             CreateStep::ShardBackup => render_shard_backup(ui, state),
-            CreateStep::Done => render_create_done(ui, state),
         }
     });
 }
@@ -482,8 +480,7 @@ fn render_create_passphrase(ui: &mut Ui, state: &mut AppState, rt: &tokio::runti
                                         did: String::new(),
                                         tier: "SelfSovereign".into(),
                                         status: "Active".into(),
-                                        created_at: result.response.created_at.clone(),
-                                        updated_at: result.response.created_at,
+                                        created_at: result.response.created_at,
                                         frozen: false,
                                         freeze_reason: None,
                                     };
@@ -552,19 +549,6 @@ fn render_shard_backup(ui: &mut Ui, state: &mut AppState) {
     }
 }
 
-fn render_create_done(ui: &mut Ui, state: &mut AppState) {
-    ui.add_space(40.0);
-    ui.label(
-        RichText::new("IDENTITY CREATED")
-            .size(font_size::SUBTITLE)
-            .color(tokens::SUCCESS),
-    );
-    ui.add_space(spacing::XL);
-    if buttons::action_button(ui, "Go to Dashboard", true) {
-        state.current_page = Page::Dashboard;
-    }
-}
-
 // --- Recover Identity ---
 
 fn render_recover(
@@ -579,11 +563,10 @@ fn render_recover(
             RecoverStep::Recovering => 1,
             RecoverStep::NewPassphrase => 2,
             RecoverStep::NewShardBackup => 3,
-            RecoverStep::Done => 4,
         };
         feedback::progress_stepper(
             ui,
-            &["Enter Shards", "Recovering", "New Passphrase", "New Backup", "Done"],
+            &["Enter Shards", "Recovering", "New Passphrase", "New Backup"],
             step_idx,
         );
         ui.add_space(spacing::XXL);
@@ -593,7 +576,6 @@ fn render_recover(
             RecoverStep::Recovering => render_recovering(ui),
             RecoverStep::NewPassphrase => render_new_passphrase(ui, state, rt),
             RecoverStep::NewShardBackup => render_new_shard_backup(ui, state),
-            RecoverStep::Done => render_recover_done(ui, state),
         }
     });
 }
@@ -821,8 +803,7 @@ fn start_recovery(state: &mut AppState, rt: &tokio::runtime::Handle) {
                             did: String::new(),
                             tier: "SelfSovereign".into(),
                             status: "Active".into(),
-                            created_at: response.created_at.clone(),
-                            updated_at: response.created_at,
+                            created_at: response.created_at,
                             frozen: false,
                             freeze_reason: None,
                         };
@@ -885,19 +866,6 @@ fn render_new_shard_backup(ui: &mut Ui, state: &mut AppState) {
         state.recovery_passphrase_confirm.clear();
         state.recovery_new_shards.clear();
         state.recovery_shards_acknowledged = false;
-        state.current_page = Page::Dashboard;
-    }
-}
-
-fn render_recover_done(ui: &mut Ui, state: &mut AppState) {
-    ui.add_space(40.0);
-    ui.label(
-        RichText::new("IDENTITY RECOVERED")
-            .size(font_size::SUBTITLE)
-            .color(tokens::SUCCESS),
-    );
-    ui.add_space(spacing::XL);
-    if buttons::action_button(ui, "Go to Dashboard", true) {
         state.current_page = Page::Dashboard;
     }
 }

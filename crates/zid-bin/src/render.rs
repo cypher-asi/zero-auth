@@ -67,8 +67,6 @@ fn render_dashboard(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Hand
         });
     } else if state.identity_status == LoadStatus::Loading {
         feedback::loading_state(ui, "Loading identity...");
-    } else if let LoadStatus::Error(ref e) = state.identity_status {
-        labels::error_label(ui, e);
     }
 
     if let Some(session) = &state.current_session {
@@ -142,7 +140,6 @@ fn render_machines(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Handl
                     }
                 }
             }
-            LoadStatus::Error(e) => labels::error_label(ui, e),
             _ => {}
         }
     });
@@ -291,8 +288,6 @@ async fn run_enrollment(
         last_used_at: None,
         revoked: false,
         key_scheme: "PQ-Hybrid".into(),
-        capabilities: vec!["AUTHENTICATE".into(), "SIGN".into(), "ENCRYPT".into()],
-        epoch: 0,
     })
 }
 
@@ -369,7 +364,6 @@ fn render_credentials(ui: &mut Ui, state: &mut AppState, rt: &tokio::runtime::Ha
                     }
                 }
             }
-            LoadStatus::Error(e) => labels::error_label(ui, e),
             _ => {}
         }
     });

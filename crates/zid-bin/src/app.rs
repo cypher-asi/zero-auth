@@ -372,20 +372,6 @@ impl ZeroIdApp {
                     }
                 });
             }
-            ConfirmAction::RevokeSession(session_id) => {
-                let tx = self.state.tx.clone();
-                let client = self.state.http_client.clone();
-                self.rt.spawn(async move {
-                    match crate::service::session::revoke(&client, session_id).await {
-                        Ok(()) => {
-                            let _ = tx.send(AppMessage::SessionRevoked);
-                        }
-                        Err(e) => {
-                            let _ = tx.send(AppMessage::Error(e));
-                        }
-                    }
-                });
-            }
             ConfirmAction::DeleteProfile(name) => {
                 match self.state.storage.delete_profile(&name) {
                     Ok(()) => {

@@ -21,10 +21,8 @@ struct EnrollBody {
 }
 
 #[derive(Deserialize, Debug)]
-#[allow(dead_code)]
 pub struct EnrollResponse {
     pub machine_id: Uuid,
-    pub namespace_id: Uuid,
     pub enrolled_at: String,
 }
 
@@ -43,10 +41,6 @@ pub struct MachineInfo {
     pub revoked: bool,
     #[serde(default)]
     pub key_scheme: Option<String>,
-    #[serde(default)]
-    pub capabilities: Option<Vec<String>>,
-    #[serde(default)]
-    pub epoch: Option<u64>,
 }
 
 pub async fn enroll(
@@ -97,8 +91,6 @@ pub async fn list(client: &HttpClient) -> Result<Vec<MachineViewModel>, AppError
             last_used_at: m.last_used_at,
             revoked: m.revoked,
             key_scheme: m.key_scheme.unwrap_or_else(|| "Classical".into()),
-            capabilities: m.capabilities.unwrap_or_default(),
-            epoch: m.epoch.unwrap_or(0),
         })
         .collect())
 }

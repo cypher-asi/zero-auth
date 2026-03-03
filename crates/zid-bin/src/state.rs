@@ -1,5 +1,3 @@
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -18,8 +16,6 @@ pub enum LoadStatus {
     Idle,
     Loading,
     Loaded,
-    #[allow(dead_code)]
-    Error(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -47,8 +43,6 @@ pub enum CreateStep {
     Generating,
     Passphrase,
     ShardBackup,
-    #[allow(dead_code)]
-    Done,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -57,8 +51,6 @@ pub enum RecoverStep {
     Recovering,
     NewPassphrase,
     NewShardBackup,
-    #[allow(dead_code)]
-    Done,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -81,7 +73,6 @@ pub struct IdentityViewModel {
     pub tier: String,
     pub status: String,
     pub created_at: String,
-    pub updated_at: String,
     pub frozen: bool,
     pub freeze_reason: Option<String>,
 }
@@ -95,10 +86,6 @@ pub struct MachineViewModel {
     pub last_used_at: Option<String>,
     pub revoked: bool,
     pub key_scheme: String,
-    #[allow(dead_code)]
-    pub capabilities: Vec<String>,
-    #[allow(dead_code)]
-    pub epoch: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -107,8 +94,6 @@ pub struct CredentialViewModel {
     pub method_id: String,
     pub primary: bool,
     pub verified: bool,
-    #[allow(dead_code)]
-    pub created_at: String,
 }
 
 #[derive(Debug, Clone)]
@@ -130,8 +115,6 @@ pub struct NamespaceViewModel {
 #[derive(Debug, Clone)]
 pub struct FrozenInfo {
     pub reason: String,
-    #[allow(dead_code)]
-    pub frozen_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -144,8 +127,6 @@ pub enum ToastLevel {
 
 #[derive(Debug, Clone)]
 pub struct ToastMessage {
-    #[allow(dead_code)]
-    pub id: u64,
     pub level: ToastLevel,
     pub text: String,
     pub created_at: std::time::Instant,
@@ -261,12 +242,6 @@ pub enum AppMessage {
     },
     IdentityLoaded(IdentityViewModel),
     IdentityFrozen,
-    #[allow(dead_code)]
-    IdentityUnfrozen,
-    #[allow(dead_code)]
-    IdentityDisabled,
-    #[allow(dead_code)]
-    IdentityEnabled,
 
     // Auth / Session
     LoginSuccess {
@@ -321,16 +296,11 @@ pub enum AppMessage {
     ProfileSwitched(String),
     ProfileDeleted(String),
 
-    // Toast
-    #[allow(dead_code)]
-    Toast(ToastLevel, String),
 }
 
 // ---------------------------------------------------------------------------
 // Navigation
 // ---------------------------------------------------------------------------
-
-static TOAST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Maps nav sidebar sections to pages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -404,13 +374,9 @@ pub struct AppState {
 
     // Sessions
     pub current_session: Option<SessionViewModel>,
-    #[allow(dead_code)]
-    pub active_sessions: Vec<SessionViewModel>,
 
     // Namespaces
     pub namespaces: Vec<NamespaceViewModel>,
-    #[allow(dead_code)]
-    pub active_namespace: Option<uuid::Uuid>,
 
     // Security
     pub frozen_state: Option<FrozenInfo>,
@@ -493,8 +459,6 @@ pub enum ConfirmAction {
     RevokeMachine(uuid::Uuid),
     RevokeCredential(String, String),
     FreezeIdentity,
-    #[allow(dead_code)]
-    RevokeSession(uuid::Uuid),
     DeleteProfile(String),
     Logout,
 }
@@ -532,9 +496,7 @@ impl AppState {
             credentials: vec![],
             credentials_status: LoadStatus::Idle,
             current_session: None,
-            active_sessions: vec![],
             namespaces: vec![],
-            active_namespace: None,
             frozen_state: None,
             toasts: vec![],
             access_token: None,
@@ -586,9 +548,7 @@ impl AppState {
     }
 
     pub fn add_toast(&mut self, level: ToastLevel, text: String) {
-        let id = TOAST_COUNTER.fetch_add(1, Ordering::Relaxed);
         self.toasts.push(ToastMessage {
-            id,
             level,
             text,
             created_at: std::time::Instant::now(),
@@ -634,7 +594,6 @@ impl AppState {
                             .freeze_reason
                             .clone()
                             .unwrap_or_else(|| "Unknown".into()),
-                        frozen_at: identity.updated_at.clone(),
                     });
                 }
                 self.identity = Some(identity);
@@ -766,33 +725,9 @@ impl AppState {
                 }
                 self.frozen_state = Some(FrozenInfo {
                     reason: self.freeze_reason.as_str().to_string(),
-                    frozen_at: chrono::Utc::now().to_rfc3339(),
                 });
                 self.show_freeze_dialog = false;
                 self.add_toast(ToastLevel::Warning, "Identity frozen".into());
-            }
-
-            AppMessage::IdentityUnfrozen => {
-                if let Some(id) = &mut self.identity {
-                    id.frozen = false;
-                    id.status = "Active".into();
-                }
-                self.frozen_state = None;
-                self.add_toast(ToastLevel::Success, "Identity unfrozen".into());
-            }
-
-            AppMessage::IdentityDisabled => {
-                if let Some(id) = &mut self.identity {
-                    id.status = "Disabled".into();
-                }
-                self.add_toast(ToastLevel::Warning, "Identity disabled".into());
-            }
-
-            AppMessage::IdentityEnabled => {
-                if let Some(id) = &mut self.identity {
-                    id.status = "Active".into();
-                }
-                self.add_toast(ToastLevel::Success, "Identity enabled".into());
             }
 
             AppMessage::RecoveryComplete {
@@ -887,32 +822,16 @@ impl AppState {
             }
 
             AppMessage::Error(err) => {
-                match &err {
-                    AppError::TokenFamilyRevoked => {
-                        self.access_token = None;
-                        self.refresh_token = None;
-                        self.http_client.set_access_token(None);
-                        self.current_session = None;
-                        self.current_page = Page::Onboarding(OnboardingStep::Login(
-                            LoginStep::EnterPassphrase,
-                        ));
-                    }
-                    AppError::SessionExpired => {
-                        self.access_token = None;
-                        self.refresh_token = None;
-                        self.http_client.set_access_token(None);
-                        self.current_session = None;
-                        self.current_page = Page::Onboarding(OnboardingStep::Login(
-                            LoginStep::EnterPassphrase,
-                        ));
-                    }
-                    _ => {}
+                if matches!(&err, AppError::SessionExpired) {
+                    self.access_token = None;
+                    self.refresh_token = None;
+                    self.http_client.set_access_token(None);
+                    self.current_session = None;
+                    self.current_page = Page::Onboarding(OnboardingStep::Login(
+                        LoginStep::EnterPassphrase,
+                    ));
                 }
                 self.add_toast(ToastLevel::Error, err.to_string());
-            }
-
-            AppMessage::Toast(level, text) => {
-                self.add_toast(level, text);
             }
         }
     }
