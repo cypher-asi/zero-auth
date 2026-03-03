@@ -98,7 +98,7 @@ For detailed technical specifications of each component:
 |------|-------|-------------|
 | [System Overview](docs/spec/v0.1.1/00-system-overview.md) | — | Architecture, dependency graph, security model |
 | [Crypto Primitives](docs/spec/v0.1.1/01-crypto.md) | `zid-crypto` | Key derivation, encryption, signatures, Shamir, DIDs |
-| [Storage](docs/spec/v0.1.1/02-storage.md) | `zid-storage` | Storage abstraction and 33 column families |
+| [Storage](docs/spec/v0.1.1/02-storage.md) | `zid-storage` | Storage abstraction and 35 column families |
 | [Policy Engine](docs/spec/v0.1.1/03-policy.md) | `zid-policy` | Rate limiting, reputation, authorization |
 | [Identity Core](docs/spec/v0.1.1/04-identity-core.md) | `zid-identity-core` | Identities, machines, namespaces, ceremonies |
 | [Sessions](docs/spec/v0.1.1/05-sessions.md) | `zid-sessions` | JWT issuance, refresh tokens, introspection |
@@ -503,9 +503,11 @@ zid supports multiple authentication methods, each associated with an identity t
 | Method | Description | Identity Tier | Use Case |
 |--------|-------------|---------------|----------|
 | Machine Key | Ed25519 challenge-response | Self-Sovereign | Primary authentication for enrolled devices |
-| Email + Password | Argon2id password hashing | Managed | Traditional account creation, account linking |
+| Email + Password | OPAQUE password-authenticated key exchange | Managed | Traditional account creation, account linking |
 | OAuth | Google, X/Twitter, Epic Games | Managed | Social login, account linking |
 | Wallet | EVM (SECP256k1), Solana (Ed25519) | Managed | Blockchain-based authentication |
+
+**OPAQUE (Oblivious Pseudo-Random Function and Asymmetric Password-Authenticated Key Exchange)** ensures the server never sees plaintext passwords. Registration and login are each two-step protocols: the client blinds the password locally, the server evaluates the OPRF and returns a credential response, and the client finalizes—producing a shared session key without ever transmitting the password. The cipher suite uses Ristretto255, SHA-512, and Argon2id as the key stretching function.
 
 The authentication system is designed to be extensible with OAuth and OIDC, allowing integration with any range of trusted identity providers. New providers can be added as modules to the system without modifying the core authentication logic.
 
@@ -517,15 +519,16 @@ The system is composed of modular crates organized in three layers:
 
 | Crate | Layer | Purpose |
 |-------|-------|---------|
-| `zid-crypto` | Core | Cryptographic primitives (Ed25519, X25519, XChaCha20-Poly1305, HKDF, Argon2id, DIDs) |
-| `zid-storage` | Core | RocksDB abstraction layer with 33 column families |
+| `zid-crypto` | Core | Cryptographic primitives (Ed25519, X25519, ML-DSA-65, ML-KEM-768, OPAQUE, HKDF, DIDs) |
+| `zid-storage` | Core | RocksDB abstraction layer with 35 column families |
 | `zid-policy` | Domain | Policy engine for authorization and rate limiting |
 | `zid-identity-core` | Domain | Identity, Machine Key, and namespace management |
 | `zid-sessions` | Domain | Session and JWT token management |
 | `zid-integrations` | Domain | Event streaming (SSE) and webhooks |
-| `zid-methods` | Application | Authentication methods (Machine Key, Email, OAuth, Wallet) |
+| `zid-methods` | Application | Authentication methods (Machine Key, Email/OPAQUE, OAuth, Wallet) |
 | `zid-server` | Application | HTTP API server (Axum) |
 | `zid-client` | Application | Official CLI client |
+| `zid-bin` | Application | Desktop GUI application (egui) |
 
 ## Getting Started
 
@@ -680,7 +683,7 @@ cargo llvm-cov --workspace --html
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Liveness probe |
-| `/health/ready` | GET | Readiness probe (checks storage) |
+| `/ready` | GET | Readiness probe (checks storage) |
 
 ### Authentication
 
@@ -688,9 +691,11 @@ cargo llvm-cov --workspace --html
 |----------|--------|-------------|
 | `/v1/auth/challenge` | GET | Get authentication challenge |
 | `/v1/auth/login/machine` | POST | Machine key authentication |
-| `/v1/auth/login/email` | POST | Email/password authentication |
-| `/v1/auth/login/oauth` | POST | OAuth authentication |
+| `/v1/auth/login/email/init` | POST | OPAQUE email login step 1 |
+| `/v1/auth/login/email/finish` | POST | OPAQUE email login step 2 |
 | `/v1/auth/login/wallet` | POST | Wallet signature authentication |
+| `/v1/auth/oauth/:provider` | GET | Start OAuth login flow |
+| `/v1/auth/oauth/:provider/callback` | POST | Complete OAuth login flow |
 | `/v1/auth/refresh` | POST | Refresh access token |
 | `/v1/auth/introspect` | POST | Token introspection |
 | `/.well-known/jwks.json` | GET | Public keys for JWT validation |
@@ -701,44 +706,48 @@ cargo llvm-cov --workspace --html
 |----------|--------|-------------|
 | `/v1/identity` | POST | Create identity (self-sovereign) |
 | `/v1/identity` | GET | Get current identity |
-| `/v1/identity` | DELETE | Disable identity |
+| `/v1/identity/:identity_id` | GET | Get identity by ID |
+| `/v1/identity/did/*did` | GET | Get identity by DID |
+| `/v1/identity/email/register/init` | POST | Create email identity step 1 (OPAQUE) |
+| `/v1/identity/email/register/finish` | POST | Create email identity step 2 (OPAQUE) |
+| `/v1/identity/oauth/:provider` | POST | Initiate OAuth identity creation |
+| `/v1/identity/oauth/:provider/callback` | POST | Complete OAuth identity creation |
+| `/v1/identity/wallet/challenge` | POST | Initiate wallet identity creation |
+| `/v1/identity/wallet/verify` | POST | Complete wallet identity creation |
+| `/v1/identity/tier` | GET | Get identity tier status |
+| `/v1/identity/upgrade` | POST | Upgrade managed to self-sovereign |
 | `/v1/identity/freeze` | POST | Freeze identity |
 | `/v1/identity/unfreeze` | POST | Unfreeze identity |
+| `/v1/identity/recovery` | POST | Recovery ceremony |
+| `/v1/identity/rotation` | POST | Key rotation ceremony |
 
 ### Machine Management
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/identity/machines` | POST | Enroll machine |
-| `/v1/identity/machines` | GET | List machines |
-| `/v1/identity/machines/:id` | GET | Get machine |
-| `/v1/identity/machines/:id` | DELETE | Revoke machine |
+| `/v1/machines/enroll` | POST | Enroll machine |
+| `/v1/machines` | GET | List machines |
+| `/v1/machines/:machine_id` | DELETE | Revoke machine |
 
 ### Credentials
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/v1/credentials` | GET | List all credentials |
-| `/v1/credentials/email` | POST | Attach email credential |
+| `/v1/credentials/email/register/init` | POST | Attach email credential step 1 (OPAQUE) |
+| `/v1/credentials/email/register/finish` | POST | Attach email credential step 2 (OPAQUE) |
 | `/v1/credentials/wallet` | POST | Attach wallet credential |
-| `/v1/credentials/wallet/:address` | DELETE | Revoke wallet credential |
-
-### OAuth
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/oauth/:provider/initiate` | GET | Start OAuth link flow |
-| `/v1/oauth/:provider/login` | GET | Start OAuth login flow |
-| `/v1/oauth/callback` | POST | Complete OAuth flow |
-| `/v1/oauth/:provider` | DELETE | Revoke OAuth link |
+| `/v1/credentials/oauth/:provider` | POST | Start OAuth link flow |
+| `/v1/credentials/oauth/:provider/callback` | POST | Complete OAuth link flow |
+| `/v1/credentials/:method_type/:method_id` | DELETE | Revoke credential |
+| `/v1/credentials/:method_type/:method_id/primary` | PUT | Set primary credential |
 
 ### Sessions
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/sessions` | GET | List sessions |
-| `/v1/sessions/:id` | DELETE | Revoke session |
-| `/v1/sessions` | DELETE | Revoke all sessions |
+| `/v1/session/revoke` | POST | Revoke session |
+| `/v1/session/revoke-all` | POST | Revoke all sessions |
 
 ### Namespace Management
 
@@ -746,21 +755,22 @@ cargo llvm-cov --workspace --html
 |----------|--------|-------------|
 | `/v1/namespaces` | GET | List namespaces |
 | `/v1/namespaces` | POST | Create namespace |
-| `/v1/namespaces/:id` | GET | Get namespace |
-| `/v1/namespaces/:id` | PATCH | Update namespace |
-| `/v1/namespaces/:id` | DELETE | Delete namespace |
-| `/v1/namespaces/:id/members` | GET | List members |
-| `/v1/namespaces/:id/members` | POST | Add member |
-| `/v1/namespaces/:id/members/:identity_id` | PATCH | Update member |
-| `/v1/namespaces/:id/members/:identity_id` | DELETE | Remove member |
+| `/v1/namespaces/:namespace_id` | GET | Get namespace |
+| `/v1/namespaces/:namespace_id` | PATCH | Update namespace |
+| `/v1/namespaces/:namespace_id` | DELETE | Delete namespace |
+| `/v1/namespaces/:namespace_id/deactivate` | POST | Deactivate namespace |
+| `/v1/namespaces/:namespace_id/reactivate` | POST | Reactivate namespace |
+| `/v1/namespaces/:namespace_id/members` | GET | List members |
+| `/v1/namespaces/:namespace_id/members` | POST | Add member |
+| `/v1/namespaces/:namespace_id/members/:identity_id` | PATCH | Update member |
+| `/v1/namespaces/:namespace_id/members/:identity_id` | DELETE | Remove member |
 
 ### Integrations
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/v1/events/stream` | GET | SSE event stream (mTLS) |
-| `/v1/services` | POST | Register service (Admin) |
-| `/v1/services/:id` | DELETE | Revoke service (Admin) |
+| `/v1/integrations/register` | POST | Register service (Admin) |
 
 ## Cryptographic Standards
 
@@ -772,7 +782,8 @@ cargo llvm-cov --workspace --html
 | Key Exchange | X25519 | RFC 7748 |
 | Encryption | XChaCha20-Poly1305 | RFC 8439 |
 | Key Derivation | HKDF-SHA256 | RFC 5869 |
-| Password Hashing | Argon2id (64MB, 3 iterations) | RFC 9106 |
+| Password Authentication | OPAQUE (Ristretto255, SHA-512, Argon2id) | RFC 9497 |
+| Password KSF | Argon2id (64MB, 3 iterations) | RFC 9106 |
 | Non-password Hashing | BLAKE3 | - |
 
 ### Post-Quantum Cryptography
@@ -863,6 +874,7 @@ if is_valid_ed25519_did_key(&did) {
 - **No Unsafe Code**: Entire codebase uses `#![forbid(unsafe_code)]`
 - **Domain Separation**: Unique domain strings prevent key reuse across purposes
 - **Canonical Encoding**: Signed messages use deterministic binary format
+- **OPAQUE PAKE**: Server never sees plaintext passwords; resistant to pre-computation and offline dictionary attacks
 - **Rate Limiting**: Built-in rate limiting per identity and operation
 - **Token Security**: EdDSA-signed JWTs with short expiry and refresh rotation
 - **Comprehensive Revocation**: Per-session, per-identity, and epoch-level revocation
